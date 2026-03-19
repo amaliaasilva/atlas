@@ -8,8 +8,7 @@
     },
     "ghcr.io/devcontainers/features/node:1": {
       "version": "20"
-    },
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    }
   },
 
   "forwardPorts": [3000, 8000, 5432],
