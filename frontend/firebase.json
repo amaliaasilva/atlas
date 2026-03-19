@@ -1,7 +1,7 @@
 {
   "hosting": {
     "site": "atlasfinance",
-    "public": "out",
+    "public": "public",
     "cleanUrls": true,
     "trailingSlash": false,
     "ignore": [
@@ -12,7 +12,10 @@
     "rewrites": [
       {
         "source": "**",
-        "destination": "/index.html"
+        "run": {
+          "serviceId": "atlas-frontend",
+          "region": "southamerica-east1"
+        }
       }
     ],
     "headers": [

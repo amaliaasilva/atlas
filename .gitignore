@@ -61,3 +61,4 @@ uploads/
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+.firebase_token

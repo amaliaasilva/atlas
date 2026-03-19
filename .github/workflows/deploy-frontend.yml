@@ -1,4 +1,4 @@
-name: CD — Deploy Frontend (Firebase Hosting)
+name: CD — Deploy Frontend (Cloud Run + Firebase Hosting)
 
 on:
   push:
@@ -17,52 +17,29 @@ on:
 
 concurrency:
   group: deploy-frontend-${{ github.ref }}
-  cancel-in-progress: false  # Nunca cancela deploys em andamento
+  cancel-in-progress: false
 
 env:
   NODE_VERSION: "22"
   GCP_PROJECT: atlasfinance
+  GCP_REGION: southamerica-east1
+  CLOUD_RUN_SERVICE: atlas-frontend
+  IMAGE_NAME: gcr.io/atlasfinance/atlas-frontend
   FIREBASE_SITE: atlasfinance
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────────
-  # Validar se CI passou antes de deployar
+  # Build & Push imagem Docker para GCR
   # ─────────────────────────────────────────────────────────────────────────
-  check-ci:
-    name: Verificar CI
+  build-push:
+    name: Build & Push Docker (Next.js standalone)
     runs-on: ubuntu-24.04
-    steps:
-      - name: Verificar status do último CI
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { data: runs } = await github.rest.actions.listWorkflowRunsForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'ci.yml',
-              branch: context.ref.replace('refs/heads/', ''),
-              per_page: 1,
-            });
-            const latest = runs.workflow_runs[0];
-            if (latest && latest.conclusion === 'failure') {
-              core.setFailed('CI falhou — deploy bloqueado');
-            } else {
-              core.info('CI OK — prosseguindo com deploy');
-            }
-
-  # ─────────────────────────────────────────────────────────────────────────
-  # Build do Frontend
-  # ─────────────────────────────────────────────────────────────────────────
-  build:
-    name: Build Next.js
-    runs-on: ubuntu-24.04
-    needs: check-ci
     outputs:
-      build-sha: ${{ steps.meta.outputs.sha }}
+      image-tag: ${{ steps.meta.outputs.tag }}
 
-    defaults:
-      run:
-        working-directory: frontend
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - name: Checkout
@@ -70,87 +47,89 @@ jobs:
 
       - name: Metadata
         id: meta
-        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+        run: echo "tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Configurar Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
+      - name: Autenticar no GCP
+        uses: google-github-actions/auth@v2
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Instalar dependências (ci — reproducível)
-        run: npm ci --prefer-offline --no-audit
+      - name: Configurar Docker para GCR
+        run: gcloud auth configure-docker --quiet
 
-      - name: Build export estático
-        env:
-          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
-          NEXT_PUBLIC_ENV: ${{ inputs.environment || 'production' }}
-          NODE_ENV: production
-        run: npm run build
-
-      - name: Verificar conteúdo do build
+      - name: Build Docker (Next.js standalone)
+        working-directory: frontend
         run: |
-          echo "── Arquivos gerados ──"
-          find out -type f | sort | head -40
-          echo "── Tamanho total ──"
-          du -sh out/
+          docker build \
+            --tag "${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}" \
+            --tag "${{ env.IMAGE_NAME }}:latest" \
+            --build-arg NEXT_PUBLIC_API_URL="${{ secrets.NEXT_PUBLIC_API_URL }}" \
+            --cache-from "${{ env.IMAGE_NAME }}:latest" \
+            .
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist-${{ steps.meta.outputs.sha }}
-          path: frontend/out/
-          retention-days: 3
-          if-no-files-found: error
+      - name: Push para Google Container Registry
+        run: |
+          docker push "${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}"
+          docker push "${{ env.IMAGE_NAME }}:latest"
 
   # ─────────────────────────────────────────────────────────────────────────
-  # Deploy Preview (PRs — não deployar em main automático)
+  # Deploy no Cloud Run
   # ─────────────────────────────────────────────────────────────────────────
-  deploy-preview:
-    name: Deploy Preview (Firebase)
+  deploy-cloud-run:
+    name: Deploy Cloud Run (atlas-frontend)
     runs-on: ubuntu-24.04
-    needs: build
-    if: github.event_name == 'pull_request'
-    permissions:
-      pull-requests: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist-${{ needs.build.outputs.build-sha }}
-          path: frontend/out/
-
-      - name: Deploy preview no Firebase
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: ${{ env.GCP_PROJECT }}
-          expires: 7d
-          channelId: ""   # auto-generated preview channel
-
-  # ─────────────────────────────────────────────────────────────────────────
-  # Deploy Production
-  # ─────────────────────────────────────────────────────────────────────────
-  deploy-production:
-    name: Deploy Production (Firebase Hosting)
-    runs-on: ubuntu-24.04
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-push
     environment:
       name: production
       url: https://${{ env.FIREBASE_SITE }}.web.app
 
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configurar Node.js ${{ env.NODE_VERSION }}
+      - name: Autenticar no GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configurar gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy no Cloud Run
+        run: |
+          gcloud run deploy "${{ env.CLOUD_RUN_SERVICE }}" \
+            --image "${{ env.IMAGE_NAME }}:${{ needs.build-push.outputs.image-tag }}" \
+            --platform managed \
+            --region "${{ env.GCP_REGION }}" \
+            --project "${{ env.GCP_PROJECT }}" \
+            --allow-unauthenticated \
+            --port 3000 \
+            --memory 512Mi \
+            --cpu 1 \
+            --min-instances 0 \
+            --max-instances 5 \
+            --concurrency 100 \
+            --timeout 60 \
+            --set-env-vars "NODE_ENV=production,NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}" \
+            --quiet
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Deploy Firebase Hosting (aponta para Cloud Run)
+  # ─────────────────────────────────────────────────────────────────────────
+  deploy-hosting:
+    name: Deploy Firebase Hosting
+    runs-on: ubuntu-24.04
+    needs: deploy-cloud-run
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -158,56 +137,38 @@ jobs:
       - name: Instalar Firebase CLI
         run: npm install -g firebase-tools@latest --no-audit
 
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist-${{ needs.build.outputs.build-sha }}
-          path: frontend/out/
-
-      - name: Verificar autenticidade do artifact
-        run: |
-          echo "── Resumo do build ──"
-          find frontend/out -type f | wc -l
-          du -sh frontend/out/
-
-      - name: Firebase Deploy — Hosting
+      - name: Firebase Deploy — Hosting (rewrite → Cloud Run)
         working-directory: frontend
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
         run: |
           firebase deploy \
             --only "hosting:${{ env.FIREBASE_SITE }}" \
             --project "${{ env.GCP_PROJECT }}" \
             --token "${{ secrets.FIREBASE_TOKEN }}" \
             --non-interactive \
-            --message "Deploy ${{ needs.build.outputs.build-sha }} — ${{ github.event.head_commit.message }}"
+            --message "Deploy $(git rev-parse --short HEAD)"
 
-      - name: Health check pós-deploy
+      - name: Health check
         run: |
-          echo "Aguardando propagação CDN (30s)..."
           sleep 30
-          HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" \
-            --max-time 20 \
-            "https://${{ env.FIREBASE_SITE }}.web.app/" 2>/dev/null || echo "000")
-          echo "HTTP Status: $HTTP_CODE"
-          if [[ "$HTTP_CODE" != "200" ]]; then
-            echo "⚠ Health check retornou $HTTP_CODE"
-            exit 1
-          fi
-          echo "✅ Deploy verificado com sucesso!"
+          STATUS=$(node -e "
+            const https = require('https');
+            const req = https.get('https://${{ env.FIREBASE_SITE }}.web.app/', r => {
+              process.stdout.write(String(r.statusCode)); process.exit(0);
+            });
+            req.on('error', () => { process.stdout.write('0'); process.exit(1); });
+            req.setTimeout(20000, () => { process.stdout.write('0'); process.exit(1); });
+          ")
+          echo "HTTP: $STATUS"
+          [[ "$STATUS" =~ ^(200|301|302)$ ]] && echo "✅ OK" || exit 1
 
-      - name: Notificar deploy no commit
+      - name: Comentar no commit
         uses: actions/github-script@v7
         if: always()
         with:
           script: |
-            const status = '${{ job.status }}' === 'success' ? '✅' : '❌';
-            const msg = `${status} Frontend deploy ${{ job.status }}\n` +
-              `Commit: \`${{ needs.build.outputs.build-sha }}\`\n` +
-              `URL: https://${{ env.FIREBASE_SITE }}.web.app`;
+            const ok = '${{ job.status }}' === 'success';
             github.rest.repos.createCommitComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner: context.repo.owner, repo: context.repo.repo,
               commit_sha: context.sha,
-              body: msg,
+              body: `${ok ? '✅' : '❌'} Frontend deploy ${{ job.status }}\nURL: https://${{ env.FIREBASE_SITE }}.web.app`,
             });
