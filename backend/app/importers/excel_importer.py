@@ -119,9 +119,10 @@ class ExcelImporter:
     Importa um arquivo Excel de orçamento de unidade para o banco de dados.
     """
 
-    def __init__(self, file_path: str, budget_version_id: str, db: "Session"):
+    def __init__(self, file_path: str, budget_version_id: str, db: "Session", unit_id: str | None = None):
         self.file_path = file_path
         self.budget_version_id = budget_version_id
+        self.unit_id = unit_id
         self.db = db
         self.errors: list[str] = []
         self.imported_count = 0
@@ -140,6 +141,7 @@ class ExcelImporter:
             import_type="unit_budget",
             status=ImportStatus.processing,
             budget_version_id=self.budget_version_id,
+            unit_id=self.unit_id,
             started_at=datetime.now(timezone.utc),
         )
         self.db.add(job)
@@ -257,6 +259,7 @@ def import_from_path(
     file_path: str,
     budget_version_id: str,
     db: "Session",
+    unit_id: str | None = None,
 ) -> dict:
-    importer = ExcelImporter(file_path, budget_version_id, db)
+    importer = ExcelImporter(file_path, budget_version_id, db, unit_id=unit_id)
     return importer.run()

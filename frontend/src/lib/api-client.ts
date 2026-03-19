@@ -1,6 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://atlas-backend-7cuu5kzxjq-rj.a.run.app';
 
 export const api = axios.create({
   baseURL: `${BASE_URL}/api/v1`,

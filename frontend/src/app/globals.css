@@ -1,15 +1,16 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --color-brand: #4f46e5;
+  --color-brand: #3b82f6;
+  --gradient-hero: linear-gradient(135deg, #1E2A44 0%, #3B82F6 55%, #22C7E6 100%);
 }
 
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Manrope', sans-serif;
 }
 
 /* Table styling */

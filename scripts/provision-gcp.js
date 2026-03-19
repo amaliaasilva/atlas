@@ -21,8 +21,9 @@
 
 'use strict';
 
-const https = require('https');
+const https  = require('https');
 const crypto = require('crypto');
+const { getAccessToken } = require('./gcp-auth');
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 const PROJECT  = process.env.GCP_PROJECT  || 'atlasfinance';
@@ -33,9 +34,6 @@ const DB_USER  = 'atlas';
 const BUCKET   = `${PROJECT}-uploads`;
 const SA_NAME  = 'atlas-deploy';
 const SA_EMAIL = `${SA_NAME}@${PROJECT}.iam.gserviceaccount.com`;
-
-const REFRESH_TOKEN = process.env.FIREBASE_TOKEN;
-const TOKEN_FILE    = '/tmp/fb_token.txt';
 
 // ─── Modo ────────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -93,44 +91,8 @@ function request(method, url, body, token) {
   });
 }
 
-// ─── OAuth: troca refresh_token por access_token ─────────────────────────────
-async function getAccessToken(refreshToken) {
-  // Firebase usa Google OAuth2 — o refresh token é compatível
-  return new Promise((resolve, reject) => {
-    const body = new URLSearchParams({
-      client_id: '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com',
-      client_secret: 'j9iVZfS8nnY63tMEFUFP_dQ7', // client secret público do Firebase CLI
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }).toString();
-
-    const req = https.request({
-      hostname: 'oauth2.googleapis.com',
-      path: '/token',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Content-Length': Buffer.byteLength(body),
-      },
-    }, (res) => {
-      let data = '';
-      res.on('data', c => data += c);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          if (json.access_token) resolve(json.access_token);
-          else reject(new Error('Token refresh falhou: ' + data));
-        } catch (e) { reject(e); }
-      });
-    });
-    req.on('error', reject);
-    req.write(body);
-    req.end();
-  });
-}
-
 // Aguarda uma operação LRO (Long Running Operation) do GCP concluir
-async function waitOperation(operationUrl, token, maxWaitMs = 300_000) {
+async function waitOperation(operationUrl, token, maxWaitMs = 900_000) {
   const start = Date.now();
   let delay = 3000;
   while (Date.now() - start < maxWaitMs) {
@@ -245,7 +207,7 @@ async function setupServiceAccount(token) {
 // ─── 3. Cloud SQL ─────────────────────────────────────────────────────────────
 async function provisionCloudSQL(token) {
   step('3/7 — Cloud SQL PostgreSQL 16');
-  if (DRY_RUN) { dry(`Criaria: ${DB_INST} (db-f1-micro, ${REGION})`); return null; }
+  if (DRY_RUN) { dry(`Criaria: ${DB_INST} (db-g1-small, ${REGION})`); return null; }
 
   // Verifica se já existe
   try {
@@ -268,7 +230,8 @@ async function provisionCloudSQL(token) {
         databaseVersion: 'POSTGRES_16',
         region: REGION,
         settings: {
-          tier: 'db-f1-micro',
+          tier: 'db-g1-small',
+          edition: 'ENTERPRISE',
           dataDiskType: 'PD_SSD',
           dataDiskSizeGb: '10',
           storageAutoResize: true,
@@ -278,7 +241,8 @@ async function provisionCloudSQL(token) {
             pointInTimeRecoveryEnabled: true,
           },
           ipConfiguration: {
-            ipv4Enabled: false,  // sem IP público — acesso via Cloud SQL Proxy
+            ipv4Enabled: true,   // IP público com SSL obrigatório
+            requireSsl: true,
           },
           maintenanceWindow: { hour: 4, day: 7 },
           activationPolicy: 'ALWAYS',
@@ -367,14 +331,10 @@ async function provisionStorage(token) {
 // ─── 5. Secret Manager ───────────────────────────────────────────────────────
 async function upsertSecret(name, value, token) {
   const secretUrl = `https://secretmanager.googleapis.com/v1/projects/${PROJECT}/secrets`;
-  // Tenta criar o secret
-  try {
-    await request('POST', secretUrl,
-      { replication: { automatic: {} } , name: `projects/${PROJECT}/secrets/${name}` },
-      token);
-  } catch (e) {
-    if (!e.message.includes('409') && !e.message.includes('already exists')) throw e;
-  }
+  // Cria secret com secretId como query param (formato correto da API)
+  await request('POST', `${secretUrl}?secretId=${name}`,
+    { replication: { automatic: {} } },
+    token).catch(() => {});
   // Adiciona versão com o valor
   const encoded = Buffer.from(value).toString('base64');
   await request('POST',
@@ -470,29 +430,14 @@ ${C.bold}${C.blue}╔═══════════════════�
   ${DRY_RUN ? C.yellow + '[DRY RUN]' + C.reset : ''}
 `);
 
-  // Carrega o token
-  let refreshToken = REFRESH_TOKEN;
-  if (!refreshToken) {
-    try {
-      const fs = require('fs');
-      refreshToken = fs.readFileSync(TOKEN_FILE, 'utf8').trim();
-      info(`Token carregado de ${TOKEN_FILE}`);
-    } catch {
-      err('FIREBASE_TOKEN não definido e /tmp/fb_token.txt não encontrado.');
-      err('Execute: firebase login:ci --no-localhost');
-      err('Depois: export FIREBASE_TOKEN=$(cat /tmp/fb_token.txt)');
-      process.exit(1);
-    }
-  }
-
   step('0/7 — Obtendo access token GCP');
   let accessToken;
   try {
-    accessToken = await getAccessToken(refreshToken);
-    ok('Access token obtido com sucesso');
+    accessToken = await getAccessToken();
+    ok('Access token obtido (via firebase login local)');
   } catch (e) {
     err(`Falha ao obter access token: ${e.message}`);
-    err('O token pode ter expirado. Execute novamente: firebase login:ci --no-localhost');
+    err('Execute: firebase login --no-localhost');
     process.exit(1);
   }
 

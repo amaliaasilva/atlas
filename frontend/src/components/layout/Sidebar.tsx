@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Building2, MapPin, TrendingUp,
   FileSpreadsheet, Upload, ClipboardList, Settings, LogOut, ChevronDown,
+  Briefcase, BarChart2,
 } from 'lucide-react';
 import { useAuthStore, useNavStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,11 @@ export function Sidebar() {
       icon: <MapPin className="h-4 w-4" />,
     },
     {
+      label: 'Negócios',
+      href: '/businesses',
+      icon: <Briefcase className="h-4 w-4" />,
+    },
+    {
       label: 'Cenários',
       href: '/scenarios',
       icon: <TrendingUp className="h-4 w-4" />,
@@ -44,6 +50,12 @@ export function Sidebar() {
       label: 'Orçamento',
       href: '/budget',
       icon: <FileSpreadsheet className="h-4 w-4" />,
+    },
+    {
+      label: 'Consolidado',
+      href: businessId ? `/dashboard/consolidated/${businessId}` : '/dashboard/visao-geral',
+      matchPrefix: '/dashboard/consolidated',
+      icon: <BarChart2 className="h-4 w-4" />,
     },
     {
       label: 'Comparações',
@@ -72,15 +84,18 @@ export function Sidebar() {
   ];
 
   return (
-    <aside className="w-60 shrink-0 flex flex-col bg-gray-900 min-h-screen">
+    <aside
+      className="w-60 shrink-0 flex flex-col min-h-screen"
+      style={{ background: 'linear-gradient(180deg, #1E2A44 0%, #111827 100%)' }}
+    >
       {/* Logo */}
-      <div className="px-5 py-4 border-b border-gray-700/50 flex items-center gap-3">
+      <div className="px-3 py-6 border-b border-gray-700/50 flex items-center justify-center">
         <Image
-          src="/logo-atlas.svg"
+          src="/logo-atlas.png"
           alt="Atlas Finance"
-          width={130}
-          height={32}
-          className="h-8 w-auto object-contain brightness-0 invert"
+          width={900}
+          height={340}
+          className="w-full h-auto object-contain brightness-0 invert"
           priority
         />
       </div>

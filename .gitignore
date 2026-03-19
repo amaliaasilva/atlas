@@ -62,3 +62,9 @@ uploads/
 *.tsbuildinfo
 next-env.d.ts
 .firebase_token
+
+# GCP Service Account keys — NUNCA commitar
+*.sa-key.json
+.gcp-sa-key.json
+gcp-key*.json
+service-account*.json

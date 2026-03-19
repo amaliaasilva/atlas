@@ -43,8 +43,20 @@ export function downloadBlob(blob: Blob, filename: string) {
 
 export function getErrorMessage(error: unknown): string {
   if (error && typeof error === 'object' && 'response' in error) {
-    const axiosError = error as { response?: { data?: { detail?: string } } };
-    return axiosError.response?.data?.detail ?? 'Erro desconhecido';
+    const axiosError = error as { response?: { data?: { detail?: unknown } } };
+    const detail = axiosError.response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+    // FastAPI/Pydantic validation errors: detail is array of {type, loc, msg, input}
+    if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0] as Record<string, unknown>;
+      if (first?.msg) return String(first.msg);
+      return 'Dados inválidos';
+    }
+    if (detail && typeof detail === 'object') {
+      const d = detail as Record<string, unknown>;
+      if (d.msg) return String(d.msg);
+    }
+    return 'Erro desconhecido';
   }
   if (error instanceof Error) return error.message;
   return 'Erro desconhecido';

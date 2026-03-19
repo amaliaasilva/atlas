@@ -12,9 +12,7 @@ import type {
 export const authApi = {
   login: (email: string, password: string): Promise<AuthTokens> =>
     api
-      .post<AuthTokens>('/auth/login', new URLSearchParams({ username: email, password }), {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      })
+      .post<AuthTokens>('/auth/login', { email, password })
       .then((r) => r.data),
 
   me: (): Promise<User> => api.get<User>('/users/me').then((r) => r.data),
@@ -143,13 +141,12 @@ export const importsApi = {
   upload: (unit_id: string, file: File): Promise<ImportJob> => {
     const form = new FormData();
     form.append('file', file);
-    form.append('unit_id', unit_id);
-    return api.post<ImportJob>('/imports/upload', form, {
+    return api.post<ImportJob>(`/imports/upload/${unit_id}`, form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then((r) => r.data);
   },
   list: (unit_id?: string): Promise<ImportJob[]> =>
-    api.get<ImportJob[]>('/imports', { params: { unit_id } }).then((r) => r.data),
+    api.get<ImportJob[]>('/imports/jobs', { params: { unit_id } }).then((r) => r.data),
 };
 
 // ── Audit ─────────────────────────────────────────────────────────────────────

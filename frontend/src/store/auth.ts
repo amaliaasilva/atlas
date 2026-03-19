@@ -16,12 +16,20 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       user: null,
       setToken: (token) => {
-        if (typeof window !== 'undefined') localStorage.setItem('atlas_token', token);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('atlas_token', token);
+          // Cookie para SSR middleware guard (7 dias).
+          // Deve ser '__session' — Firebase Hosting só encaminha esse nome para o Cloud Run.
+          document.cookie = `__session=1; path=/; SameSite=Strict; max-age=${60 * 60 * 24 * 7}`;
+        }
         set({ token });
       },
       setUser: (user) => set({ user }),
       logout: () => {
-        if (typeof window !== 'undefined') localStorage.removeItem('atlas_token');
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('atlas_token');
+          document.cookie = '__session=; path=/; max-age=0';
+        }
         set({ token: null, user: null });
       },
     }),
