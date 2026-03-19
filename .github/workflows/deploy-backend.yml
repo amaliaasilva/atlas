@@ -176,7 +176,7 @@ jobs:
       url: ${{ steps.deploy.outputs.url }}
 
     permissions:
-      contents: read
+      contents: write
       id-token: write
 
     steps:
@@ -207,6 +207,7 @@ jobs:
             --max-instances=10
             --concurrency=80
             --timeout=60
+            --service-account=${{ secrets.WIF_SERVICE_ACCOUNT }}
           env_vars: |-
             ENVIRONMENT=production
             CORS_ORIGINS=https://atlasfinance.web.app,https://atlasfinance.firebaseapp.com
@@ -283,11 +284,16 @@ jobs:
     needs: deploy
     if: failure()
 
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
       - name: Autenticar no GCP
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
       - name: Configurar gcloud
         uses: google-github-actions/setup-gcloud@v2

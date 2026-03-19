@@ -49,16 +49,16 @@ jobs:
         id: meta
         run: echo "tag=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Configurar gcloud CLI
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ env.GCP_PROJECT }}
-
       - name: Autenticar no GCP
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Configurar gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
 
       - name: Configurar Docker para GCR
         run: gcloud auth configure-docker --quiet
@@ -121,6 +121,7 @@ jobs:
             --max-instances 5 \
             --concurrency 100 \
             --timeout 60 \
+            --service-account "${{ secrets.WIF_SERVICE_ACCOUNT }}" \
             --set-env-vars "NODE_ENV=production,NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}" \
             --quiet
 
