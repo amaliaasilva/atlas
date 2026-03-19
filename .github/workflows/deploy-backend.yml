@@ -87,6 +87,10 @@ jobs:
       image-tag: ${{ steps.meta.outputs.tag }}
       full-image: ${{ steps.meta.outputs.full-image }}
 
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -105,7 +109,8 @@ jobs:
       - name: Autenticar no GCP
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
       - name: Configurar gcloud
         uses: google-github-actions/setup-gcloud@v2
@@ -170,11 +175,16 @@ jobs:
       name: production
       url: ${{ steps.deploy.outputs.url }}
 
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
       - name: Autenticar no GCP
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
       - name: Configurar gcloud
         uses: google-github-actions/setup-gcloud@v2
