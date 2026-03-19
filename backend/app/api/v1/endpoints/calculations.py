@@ -1,0 +1,245 @@
+"""
+Atlas Finance — Calculations Endpoint
+Dispara o motor financeiro para recalcular uma versão de orçamento.
+"""
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+
+from app.core.database import get_db
+from app.api.v1.deps import get_current_user
+from app.models.user import User
+from app.models.budget_version import BudgetVersion
+from app.models.assumption import AssumptionValue, AssumptionDefinition
+from app.models.unit import Unit
+from app.services.financial_engine import FinancialEngine
+from app.services.financial_engine.models import (
+    FinancialInputs, RevenueInputs, FixedCostInputs,
+    VariableCostInputs, CapexInputs, FinancingInputs, TaxInputs,
+)
+from app.services.financial_engine.consolidator import consolidate_business
+
+router = APIRouter()
+
+
+def _load_assumption_values(version_id: str, db: Session) -> dict:
+    """
+    Carrega os assumption_values de uma versão e retorna um dict
+    {(definition_code, period_date): value_numeric}.
+    """
+    rows = (
+        db.query(AssumptionValue, AssumptionDefinition)
+        .join(AssumptionDefinition, AssumptionValue.assumption_definition_id == AssumptionDefinition.id)
+        .filter(AssumptionValue.budget_version_id == version_id)
+        .all()
+    )
+    result = {}
+    for val, defn in rows:
+        key = (defn.code, val.period_date)
+        result[key] = val.value_numeric if val.value_numeric is not None else defn.default_value or 0.0
+    return result
+
+
+def _get(values: dict, code: str, period: str | None = None, default: float = 0.0) -> float:
+    """Helper para buscar um valor por code e período."""
+    v = values.get((code, period)) or values.get((code, None))
+    return float(v) if v is not None else default
+
+
+def _build_inputs_for_version(version_id: str, db: Session) -> tuple[list[FinancialInputs], CapexInputs, list[str]]:
+    """
+    Constrói a lista de FinancialInputs por período e o CapexInputs
+    a partir dos assumption_values de uma versão.
+    """
+    values = _load_assumption_values(version_id, db)
+
+    # Descobre os períodos disponíveis (YYYY-MM) dos valores mensais
+    periods = sorted(set(
+        period for (_, period) in values.keys()
+        if period is not None
+    ))
+
+    if not periods:
+        # Sem dados de período, usa apenas premissas estáticas em um período fictício
+        periods = ["2026-08"]
+
+    capex = CapexInputs(
+        equipment_value=_get(values, "valor_equipamentos"),
+        renovation_works=_get(values, "custo_obras_adaptacoes"),
+        pre_operational_expenses=_get(values, "despesas_preoperacionais"),
+        working_capital=_get(values, "capital_giro_inicial"),
+        furniture_fixtures=_get(values, "moveis_e_fixtures"),
+        technology_setup=_get(values, "tecnologia_setup"),
+        other_capex=_get(values, "outros_capex"),
+    )
+
+    financing = FinancingInputs(
+        financed_amount=_get(values, "valor_financiado"),
+        monthly_interest_rate=_get(values, "taxa_juros_mensal"),
+        term_months=int(_get(values, "prazo_meses")),
+        grace_period_months=int(_get(values, "carencia_meses")),
+    )
+
+    tax_rate = _get(values, "aliquota_imposto_receita", default=0.06)
+
+    inputs_list = []
+    for period in periods:
+        p = period  # alias
+        revenue = RevenueInputs(
+            max_students=int(_get(values, "alunos_capacidade_maxima", p)),
+            occupancy_rate=_get(values, "taxa_ocupacao", p),
+            avg_ticket_monthly=_get(values, "ticket_medio_plano_mensal", p),
+            avg_ticket_quarterly=_get(values, "ticket_medio_plano_trimestral", p),
+            avg_ticket_annual=_get(values, "ticket_medio_plano_anual", p),
+            mix_monthly_pct=_get(values, "mix_plano_mensal_pct", p, default=1.0),
+            mix_quarterly_pct=_get(values, "mix_plano_trimestral_pct", p),
+            mix_annual_pct=_get(values, "mix_plano_anual_pct", p),
+            num_personal_trainers=int(_get(values, "num_personal_trainers", p)),
+            avg_personal_revenue_month=_get(values, "receita_media_personal_mes", p),
+            other_revenue=_get(values, "outras_receitas", p),
+        )
+
+        fixed = FixedCostInputs(
+            rent=_get(values, "aluguel_mensal", p),
+            condo_fee=_get(values, "condominio_mensal", p),
+            iptu=_get(values, "iptu_mensal", p),
+            cleaning_staff_salary=_get(values, "salario_limpeza", p),
+            receptionist_salary=_get(values, "salario_recepcao", p),
+            marketing_staff_salary=_get(values, "salario_marketing", p),
+            commercial_staff_salary=_get(values, "salario_comercial", p),
+            manager_salary=_get(values, "salario_gerente", p),
+            fitness_teacher_salary=_get(values, "salario_educador_fisico", p),
+            pro_labore=_get(values, "pro_labore", p),
+            social_charges_rate=_get(values, "encargos_folha_pct", p, default=0.08),
+            benefits_per_employee=_get(values, "beneficios_por_funcionario", p),
+            num_employees=int(_get(values, "num_funcionarios", p)),
+            electricity_kwh=_get(values, "kwh_consumo_mensal", p),
+            electricity_rate=_get(values, "tarifa_kwh", p),
+            water_m3=_get(values, "consumo_agua_m3_mensal", p),
+            water_rate=_get(values, "tarifa_agua_m3", p),
+            internet_phone=_get(values, "internet_telefonia_mensal", p),
+            office_supplies=_get(values, "material_escritorio", p),
+            hygiene_cleaning=_get(values, "higiene_limpeza_mensal", p),
+            management_software=_get(values, "sistema_gestao_mensal", p),
+            legal_fees=_get(values, "juridico_mensal", p),
+            accounting_fees=_get(values, "contabilidade_mensal", p),
+            administrative_services=_get(values, "servicos_administrativos", p),
+            property_insurance=_get(values, "seguro_imovel", p),
+            equipment_insurance=_get(values, "seguro_equipamentos", p),
+            digital_marketing=_get(values, "marketing_digital_mensal", p),
+            brand_materials=_get(values, "material_identidade_visual", p),
+            promotional_materials=_get(values, "material_publicitario", p),
+            depreciation_equipment=_get(values, "depreciacao_equipamentos", p),
+            maintenance_equipment=_get(values, "manutencao_equipamentos", p),
+            security_systems=_get(values, "sistemas_seguranca", p),
+            financial_fees=_get(values, "despesas_financeiras_taxas", p),
+        )
+
+        variable = VariableCostInputs(
+            hygiene_kit_per_student=_get(values, "kit_higiene_por_aluno", p),
+            sales_commission_rate=_get(values, "comissao_vendas_pct", p),
+            other_variable_costs=_get(values, "outros_custos_variaveis", p),
+        )
+
+        inputs_list.append(FinancialInputs(
+            period=period,
+            revenue=revenue,
+            fixed_costs=fixed,
+            variable_costs=variable,
+            capex=capex,
+            financing=financing,
+            taxes=TaxInputs(tax_rate_on_revenue=tax_rate),
+        ))
+
+    return inputs_list, capex, periods
+
+
+class RecalculateResponse(BaseModel):
+    budget_version_id: str
+    periods_calculated: int
+    total_revenue: float
+    total_net_result: float
+    payback_months: int | None
+    annual_summaries: dict
+
+
+@router.post("/recalculate/{version_id}", response_model=RecalculateResponse)
+def recalculate_version(
+    version_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Executa o motor financeiro para uma versão de orçamento.
+    Apaga resultados anteriores e gera novos.
+    """
+    version = db.query(BudgetVersion).filter(BudgetVersion.id == version_id).first()
+    if not version:
+        raise HTTPException(status_code=404, detail="Versão não encontrada")
+
+    if version.status == "archived":
+        raise HTTPException(status_code=409, detail="Versão arquivada não pode ser recalculada")
+
+    inputs_list, capex, periods = _build_inputs_for_version(version_id, db)
+
+    engine = FinancialEngine()
+    outputs = engine.calculate(
+        inputs_by_period=inputs_list,
+        capex=capex,
+        budget_version_id=version_id,
+        unit_id=version.unit_id,
+        scenario_id=version.scenario_id,
+    )
+
+    engine.persist(outputs, db)
+
+    return RecalculateResponse(
+        budget_version_id=version_id,
+        periods_calculated=len(outputs.periods),
+        total_revenue=outputs.total_revenue_all_periods,
+        total_net_result=outputs.total_net_result_all_periods,
+        payback_months=outputs.payback_months,
+        annual_summaries=outputs.annual_summaries,
+    )
+
+
+@router.post("/consolidate/{business_id}/{scenario_id}")
+def consolidate(
+    business_id: str,
+    scenario_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Consolida resultados de todas as unidades publicadas de um negócio.
+    """
+    rows = consolidate_business(business_id, scenario_id, db)
+    return {"consolidated_rows": len(rows), "business_id": business_id, "scenario_id": scenario_id}
+
+
+@router.get("/results/{version_id}")
+def get_results(
+    version_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retorna os resultados calculados de uma versão de orçamento."""
+    from app.models.calculated_result import CalculatedResult
+    from app.models.line_item import LineItemDefinition
+    results = (
+        db.query(CalculatedResult, LineItemDefinition)
+        .join(LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id)
+        .filter(CalculatedResult.budget_version_id == version_id)
+        .order_by(CalculatedResult.period_date, LineItemDefinition.display_order)
+        .all()
+    )
+    return [
+        {
+            "period_date": r.period_date,
+            "line_item_code": li.code,
+            "line_item_name": li.name,
+            "category": li.category,
+            "value": r.value,
+        }
+        for r, li in results
+    ]

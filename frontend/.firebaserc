@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "atlasfinance"
+  },
+  "targets": {
+    "atlasfinance": {
+      "hosting": {
+        "frontend": [
+          "atlasfinance"
+        ]
+      }
+    }
+  }
+}

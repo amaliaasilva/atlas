@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-brand: #4f46e5;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+/* Table styling */
+.atlas-table {
+  @apply w-full text-sm border-collapse;
+}
+.atlas-table thead tr {
+  @apply bg-gray-50 border-b border-gray-200;
+}
+.atlas-table th {
+  @apply px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide text-left;
+}
+.atlas-table tbody tr {
+  @apply border-b border-gray-100 hover:bg-gray-50 transition-colors;
+}
+.atlas-table td {
+  @apply px-4 py-3 text-gray-700;
+}
+
+/* Number cells always right-aligned */
+.atlas-table td.numeric {
+  @apply text-right tabular-nums font-medium;
+}
+.atlas-table td.negative {
+  @apply text-red-600;
+}
+.atlas-table td.positive {
+  @apply text-emerald-600;
+}
