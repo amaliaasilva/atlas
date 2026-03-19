@@ -91,6 +91,8 @@ if ! gcloud iam workload-identity-pools describe "$POOL_ID" \
     --location="$LOCATION" \
     --display-name="GitHub Actions" \
     --quiet
+  info "Aguardando propagação do pool (15s)..."
+  sleep 15
   ok "Pool criado"
 else
   ok "Pool já existe"
@@ -121,6 +123,8 @@ attribute.repository=assertion.repository,\
 attribute.repository_owner=assertion.repository_owner" \
     --attribute-condition="assertion.repository=='${REPO}'" \
     --quiet
+  info "Aguardando propagação do provider (10s)..."
+  sleep 10
   ok "Provider criado"
 else
   ok "Provider já existe"
