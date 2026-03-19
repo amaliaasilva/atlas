@@ -110,7 +110,7 @@ export default function LoginPage() {
 
         {/* Logo */}
         <motion.div
-          className="flex flex-col items-center mb-1"
+          className="flex flex-col items-center mb-0"
           initial={{ opacity: 0, y: -30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
@@ -125,12 +125,12 @@ export default function LoginPage() {
             transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
           >
             <Image
-              src="/logo-atlas.png"
+              src="/logo-atlas.svg"
               alt="Atlas Finance"
-              width={900}
-              height={340}
+              width={650}
+              height={300}
               priority
-              style={{ width: '100%', height: 'auto', maxWidth: '400px', display: 'block' }}
+              style={{ height: '180px', width: 'auto', display: 'block' }}
             />
           </motion.div>
         </motion.div>

@@ -89,13 +89,14 @@ export function Sidebar() {
       style={{ background: 'linear-gradient(180deg, #1E2A44 0%, #111827 100%)' }}
     >
       {/* Logo */}
-      <div className="px-3 py-6 border-b border-gray-700/50 flex items-center justify-center">
+      <div className="px-4 py-5 border-b border-gray-700/50 flex items-center justify-center">
         <Image
-          src="/logo-atlas.png"
+          src="/logo-atlas.svg"
           alt="Atlas Finance"
-          width={900}
-          height={340}
-          className="w-full h-auto object-contain brightness-0 invert"
+          width={650}
+          height={300}
+          className="object-contain brightness-0 invert"
+          style={{ height: '48px', width: 'auto' }}
           priority
         />
       </div>
