@@ -161,6 +161,11 @@ if command -v gh &>/dev/null; then
     echo ""
     ok "✅ Todos os secrets configurados no GitHub!"
     echo ""
+    echo "  Secrets criados:"
+    echo "    WIF_PROVIDER        — identifica o provedor OIDC"
+    echo "    WIF_SERVICE_ACCOUNT — SA que executa os deploys"
+    echo "    NEXT_PUBLIC_API_URL — URL do backend para o frontend"
+    echo ""
     info "Verifique em: https://github.com/${REPO}/settings/secrets/actions"
   else
     warn "gh CLI disponível mas não autenticado."

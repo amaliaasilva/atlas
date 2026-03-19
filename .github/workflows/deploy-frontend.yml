@@ -132,9 +132,19 @@ jobs:
     runs-on: ubuntu-24.04
     needs: deploy-cloud-run
 
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Autenticar no GCP (ADC para Firebase CLI)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
@@ -150,7 +160,6 @@ jobs:
           firebase deploy \
             --only "hosting:${{ env.FIREBASE_SITE }}" \
             --project "${{ env.GCP_PROJECT }}" \
-            --token "${{ secrets.FIREBASE_TOKEN }}" \
             --non-interactive \
             --message "Deploy $(git rev-parse --short HEAD)"
 
