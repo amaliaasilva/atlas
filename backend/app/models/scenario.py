@@ -16,10 +16,19 @@ class ScenarioType(str, enum.Enum):
 class Scenario(Base, TimestampMixin):
     __tablename__ = "scenarios"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    business_id: Mapped[str] = mapped_column(String(36), ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False, index=True)
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    business_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("businesses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
-    scenario_type: Mapped[str] = mapped_column(SAEnum(ScenarioType), nullable=False, default=ScenarioType.base)
+    scenario_type: Mapped[str] = mapped_column(
+        SAEnum(ScenarioType), nullable=False, default=ScenarioType.base
+    )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
 
@@ -29,5 +38,9 @@ class Scenario(Base, TimestampMixin):
 
     # Relationships
     business: Mapped["Business"] = relationship("Business", back_populates="scenarios")
-    budget_versions: Mapped[list["BudgetVersion"]] = relationship("BudgetVersion", back_populates="scenario")
-    consolidated_results: Mapped[list["ConsolidatedResult"]] = relationship("ConsolidatedResult", back_populates="scenario")
+    budget_versions: Mapped[list["BudgetVersion"]] = relationship(
+        "BudgetVersion", back_populates="scenario"
+    )
+    consolidated_results: Mapped[list["ConsolidatedResult"]] = relationship(
+        "ConsolidatedResult", back_populates="scenario"
+    )

@@ -2,6 +2,7 @@
 Atlas Finance — SQLAlchemy Models
 Re-export all models so Alembic and seeds can use a single import.
 """
+
 from app.core.database import Base  # noqa
 
 from app.models.organization import Organization  # noqa
@@ -9,7 +10,11 @@ from app.models.business import Business  # noqa
 from app.models.unit import Unit  # noqa
 from app.models.scenario import Scenario  # noqa
 from app.models.budget_version import BudgetVersion  # noqa
-from app.models.assumption import AssumptionCategory, AssumptionDefinition, AssumptionValue  # noqa
+from app.models.assumption import (
+    AssumptionCategory,
+    AssumptionDefinition,
+    AssumptionValue,
+)  # noqa
 from app.models.line_item import LineItemDefinition  # noqa
 from app.models.calculated_result import CalculatedResult  # noqa
 from app.models.consolidated_result import ConsolidatedResult  # noqa

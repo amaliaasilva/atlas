@@ -82,4 +82,5 @@ class AssumptionValueOut(AssumptionValueBase):
 
 class AssumptionValueBulkUpdate(BaseModel):
     """Batch update for a full set of assumption values for a budget version."""
+
     values: list[AssumptionValueCreate]

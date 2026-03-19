@@ -1,4 +1,5 @@
 """Atlas Finance — Exception classes"""
+
 from fastapi import HTTPException, status
 
 

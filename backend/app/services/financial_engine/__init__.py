@@ -9,7 +9,12 @@ Estrutura do Motor:
 O motor é completamente desacoplado da UI.
 Cada submódulo é testável de forma independente.
 """
+
 from app.services.financial_engine.engine import FinancialEngine
-from app.services.financial_engine.models import FinancialInputs, FinancialOutputs, PeriodResult
+from app.services.financial_engine.models import (
+    FinancialInputs,
+    FinancialOutputs,
+    PeriodResult,
+)
 
 __all__ = ["FinancialEngine", "FinancialInputs", "FinancialOutputs", "PeriodResult"]

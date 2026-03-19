@@ -10,6 +10,7 @@ Fluxo:
   5. Persiste os dados
   6. Atualiza status do ImportJob
 """
+
 from __future__ import annotations
 
 import re
@@ -119,7 +120,13 @@ class ExcelImporter:
     Importa um arquivo Excel de orçamento de unidade para o banco de dados.
     """
 
-    def __init__(self, file_path: str, budget_version_id: str, db: "Session", unit_id: str | None = None):
+    def __init__(
+        self,
+        file_path: str,
+        budget_version_id: str,
+        db: "Session",
+        unit_id: str | None = None,
+    ):
         self.file_path = file_path
         self.budget_version_id = budget_version_id
         self.unit_id = unit_id
@@ -157,10 +164,7 @@ class ExcelImporter:
                 discovered.update(sheet_results)
 
             # Valida premissas contra as definições no banco
-            defs = (
-                self.db.query(AssumptionDefinition)
-                .all()
-            )
+            defs = self.db.query(AssumptionDefinition).all()
             code_to_def = {d.code: d for d in defs}
 
             values_to_insert = []
@@ -188,7 +192,9 @@ class ExcelImporter:
             self.db.add_all(values_to_insert)
             self.imported_count = len(values_to_insert)
 
-            job.status = ImportStatus.completed if not self.errors else ImportStatus.partial
+            job.status = (
+                ImportStatus.completed if not self.errors else ImportStatus.partial
+            )
             job.summary = {
                 "imported": self.imported_count,
                 "errors": self.errors[:20],
@@ -225,11 +231,17 @@ class ExcelImporter:
 
         if not headers:
             # Sem períodos detectados — tenta ler como pares label:valor estático
-            for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=3):
+            for row in ws.iter_rows(
+                min_row=2, max_row=ws.max_row, min_col=1, max_col=3
+            ):
                 label_cell = row[0]
                 val_cell = row[1] if len(row) > 1 else None
 
-                if label_cell.value and val_cell and isinstance(val_cell.value, (int, float)):
+                if (
+                    label_cell.value
+                    and val_cell
+                    and isinstance(val_cell.value, (int, float))
+                ):
                     code = _find_assumption_code(sheet_name, str(label_cell.value))
                     if code:
                         results[(code, None)] = val_cell.value

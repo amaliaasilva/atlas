@@ -16,12 +16,21 @@ class UnitStatus(str, enum.Enum):
 class Unit(Base, TimestampMixin):
     __tablename__ = "units"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    business_id: Mapped[str] = mapped_column(String(36), ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False, index=True)
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    business_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("businesses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     code: Mapped[str] = mapped_column(String(50), nullable=False)
     opening_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    status: Mapped[str] = mapped_column(SAEnum(UnitStatus), nullable=False, default=UnitStatus.planning)
+    status: Mapped[str] = mapped_column(
+        SAEnum(UnitStatus), nullable=False, default=UnitStatus.planning
+    )
     city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     state: Mapped[str | None] = mapped_column(String(50), nullable=True)
     area_m2: Mapped[float | None] = mapped_column(nullable=True)
@@ -30,5 +39,9 @@ class Unit(Base, TimestampMixin):
 
     # Relationships
     business: Mapped["Business"] = relationship("Business", back_populates="units")
-    budget_versions: Mapped[list["BudgetVersion"]] = relationship("BudgetVersion", back_populates="unit", cascade="all, delete-orphan")
-    calculated_results: Mapped[list["CalculatedResult"]] = relationship("CalculatedResult", back_populates="unit")
+    budget_versions: Mapped[list["BudgetVersion"]] = relationship(
+        "BudgetVersion", back_populates="unit", cascade="all, delete-orphan"
+    )
+    calculated_results: Mapped[list["CalculatedResult"]] = relationship(
+        "CalculatedResult", back_populates="unit"
+    )

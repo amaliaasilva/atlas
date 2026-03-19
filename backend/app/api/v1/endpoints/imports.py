@@ -2,7 +2,7 @@
 Atlas Finance — Import Endpoint
 Upload e processamento de arquivos Excel.
 """
-import os
+
 import shutil
 import uuid
 from pathlib import Path
@@ -30,10 +30,13 @@ async def upload_excel(
     para a unidade especificada (usa a budget_version ativa da unidade).
     """
     if not file.filename.endswith((".xlsx", ".xls")):
-        raise HTTPException(status_code=400, detail="Apenas arquivos Excel (.xlsx, .xls) são permitidos")
+        raise HTTPException(
+            status_code=400, detail="Apenas arquivos Excel (.xlsx, .xls) são permitidos"
+        )
 
     # Busca a budget_version ativa da unidade
     from app.models.budget_version import BudgetVersion
+
     budget_version = (
         db.query(BudgetVersion)
         .filter(BudgetVersion.unit_id == unit_id, BudgetVersion.is_active == True)
@@ -41,7 +44,10 @@ async def upload_excel(
         .first()
     )
     if not budget_version:
-        raise HTTPException(status_code=404, detail="Nenhuma budget version ativa encontrada para esta unidade")
+        raise HTTPException(
+            status_code=404,
+            detail="Nenhuma budget version ativa encontrada para esta unidade",
+        )
 
     # Sanitiza o nome do arquivo
     safe_name = f"{uuid.uuid4()}_{Path(file.filename).name}"
@@ -67,6 +73,7 @@ def list_import_jobs(
     current_user: User = Depends(get_current_user),
 ):
     from app.models.import_job import ImportJob
+
     q = db.query(ImportJob)
     if unit_id:
         q = q.filter(ImportJob.unit_id == unit_id)
@@ -82,6 +89,7 @@ def get_import_job(
     current_user: User = Depends(get_current_user),
 ):
     from app.models.import_job import ImportJob
+
     job = db.query(ImportJob).filter(ImportJob.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job não encontrado")

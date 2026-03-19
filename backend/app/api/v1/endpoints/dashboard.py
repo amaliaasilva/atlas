@@ -2,6 +2,7 @@
 Atlas Finance — Dashboard Endpoint
 KPIs executivos por unidade e consolidados.
 """
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from collections import defaultdict
@@ -18,9 +19,15 @@ from app.models.unit import Unit
 router = APIRouter()
 
 KPI_CODES = [
-    "revenue_total", "total_fixed_costs", "total_variable_costs",
-    "taxes_on_revenue", "financing_payment", "operating_result",
-    "net_result", "ebitda", "break_even_students",
+    "revenue_total",
+    "total_fixed_costs",
+    "total_variable_costs",
+    "taxes_on_revenue",
+    "financing_payment",
+    "operating_result",
+    "net_result",
+    "ebitda",
+    "break_even_students",
 ]
 
 
@@ -37,7 +44,9 @@ def unit_dashboard(
 
     results = (
         db.query(CalculatedResult, LineItemDefinition)
-        .join(LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id)
+        .join(
+            LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id
+        )
         .filter(CalculatedResult.budget_version_id == version_id)
         .order_by(CalculatedResult.period_date)
         .all()
@@ -56,7 +65,8 @@ def unit_dashboard(
     # Última ocupação disponível
     kpis["net_margin"] = (
         round(kpis["net_result"] / kpis["revenue_total"], 4)
-        if kpis.get("revenue_total", 0) > 0 else 0.0
+        if kpis.get("revenue_total", 0) > 0
+        else 0.0
     )
 
     # Série temporal para gráficos
@@ -149,7 +159,10 @@ def units_comparison(
     for version in versions:
         results = (
             db.query(CalculatedResult, LineItemDefinition)
-            .join(LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id)
+            .join(
+                LineItemDefinition,
+                CalculatedResult.line_item_id == LineItemDefinition.id,
+            )
             .filter(
                 CalculatedResult.budget_version_id == version.id,
                 LineItemDefinition.code == metric,
@@ -158,12 +171,14 @@ def units_comparison(
             .all()
         )
         series = {r.period_date: r.value for r, _ in results}
-        chart_data.append({
-            "unit_id": version.unit_id,
-            "unit_name": unit_map.get(version.unit_id, "Unidade"),
-            "total": round(sum(series.values()), 2),
-            "series": series,
-        })
+        chart_data.append(
+            {
+                "unit_id": version.unit_id,
+                "unit_name": unit_map.get(version.unit_id, "Unidade"),
+                "total": round(sum(series.values()), 2),
+                "series": series,
+            }
+        )
 
     chart_data.sort(key=lambda x: x["total"], reverse=True)
     return {"business_id": business_id, "metric": metric, "units": chart_data}

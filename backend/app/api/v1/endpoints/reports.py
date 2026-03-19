@@ -1,7 +1,8 @@
 """Reports — exportação CSV/Excel"""
+
 import csv
 import io
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -22,7 +23,9 @@ def export_csv(
 ):
     results = (
         db.query(CalculatedResult, LineItemDefinition)
-        .join(LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id)
+        .join(
+            LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id
+        )
         .filter(CalculatedResult.budget_version_id == version_id)
         .order_by(LineItemDefinition.display_order, CalculatedResult.period_date)
         .all()
@@ -30,7 +33,9 @@ def export_csv(
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["period_date", "line_item_code", "line_item_name", "category", "value"])
+    writer.writerow(
+        ["period_date", "line_item_code", "line_item_name", "category", "value"]
+    )
     for r, li in results:
         writer.writerow([r.period_date, li.code, li.name, li.category, r.value])
 
@@ -38,5 +43,7 @@ def export_csv(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=atlas_results_{version_id[:8]}.csv"},
+        headers={
+            "Content-Disposition": f"attachment; filename=atlas_results_{version_id[:8]}.csv"
+        },
     )

@@ -1,6 +1,7 @@
 """
 Atlas Finance — Variable Costs Calculator
 """
+
 from app.services.financial_engine.models import VariableCostInputs
 
 

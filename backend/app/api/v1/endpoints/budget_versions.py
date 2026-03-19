@@ -5,7 +5,11 @@ from app.core.database import get_db
 from app.api.v1.deps import get_current_user
 from app.models.user import User
 from app.models.budget_version import BudgetVersion
-from app.schemas.budget_version import BudgetVersionCreate, BudgetVersionUpdate, BudgetVersionOut
+from app.schemas.budget_version import (
+    BudgetVersionCreate,
+    BudgetVersionUpdate,
+    BudgetVersionOut,
+)
 
 router = APIRouter()
 
@@ -80,7 +84,9 @@ def publish_version(
     if not v:
         raise HTTPException(status_code=404, detail="Versão não encontrada")
     if v.status == "archived":
-        raise HTTPException(status_code=409, detail="Versão arquivada não pode ser publicada")
+        raise HTTPException(
+            status_code=409, detail="Versão arquivada não pode ser publicada"
+        )
     v.status = "published"
     db.commit()
     db.refresh(v)

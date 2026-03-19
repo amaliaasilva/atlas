@@ -5,7 +5,11 @@ from app.core.database import get_db
 from app.api.v1.deps import get_current_user
 from app.models.user import User
 from app.models.organization import Organization
-from app.schemas.organization import OrganizationCreate, OrganizationUpdate, OrganizationOut
+from app.schemas.organization import (
+    OrganizationCreate,
+    OrganizationUpdate,
+    OrganizationOut,
+)
 
 router = APIRouter()
 
@@ -15,7 +19,12 @@ def list_organizations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return db.query(Organization).filter(Organization.is_active == True).order_by(Organization.name).all()
+    return (
+        db.query(Organization)
+        .filter(Organization.is_active == True)
+        .order_by(Organization.name)
+        .all()
+    )
 
 
 @router.post("/", response_model=OrganizationOut, status_code=201)

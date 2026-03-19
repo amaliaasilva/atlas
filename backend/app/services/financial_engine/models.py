@@ -3,19 +3,20 @@ Atlas Finance — Financial Engine Data Models
 Tipos de dados puros (sem ORM) para o motor financeiro.
 Esses tipos garantem que o motor pode ser testado sem banco de dados.
 """
+
 from dataclasses import dataclass, field
-from decimal import Decimal
 
 
 @dataclass
 class RevenueInputs:
     """Premissas de receita para uma unidade em um período."""
+
     max_students: int = 0
-    occupancy_rate: float = 0.0           # 0.0–1.0 (ex.: 0.45 = 45%)
-    avg_ticket_monthly: float = 0.0        # R$
-    avg_ticket_quarterly: float = 0.0      # R$
-    avg_ticket_annual: float = 0.0         # R$ (valor mensal equivalente)
-    mix_monthly_pct: float = 1.0           # soma mix = 1.0
+    occupancy_rate: float = 0.0  # 0.0–1.0 (ex.: 0.45 = 45%)
+    avg_ticket_monthly: float = 0.0  # R$
+    avg_ticket_quarterly: float = 0.0  # R$
+    avg_ticket_annual: float = 0.0  # R$ (valor mensal equivalente)
+    mix_monthly_pct: float = 1.0  # soma mix = 1.0
     mix_quarterly_pct: float = 0.0
     mix_annual_pct: float = 0.0
     num_personal_trainers: int = 0
@@ -26,6 +27,7 @@ class RevenueInputs:
 @dataclass
 class FixedCostInputs:
     """Premissas de custos fixos."""
+
     rent: float = 0.0
     condo_fee: float = 0.0
     iptu: float = 0.0
@@ -37,7 +39,7 @@ class FixedCostInputs:
     manager_salary: float = 0.0
     fitness_teacher_salary: float = 0.0
     pro_labore: float = 0.0
-    social_charges_rate: float = 0.08     # % sobre folha (FGTS 8%)
+    social_charges_rate: float = 0.08  # % sobre folha (FGTS 8%)
     benefits_per_employee: float = 0.0
     num_employees: int = 0
     # Utilities
@@ -71,14 +73,16 @@ class FixedCostInputs:
 @dataclass
 class VariableCostInputs:
     """Premissas de custos variáveis."""
+
     hygiene_kit_per_student: float = 0.0
-    sales_commission_rate: float = 0.0    # % sobre receita
+    sales_commission_rate: float = 0.0  # % sobre receita
     other_variable_costs: float = 0.0
 
 
 @dataclass
 class CapexInputs:
     """Premissas de investimento inicial."""
+
     equipment_value: float = 0.0
     renovation_works: float = 0.0
     pre_operational_expenses: float = 0.0
@@ -91,8 +95,9 @@ class CapexInputs:
 @dataclass
 class FinancingInputs:
     """Premissas de financiamento."""
+
     financed_amount: float = 0.0
-    monthly_interest_rate: float = 0.0    # ex.: 0.015 = 1.5% a.m.
+    monthly_interest_rate: float = 0.0  # ex.: 0.015 = 1.5% a.m.
     term_months: int = 0
     grace_period_months: int = 0
 
@@ -100,13 +105,15 @@ class FinancingInputs:
 @dataclass
 class TaxInputs:
     """Premissas fiscais."""
-    tax_rate_on_revenue: float = 0.06     # Simples/Presumido
+
+    tax_rate_on_revenue: float = 0.06  # Simples/Presumido
 
 
 @dataclass
 class FinancialInputs:
     """Todos os inputs de uma versão de orçamento para um período específico."""
-    period: str = ""                       # "YYYY-MM"
+
+    period: str = ""  # "YYYY-MM"
     revenue: RevenueInputs = field(default_factory=RevenueInputs)
     fixed_costs: FixedCostInputs = field(default_factory=FixedCostInputs)
     variable_costs: VariableCostInputs = field(default_factory=VariableCostInputs)
@@ -120,6 +127,7 @@ class FinancialInputs:
 @dataclass
 class PeriodResult:
     """Resultado calculado para um único período."""
+
     period: str = ""
 
     # Receita
@@ -155,21 +163,22 @@ class PeriodResult:
 
     # Resultados
     total_costs: float = 0.0
-    operating_result: float = 0.0    # Receita - Custos fixos - Variáveis - Impostos
-    net_result: float = 0.0          # Resultado Operacional - Financiamento
-    net_margin: float = 0.0          # Net Result / Gross Revenue
+    operating_result: float = 0.0  # Receita - Custos fixos - Variáveis - Impostos
+    net_result: float = 0.0  # Resultado Operacional - Financiamento
+    net_margin: float = 0.0  # Net Result / Gross Revenue
 
     # KPIs
     active_students: int = 0
     occupancy_rate: float = 0.0
     break_even_students: int = 0
-    burn_rate: float = 0.0           # Queima mensal (resultado negativo)
+    burn_rate: float = 0.0  # Queima mensal (resultado negativo)
     ebitda: float = 0.0
 
 
 @dataclass
 class FinancialOutputs:
     """Outputs completos de um budget_version (todos os períodos)."""
+
     budget_version_id: str = ""
     unit_id: str = ""
     scenario_id: str = ""

@@ -2,8 +2,9 @@
 Atlas Finance — KPI Calculator
 Calcula KPIs a partir dos resultados de um período.
 """
+
 import math
-from app.services.financial_engine.models import PeriodResult, FinancialInputs
+from app.services.financial_engine.models import PeriodResult
 
 
 def calculate_break_even_students(
@@ -18,7 +19,9 @@ def calculate_break_even_students(
     """
     if avg_ticket <= 0:
         return 0
-    contribution_margin_per_student = avg_ticket * (1 - tax_rate) - variable_cost_per_student
+    contribution_margin_per_student = (
+        avg_ticket * (1 - tax_rate) - variable_cost_per_student
+    )
     if contribution_margin_per_student <= 0:
         return 0
     return math.ceil(total_fixed_costs / contribution_margin_per_student)

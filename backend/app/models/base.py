@@ -1,5 +1,6 @@
 """Atlas Finance — Base model mixin with timestamps"""
-from datetime import datetime, timezone
+
+from datetime import datetime
 
 from sqlalchemy import DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column

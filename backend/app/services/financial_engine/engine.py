@@ -3,6 +3,7 @@ Atlas Finance — Financial Engine Core
 Orquestra os calculadores de receita, custos fixos, variáveis,
 impostos e financiamento para produzir resultados por período.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -84,6 +85,7 @@ class FinancialEngine:
             else:
                 # Em pré-operacional, paga aluguel + setup mínimo
                 from app.services.financial_engine.models import FixedCostInputs
+
                 pre_op = FixedCostInputs(
                     rent=inp.fixed_costs.rent,
                     condo_fee=inp.fixed_costs.condo_fee,
@@ -138,9 +140,7 @@ class FinancialEngine:
                 result.operating_result - result.financing_payment, 2
             )
             if result.gross_revenue > 0:
-                result.net_margin = round(
-                    result.net_result / result.gross_revenue, 4
-                )
+                result.net_margin = round(result.net_result / result.gross_revenue, 4)
 
             # 7. KPIs
             avg_ticket = inp.revenue.avg_ticket_monthly or 1.0

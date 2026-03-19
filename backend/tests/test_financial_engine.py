@@ -4,6 +4,7 @@ Execute: cd backend && pytest tests/ -v
 
 Estes testes rodam sem banco de dados — validam apenas a lógica de cálculo.
 """
+
 import pytest
 from app.services.financial_engine.revenue import (
     calculate_gross_revenue,
@@ -12,7 +13,10 @@ from app.services.financial_engine.revenue import (
 )
 from app.services.financial_engine.fixed_costs import calculate_total_fixed_costs
 from app.services.financial_engine.variable_costs import calculate_total_variable_costs
-from app.services.financial_engine.financing import calculate_pmt, get_financing_schedule
+from app.services.financial_engine.financing import (
+    calculate_pmt,
+    get_financing_schedule,
+)
 from app.services.financial_engine.kpi import (
     calculate_break_even_students,
     calculate_burn_rate,
@@ -20,8 +24,13 @@ from app.services.financial_engine.kpi import (
 )
 from app.services.financial_engine.engine import FinancialEngine
 from app.services.financial_engine.models import (
-    FinancialInputs, RevenueInputs, FixedCostInputs,
-    VariableCostInputs, CapexInputs, FinancingInputs, TaxInputs,
+    FinancialInputs,
+    RevenueInputs,
+    FixedCostInputs,
+    VariableCostInputs,
+    CapexInputs,
+    FinancingInputs,
+    TaxInputs,
     PeriodResult,
 )
 
@@ -30,8 +39,8 @@ from app.services.financial_engine.models import (
 # Revenue Tests
 # ──────────────────────────────────────────────────────────────────────────────
 
-class TestRevenueCalculator:
 
+class TestRevenueCalculator:
     def test_active_students_zero_occupancy(self):
         inputs = RevenueInputs(max_students=200, occupancy_rate=0.0)
         assert calculate_active_students(inputs) == 0
@@ -90,8 +99,8 @@ class TestRevenueCalculator:
 # Fixed Costs Tests
 # ──────────────────────────────────────────────────────────────────────────────
 
-class TestFixedCostsCalculator:
 
+class TestFixedCostsCalculator:
     def test_rent_calculation(self):
         inputs = FixedCostInputs(rent=19000.0, condo_fee=500.0, iptu=200.0)
         result = calculate_total_fixed_costs(inputs)
@@ -129,18 +138,24 @@ class TestFixedCostsCalculator:
 # Variable Costs Tests
 # ──────────────────────────────────────────────────────────────────────────────
 
-class TestVariableCostsCalculator:
 
+class TestVariableCostsCalculator:
     def test_hygiene_kit(self):
         from app.services.financial_engine.models import VariableCostInputs
+
         inputs = VariableCostInputs(hygiene_kit_per_student=3.50)
-        result = calculate_total_variable_costs(inputs, active_students=90, gross_revenue=18000.0)
+        result = calculate_total_variable_costs(
+            inputs, active_students=90, gross_revenue=18000.0
+        )
         assert result["hygiene_kit_cost"] == pytest.approx(90 * 3.50)
 
     def test_sales_commission(self):
         from app.services.financial_engine.models import VariableCostInputs
+
         inputs = VariableCostInputs(sales_commission_rate=0.05)
-        result = calculate_total_variable_costs(inputs, active_students=90, gross_revenue=18000.0)
+        result = calculate_total_variable_costs(
+            inputs, active_students=90, gross_revenue=18000.0
+        )
         assert result["sales_commission_cost"] == pytest.approx(18000.0 * 0.05)
 
 
@@ -148,8 +163,8 @@ class TestVariableCostsCalculator:
 # Financing Tests
 # ──────────────────────────────────────────────────────────────────────────────
 
-class TestFinancingCalculator:
 
+class TestFinancingCalculator:
     def test_pmt_zero_interest(self):
         pmt = calculate_pmt(60000.0, 0.0, 60)
         assert pmt == 1000.0
@@ -162,18 +177,25 @@ class TestFinancingCalculator:
 
     def test_schedule_length(self):
         from app.services.financial_engine.models import FinancingInputs
-        inputs = FinancingInputs(financed_amount=60000.0, monthly_interest_rate=0.015, term_months=60)
+
+        inputs = FinancingInputs(
+            financed_amount=60000.0, monthly_interest_rate=0.015, term_months=60
+        )
         schedule = get_financing_schedule(inputs)
         assert len(schedule) == 60
 
     def test_schedule_balance_zero_at_end(self):
         from app.services.financial_engine.models import FinancingInputs
-        inputs = FinancingInputs(financed_amount=60000.0, monthly_interest_rate=0.015, term_months=60)
+
+        inputs = FinancingInputs(
+            financed_amount=60000.0, monthly_interest_rate=0.015, term_months=60
+        )
         schedule = get_financing_schedule(inputs)
         assert schedule[-1]["balance"] == pytest.approx(0.0, abs=1.0)
 
     def test_grace_period(self):
         from app.services.financial_engine.models import FinancingInputs
+
         inputs = FinancingInputs(
             financed_amount=60000.0,
             monthly_interest_rate=0.015,
@@ -190,8 +212,8 @@ class TestFinancingCalculator:
 # KPI Tests
 # ──────────────────────────────────────────────────────────────────────────────
 
-class TestKPICalculator:
 
+class TestKPICalculator:
     def test_break_even_students(self):
         be = calculate_break_even_students(
             total_fixed_costs=44000.0,
@@ -218,12 +240,17 @@ class TestKPICalculator:
         # Mês 2: -7000 + 3000 = -4000
         # Mês 3: -4000 + 3000 = -1000
         # Mês 4: -1000 + 3000 = +2000 → payback no mês 4
-        periods = [PeriodResult(period=f"2026-{m:02d}", net_result=3000.0) for m in range(1, 8)]
+        periods = [
+            PeriodResult(period=f"2026-{m:02d}", net_result=3000.0) for m in range(1, 8)
+        ]
         payback = calculate_payback_months(10000.0, periods)
         assert payback == 4
 
     def test_no_payback_in_horizon(self):
-        periods = [PeriodResult(period=f"2026-{m:02d}", net_result=-1000.0) for m in range(1, 13)]
+        periods = [
+            PeriodResult(period=f"2026-{m:02d}", net_result=-1000.0)
+            for m in range(1, 13)
+        ]
         assert calculate_payback_months(100000.0, periods) is None
 
 
@@ -231,8 +258,8 @@ class TestKPICalculator:
 # Integration: Full Engine Run
 # ──────────────────────────────────────────────────────────────────────────────
 
-class TestFinancialEngineIntegration:
 
+class TestFinancialEngineIntegration:
     def _make_inputs(self, period: str, occupancy: float) -> FinancialInputs:
         return FinancialInputs(
             period=period,

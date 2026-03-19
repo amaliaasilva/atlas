@@ -2,6 +2,7 @@
 Atlas Finance — Fixed Costs Calculator
 Agrupa e calcula todos os custos fixos de uma unidade.
 """
+
 from app.services.financial_engine.models import FixedCostInputs
 
 

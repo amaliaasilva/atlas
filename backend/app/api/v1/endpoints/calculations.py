@@ -2,6 +2,7 @@
 Atlas Finance — Calculations Endpoint
 Dispara o motor financeiro para recalcular uma versão de orçamento.
 """
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -11,11 +12,15 @@ from app.api.v1.deps import get_current_user
 from app.models.user import User
 from app.models.budget_version import BudgetVersion
 from app.models.assumption import AssumptionValue, AssumptionDefinition
-from app.models.unit import Unit
 from app.services.financial_engine import FinancialEngine
 from app.services.financial_engine.models import (
-    FinancialInputs, RevenueInputs, FixedCostInputs,
-    VariableCostInputs, CapexInputs, FinancingInputs, TaxInputs,
+    FinancialInputs,
+    RevenueInputs,
+    FixedCostInputs,
+    VariableCostInputs,
+    CapexInputs,
+    FinancingInputs,
+    TaxInputs,
 )
 from app.services.financial_engine.consolidator import consolidate_business
 
@@ -29,24 +34,35 @@ def _load_assumption_values(version_id: str, db: Session) -> dict:
     """
     rows = (
         db.query(AssumptionValue, AssumptionDefinition)
-        .join(AssumptionDefinition, AssumptionValue.assumption_definition_id == AssumptionDefinition.id)
+        .join(
+            AssumptionDefinition,
+            AssumptionValue.assumption_definition_id == AssumptionDefinition.id,
+        )
         .filter(AssumptionValue.budget_version_id == version_id)
         .all()
     )
     result = {}
     for val, defn in rows:
         key = (defn.code, val.period_date)
-        result[key] = val.value_numeric if val.value_numeric is not None else defn.default_value or 0.0
+        result[key] = (
+            val.value_numeric
+            if val.value_numeric is not None
+            else defn.default_value or 0.0
+        )
     return result
 
 
-def _get(values: dict, code: str, period: str | None = None, default: float = 0.0) -> float:
+def _get(
+    values: dict, code: str, period: str | None = None, default: float = 0.0
+) -> float:
     """Helper para buscar um valor por code e período."""
     v = values.get((code, period)) or values.get((code, None))
     return float(v) if v is not None else default
 
 
-def _build_inputs_for_version(version_id: str, db: Session) -> tuple[list[FinancialInputs], CapexInputs, list[str]]:
+def _build_inputs_for_version(
+    version_id: str, db: Session
+) -> tuple[list[FinancialInputs], CapexInputs, list[str]]:
     """
     Constrói a lista de FinancialInputs por período e o CapexInputs
     a partir dos assumption_values de uma versão.
@@ -54,10 +70,7 @@ def _build_inputs_for_version(version_id: str, db: Session) -> tuple[list[Financ
     values = _load_assumption_values(version_id, db)
 
     # Descobre os períodos disponíveis (YYYY-MM) dos valores mensais
-    periods = sorted(set(
-        period for (_, period) in values.keys()
-        if period is not None
-    ))
+    periods = sorted(set(period for (_, period) in values.keys() if period is not None))
 
     if not periods:
         # Sem dados de período, usa apenas premissas estáticas em um período fictício
@@ -141,15 +154,17 @@ def _build_inputs_for_version(version_id: str, db: Session) -> tuple[list[Financ
             other_variable_costs=_get(values, "outros_custos_variaveis", p),
         )
 
-        inputs_list.append(FinancialInputs(
-            period=period,
-            revenue=revenue,
-            fixed_costs=fixed,
-            variable_costs=variable,
-            capex=capex,
-            financing=financing,
-            taxes=TaxInputs(tax_rate_on_revenue=tax_rate),
-        ))
+        inputs_list.append(
+            FinancialInputs(
+                period=period,
+                revenue=revenue,
+                fixed_costs=fixed,
+                variable_costs=variable,
+                capex=capex,
+                financing=financing,
+                taxes=TaxInputs(tax_rate_on_revenue=tax_rate),
+            )
+        )
 
     return inputs_list, capex, periods
 
@@ -178,7 +193,9 @@ def recalculate_version(
         raise HTTPException(status_code=404, detail="Versão não encontrada")
 
     if version.status == "archived":
-        raise HTTPException(status_code=409, detail="Versão arquivada não pode ser recalculada")
+        raise HTTPException(
+            status_code=409, detail="Versão arquivada não pode ser recalculada"
+        )
 
     inputs_list, capex, periods = _build_inputs_for_version(version_id, db)
 
@@ -214,7 +231,11 @@ def consolidate(
     Consolida resultados de todas as unidades publicadas de um negócio.
     """
     rows = consolidate_business(business_id, scenario_id, db)
-    return {"consolidated_rows": len(rows), "business_id": business_id, "scenario_id": scenario_id}
+    return {
+        "consolidated_rows": len(rows),
+        "business_id": business_id,
+        "scenario_id": scenario_id,
+    }
 
 
 @router.get("/results/{version_id}")
@@ -226,9 +247,12 @@ def get_results(
     """Retorna os resultados calculados de uma versão de orçamento."""
     from app.models.calculated_result import CalculatedResult
     from app.models.line_item import LineItemDefinition
+
     results = (
         db.query(CalculatedResult, LineItemDefinition)
-        .join(LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id)
+        .join(
+            LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id
+        )
         .filter(CalculatedResult.budget_version_id == version_id)
         .order_by(CalculatedResult.period_date, LineItemDefinition.display_order)
         .all()

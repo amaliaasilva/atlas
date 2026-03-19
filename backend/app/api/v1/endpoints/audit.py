@@ -1,6 +1,7 @@
 """
 Atlas Finance — Audit Log Endpoint
 """
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 

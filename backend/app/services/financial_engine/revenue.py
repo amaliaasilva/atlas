@@ -2,6 +2,7 @@
 Atlas Finance — Revenue Calculator
 Calcula receita mensal com base em premissas de ocupação e ticket médio.
 """
+
 import math
 from app.services.financial_engine.models import RevenueInputs
 

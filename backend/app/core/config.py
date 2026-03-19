@@ -1,4 +1,5 @@
 """Atlas Finance — Application Configuration"""
+
 from functools import lru_cache
 from typing import List
 

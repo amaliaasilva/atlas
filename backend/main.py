@@ -2,6 +2,7 @@
 Atlas Finance — Backend Entry Point
 FastAPI application with lifespan management.
 """
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI

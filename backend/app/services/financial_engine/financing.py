@@ -2,7 +2,7 @@
 Atlas Finance — Financing Calculator
 Calcula prestações de financiamento usando sistema PRICE (PMT).
 """
-import math
+
 from app.services.financial_engine.models import FinancingInputs
 
 
@@ -47,13 +47,15 @@ def get_financing_schedule(inputs: FinancingInputs) -> list[dict]:
             payment = pmt
 
         balance = max(0.0, round(balance - principal_payment, 2))
-        schedule.append({
-            "month": month,
-            "payment": round(payment, 2),
-            "principal": principal_payment,
-            "interest": interest,
-            "balance": balance,
-        })
+        schedule.append(
+            {
+                "month": month,
+                "payment": round(payment, 2),
+                "principal": principal_payment,
+                "interest": interest,
+                "balance": balance,
+            }
+        )
     return schedule
 
 

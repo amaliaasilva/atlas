@@ -1,0 +1,12 @@
+[lint]
+select = ["E", "F"]
+ignore = [
+    "F821",   # Forward references em SQLAlchemy Mapped["Type"] — falsos positivos
+    "E501",   # Line too long — não aplicado retroativamente
+    "E711",   # Comparison to None — SQLAlchemy usa == None
+    "E712",   # Comparison to True/False — SQLAlchemy usa == True
+]
+
+[lint.per-file-ignores]
+"app/schemas/__init__.py" = ["F401"]  # Re-exports intencionais
+"app/models/__init__.py"  = ["F401"]  # Re-exports intencionais

@@ -2,6 +2,7 @@
 Atlas Finance — Consolidator
 Agrega os resultados de todas as unidades de um negócio em um consolidado.
 """
+
 from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING
@@ -46,7 +47,7 @@ def consolidate_business(
             Unit.business_id == business_id,
             BudgetVersion.scenario_id == scenario_id,
             BudgetVersion.status == "published",
-            BudgetVersion.is_active == True,
+            BudgetVersion.is_active.is_(True),  # noqa: E712
         )
         .all()
     )
@@ -62,7 +63,9 @@ def consolidate_business(
             LineItemDefinition.code,
             CalculatedResult.value,
         )
-        .join(LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id)
+        .join(
+            LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id
+        )
         .filter(
             CalculatedResult.budget_version_id.in_(version_ids),
             LineItemDefinition.code.in_(CONSOLIDATED_METRICS),
@@ -92,11 +95,13 @@ def consolidate_business(
             value=round(value, 2),
         )
         db.add(row)
-        rows.append({
-            "period_date": period_date,
-            "metric_code": metric_code,
-            "value": round(value, 2),
-        })
+        rows.append(
+            {
+                "period_date": period_date,
+                "metric_code": metric_code,
+                "value": round(value, 2),
+            }
+        )
 
     db.commit()
     return rows
