@@ -21,31 +21,41 @@ interface DRERow {
 }
 
 const DRE_STRUCTURE: DRERow[] = [
-  { code: 'gross_revenue',        label: 'Receita Bruta',              indent: 0, bold: true },
-  { code: 'membership_revenue',   label: '  Mensalidades',             indent: 1 },
-  { code: 'personal_training',    label: '  Personal Training',        indent: 1 },
-  { code: 'taxes',                label: '(-) Impostos (6% Simples)',  indent: 0 },
-  { code: 'net_revenue',          label: 'Receita Líquida',            indent: 0, bold: true, isTotal: true },
-  { code: 'total_fixed_costs',    label: '(-) Custos Fixos',          indent: 0, bold: true },
-  { code: 'rent_total',           label: '  Aluguel + Condomínio',     indent: 1 },
-  { code: 'staff_costs',          label: '  Pessoal (CLT + Pró-Lab.)', indent: 1 },
-  { code: 'utility_costs',        label: '  Utilities (Energia/Água)', indent: 1 },
-  { code: 'admin_costs',          label: '  Adm + Contabilidade',      indent: 1 },
-  { code: 'marketing_costs',      label: '  Marketing',                indent: 1 },
-  { code: 'equipment_maintenance',label: '  Manutenção Equipamentos',  indent: 1 },
-  { code: 'insurance_costs',      label: '  Seguros',                  indent: 1 },
-  { code: 'total_variable_costs', label: '(-) Custos Variáveis',      indent: 0, bold: true },
-  { code: 'hygiene_kit_cost',     label: '  Kit Higiene/Aluno',        indent: 1 },
-  { code: 'sales_commission',     label: '  Comissão de Vendas',       indent: 1 },
-  { code: 'ebitda',               label: 'EBITDA',                     indent: 0, bold: true, isTotal: true },
-  { code: 'financing_payment',    label: '(-) Financiamento',         indent: 0 },
-  { code: 'net_result',           label: 'Resultado Líquido',          indent: 0, bold: true, isTotal: true },
-  { code: 'active_students',      label: 'Alunos Ativos',              indent: 0 },
-  { code: 'occupancy_rate',       label: 'Ocupação (%)',               indent: 0 },
-  { code: 'net_margin',           label: 'Margem Líquida (%)',         indent: 0 },
+  { code: 'revenue_total',          label: 'Receita Bruta',              indent: 0, bold: true },
+  { code: 'membership_revenue',     label: '  Mensalidades',             indent: 1 },
+  { code: 'personal_training_revenue', label: '  Personal Training',     indent: 1 },
+  { code: 'other_revenue',          label: '  Outras Receitas',          indent: 1 },
+  { code: 'taxes_on_revenue',       label: '(-) Impostos (Simples)',     indent: 0 },
+  { code: 'total_fixed_costs',      label: '(-) Custos Fixos',          indent: 0, bold: true },
+  { code: 'rent_total',             label: '  Aluguel + Condomínio',     indent: 1 },
+  { code: 'staff_costs',            label: '  Pessoal (CLT + Pró-Lab.)', indent: 1 },
+  { code: 'utility_costs',          label: '  Utilities (Energia/Água)', indent: 1 },
+  { code: 'admin_costs',            label: '  Adm + Contabilidade',      indent: 1 },
+  { code: 'marketing_costs',        label: '  Marketing',                indent: 1 },
+  { code: 'equipment_costs',        label: '  Manutenção Equipamentos',  indent: 1 },
+  { code: 'insurance_costs',        label: '  Seguros',                  indent: 1 },
+  { code: 'total_variable_costs',   label: '(-) Custos Variáveis',      indent: 0, bold: true },
+  { code: 'hygiene_kit_cost',       label: '  Kit Higiene',              indent: 1 },
+  { code: 'sales_commission_cost',  label: '  Comissão de Vendas',       indent: 1 },
+  { code: 'ebitda',                 label: 'EBITDA',                     indent: 0, bold: true, isTotal: true },
+  { code: 'financing_payment',      label: '(-) Financiamento',         indent: 0 },
+  { code: 'net_result',             label: 'Resultado Líquido',          indent: 0, bold: true, isTotal: true },
+  // KPIs operacionais B2B Coworking
+  { code: 'active_hours_month',     label: 'Horas Vendidas/Mês',         indent: 0 },
+  { code: 'capacity_hours_month',   label: 'Capacidade Total (h/mês)',   indent: 0 },
+  { code: 'occupancy_rate',         label: 'Ocupação (%)',               indent: 0 },
+  { code: 'break_even_revenue',     label: 'Break-even Receita (R$)',    indent: 0 },
+  { code: 'break_even_occupancy_pct', label: 'Break-even Ocupação (%)', indent: 0 },
+  { code: 'contribution_margin_pct', label: 'Margem de Contribuição (%)', indent: 0 },
+  { code: 'net_margin',             label: 'Margem Líquida (%)',         indent: 0 },
 ];
 
-const PERCENT_METRICS = new Set(['occupancy_rate', 'net_margin']);
+const PERCENT_METRICS = new Set([
+  'occupancy_rate',
+  'net_margin',
+  'break_even_occupancy_pct',
+  'contribution_margin_pct',
+]);
 
 export default function ResultsClient() {
   const { versionId } = useParams<{ versionId: string }>();
@@ -86,6 +96,8 @@ export default function ResultsClient() {
   const formatCell = (code: string, val: number) => {
     if (val === undefined || val === null) return '—';
     if (code === 'active_students') return String(Math.round(val));
+    if (code === 'active_hours_month' || code === 'capacity_hours_month')
+      return `${Math.round(val).toLocaleString('pt-BR')} h`;
     if (PERCENT_METRICS.has(code)) return formatPercent(val);
     return formatCurrency(val);
   };

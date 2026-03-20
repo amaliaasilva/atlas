@@ -3,6 +3,7 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { dashboardApi, calculationsApi, versionsApi } from '@/lib/api';
+import { getRevenue } from '@/types/api';
 import { Topbar } from '@/components/layout/Topbar';
 import { KpiCard } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -73,9 +74,9 @@ export default function DashboardUnitClient() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
               <KpiCard
                 label="Receita Bruta (último mês)"
-                value={formatCurrency(ts[ts.length - 1]?.gross_revenue ?? 0)}
+                value={formatCurrency(getRevenue(ts[ts.length - 1]))}
                 icon={<DollarSign className="h-4 w-4" />}
-                trend={(ts[ts.length - 1]?.gross_revenue ?? 0) > 0 ? 'up' : 'neutral'}
+                trend={getRevenue(ts[ts.length - 1]) > 0 ? 'up' : 'neutral'}
               />
               <KpiCard
                 label="Resultado Líquido"
@@ -91,10 +92,16 @@ export default function DashboardUnitClient() {
                 trend={(kpis?.ebitda ?? 0) >= 0 ? 'up' : 'down'}
               />
               <KpiCard
-                label="Alunos (último mês)"
-                value={formatNumber(ts[ts.length - 1]?.active_students ?? 0)}
+                label="Horas Vendidas (último mês)"
+                value={`${Math.round(ts[ts.length - 1]?.active_hours_month ?? 0).toLocaleString('pt-BR')} h`}
                 icon={<Users className="h-4 w-4" />}
-                sub={`Breakeven: ${formatNumber(kpis?.break_even_students ?? 0)} alunos`}
+                sub={
+                  kpis?.break_even_occupancy_pct
+                    ? `Break-even: ${formatPercent(kpis.break_even_occupancy_pct)}`
+                    : kpis?.break_even_revenue
+                    ? `Break-even: ${formatCurrency(kpis.break_even_revenue)}`
+                    : undefined
+                }
               />
               <KpiCard
                 label="Ocupação (último mês)"
@@ -103,6 +110,11 @@ export default function DashboardUnitClient() {
                 trend={
                   (ts[ts.length - 1]?.occupancy_rate ?? 0) > 0.7 ? 'up' :
                   (ts[ts.length - 1]?.occupancy_rate ?? 0) > 0.4 ? 'neutral' : 'down'
+                }
+                sub={
+                  kpis?.contribution_margin_pct
+                    ? `M. Contrib.: ${formatPercent(kpis.contribution_margin_pct)}`
+                    : undefined
                 }
               />
             </div>

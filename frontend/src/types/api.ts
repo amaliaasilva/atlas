@@ -93,6 +93,12 @@ export interface KPISummary {
   break_even_students?: number;
   net_margin?: number;
   payback_months?: number;
+  // KPIs B2B Coworking
+  break_even_revenue?: number;
+  break_even_occupancy_pct?: number;
+  contribution_margin_pct?: number;
+  capacity_hours_month?: number;
+  active_hours_month?: number;
 }
 
 export interface DashboardUnit {
@@ -117,6 +123,14 @@ export interface TimeSeries {
   taxes_on_revenue?: number;
   financing_payment?: number;
   break_even_students?: number;
+  // KPIs B2B Coworking
+  capacity_hours_month?: number;
+  active_hours_month?: number;
+  avg_price_per_hour?: number;
+  break_even_revenue?: number;
+  break_even_occupancy_pct?: number;
+  contribution_margin_pct?: number;
+  net_margin?: number;
 }
 
 // Helper para resolver alias revenue_total vs gross_revenue

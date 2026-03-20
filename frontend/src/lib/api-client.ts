@@ -1,6 +1,8 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://atlas-backend-7cuu5kzxjq-rj.a.run.app';
+const _raw = process.env.NEXT_PUBLIC_API_URL || 'https://atlas-backend-7cuu5kzxjq-rj.a.run.app';
+// Garante https:// — evita Mixed Content caso env var chegue sem protocolo ou com http://
+const BASE_URL = _raw.startsWith('http') ? _raw.replace(/^http:\/\//, 'https://') : `https://${_raw}`;
 
 export const api = axios.create({
   baseURL: `${BASE_URL}/api/v1`,

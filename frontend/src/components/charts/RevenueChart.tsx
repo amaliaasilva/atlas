@@ -5,6 +5,7 @@ import {
   Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 import type { TimeSeries } from '@/types/api';
+import { getRevenue } from '@/types/api';
 import { formatCurrency, formatPeriod } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 
@@ -16,7 +17,7 @@ interface Props {
 export function RevenueChart({ data, title = 'Receita vs Resultado' }: Props) {
   const chartData = data.map((d) => ({
     period: formatPeriod(d.period),
-    receita: Math.round(d.gross_revenue ?? 0),
+    receita: Math.round(getRevenue(d)),
     resultado: Math.round(d.net_result),
     ebitda: Math.round(d.ebitda),
   }));
