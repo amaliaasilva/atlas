@@ -5,6 +5,8 @@ import type {
   AssumptionValue, CalculatedResult, DashboardUnit,
   DashboardConsolidated, UnitComparison, UnitsComparisonResponse,
   ImportJob, AuditLog, User,
+  FinancingContract, FinancingContractInput,
+  ServicePlan, ServicePlanInput,
 } from '@/types/api';
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -163,4 +165,30 @@ export const usersApi = {
   list: (): Promise<User[]> => api.get<User[]>('/users').then((r) => r.data),
   create: (data: Partial<User> & { password: string }): Promise<User> =>
     api.post<User>('/users', data).then((r) => r.data),
+};
+
+// ── Financing Contracts ─────────────────────────────────────────────────────
+
+export const financingContractsApi = {
+  list: (version_id: string): Promise<FinancingContract[]> =>
+    api.get<FinancingContract[]>(`/financing-contracts/${version_id}`).then((r) => r.data),
+  create: (data: FinancingContractInput): Promise<FinancingContract> =>
+    api.post<FinancingContract>('/financing-contracts', data).then((r) => r.data),
+  update: (id: string, data: Partial<FinancingContractInput>): Promise<FinancingContract> =>
+    api.patch<FinancingContract>(`/financing-contracts/contract/${id}`, data).then((r) => r.data),
+  delete: (id: string): Promise<void> =>
+    api.delete(`/financing-contracts/contract/${id}`).then(() => {}),
+};
+
+// ── Service Plans ─────────────────────────────────────────────────────────────
+
+export const servicePlansApi = {
+  list: (business_id: string): Promise<ServicePlan[]> =>
+    api.get<ServicePlan[]>('/service-plans', { params: { business_id } }).then((r) => r.data),
+  create: (data: ServicePlanInput): Promise<ServicePlan> =>
+    api.post<ServicePlan>('/service-plans', data).then((r) => r.data),
+  update: (id: string, data: Partial<ServicePlanInput>): Promise<ServicePlan> =>
+    api.patch<ServicePlan>(`/service-plans/${id}`, data).then((r) => r.data),
+  delete: (id: string): Promise<void> =>
+    api.delete(`/service-plans/${id}`).then(() => {}),
 };

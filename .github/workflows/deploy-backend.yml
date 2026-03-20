@@ -218,6 +218,7 @@ jobs:
             --service-account=${{ secrets.WIF_SERVICE_ACCOUNT }}
           env_vars: |-
             ENVIRONMENT=production
+          env_vars_update_strategy: overwrite
           secrets: |-
             DATABASE_URL=atlas-database-url:latest
             SECRET_KEY=atlas-secret-key:latest

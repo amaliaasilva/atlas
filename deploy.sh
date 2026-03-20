@@ -30,8 +30,10 @@ BACKEND_DIR="${SCRIPT_DIR}/backend"
 GCP_PROJECT="${GCP_PROJECT:-atlasfinance}"
 GCP_REGION="${GCP_REGION:-southamerica-east1}"
 CLOUD_RUN_SERVICE="${CLOUD_RUN_SERVICE:-atlas-backend}"
+FRONTEND_SERVICE="${FRONTEND_SERVICE:-atlas-frontend}"
 FIREBASE_SITE="${FIREBASE_SITE:-atlasfinance}"
 IMAGE_NAME="gcr.io/${GCP_PROJECT}/${CLOUD_RUN_SERVICE}"
+FRONTEND_IMAGE_NAME="gcr.io/${GCP_PROJECT}/${FRONTEND_SERVICE}"
 DEPLOY_TARGET="all"
 ENVIRONMENT="production"
 DRY_RUN=false
@@ -46,7 +48,7 @@ ${BOLD}Atlas Finance Deploy Script${NC}
   ${CYAN}./deploy.sh${NC} [target] [opções]
 
 ${BOLD}Targets:${NC}
-  frontend    Deploy somente o frontend (Firebase Hosting)
+  frontend    Deploy somente o frontend (Docker → Cloud Run + Firebase Hosting)
   backend     Deploy somente o backend (Cloud Run)
   all         Deploy completo (padrão)
 
@@ -58,10 +60,11 @@ ${BOLD}Opções:${NC}
   -h, --help  Exibe este menu
 
 ${BOLD}Variáveis de ambiente:${NC}
-  FIREBASE_TOKEN    Token do Firebase CLI (obrigatório em CI)
-  DATABASE_URL      URL do Cloud SQL (postgresql+asyncpg://...)
-  SECRET_KEY        Chave JWT secreta
-  GCS_BUCKET_NAME   Bucket do Cloud Storage
+  FIREBASE_TOKEN       Token do Firebase CLI (obrigatório em CI p/ hosting)
+  NEXT_PUBLIC_API_URL  URL do backend (auto-detectado via Cloud Run se omitido)
+  DATABASE_URL         URL do Cloud SQL (postgresql+asyncpg://...)
+  SECRET_KEY           Chave JWT secreta
+  GCS_BUCKET_NAME      Bucket do Cloud Storage
 
 ${BOLD}Exemplos:${NC}
   ./deploy.sh all --env production
@@ -79,7 +82,7 @@ while [[ $# -gt 0 ]]; do
     frontend|backend|all) DEPLOY_TARGET="$1"; shift ;;
     --env)        ENVIRONMENT="${2:-production}"; shift 2 ;;
     --dry-run)    DRY_RUN=true; shift ;;
-    --project)    GCP_PROJECT="$2"; IMAGE_NAME="gcr.io/${GCP_PROJECT}/${CLOUD_RUN_SERVICE}"; shift 2 ;;
+    --project)    GCP_PROJECT="$2"; IMAGE_NAME="gcr.io/${GCP_PROJECT}/${CLOUD_RUN_SERVICE}"; FRONTEND_IMAGE_NAME="gcr.io/${GCP_PROJECT}/${FRONTEND_SERVICE}"; shift 2 ;;
     --tag)        IMAGE_TAG="$2"; shift 2 ;;
     -h|--help)    usage; exit 0 ;;
     *)            log_error "Argumento desconhecido: $1"; usage; exit 1 ;;
@@ -89,6 +92,8 @@ done
 IMAGE_TAG="${IMAGE_TAG:-$(git -C "${SCRIPT_DIR}" rev-parse --short HEAD 2>/dev/null || echo "latest")}"
 FULL_IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
 FULL_IMAGE_LATEST="${IMAGE_NAME}:latest"
+FRONTEND_FULL_IMAGE="${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}"
+FRONTEND_FULL_IMAGE_LATEST="${FRONTEND_IMAGE_NAME}:latest"
 
 # ─── Verificações de pré-requisitos ──────────────────────────────────────────
 check_prerequisites() {
@@ -97,12 +102,11 @@ check_prerequisites() {
   local missing=()
 
   command -v node    >/dev/null 2>&1 || missing+=("node")
-  command -v npm     >/dev/null 2>&1 || missing+=("npm")
-  command -v firebase>/dev/null 2>&1 || missing+=("firebase-tools (npm i -g firebase-tools)")
+  command -v docker  >/dev/null 2>&1 || missing+=("docker")
+  command -v gcloud  >/dev/null 2>&1 || missing+=("gcloud (https://cloud.google.com/sdk/docs/install)")
 
-  if [[ "$DEPLOY_TARGET" == "backend" || "$DEPLOY_TARGET" == "all" ]]; then
-    command -v docker  >/dev/null 2>&1 || missing+=("docker")
-    command -v gcloud  >/dev/null 2>&1 || missing+=("gcloud (https://cloud.google.com/sdk/docs/install)")
+  if [[ "$DEPLOY_TARGET" == "frontend" || "$DEPLOY_TARGET" == "all" ]]; then
+    command -v firebase>/dev/null 2>&1 || missing+=("firebase-tools (npm i -g firebase-tools)")
   fi
 
   if [[ "${#missing[@]}" -gt 0 ]]; then
@@ -122,10 +126,12 @@ validate_environment() {
 
   local warnings=()
 
-  # Token Firebase — obrigatório em CI (não em interativo)
-  if [[ -z "${FIREBASE_TOKEN:-}" ]] && [[ ! -t 0 ]]; then
-    log_error "FIREBASE_TOKEN não definido. Em CI, exporte FIREBASE_TOKEN=\$(cat /tmp/fb_token.txt)"
-    exit 1
+  # Token Firebase — obrigatório em CI quando há deploy de hosting
+  if [[ "$DEPLOY_TARGET" == "frontend" || "$DEPLOY_TARGET" == "all" ]]; then
+    if [[ -z "${FIREBASE_TOKEN:-}" ]] && [[ ! -t 0 ]]; then
+      log_error "FIREBASE_TOKEN não definido. Em CI, exporte FIREBASE_TOKEN=\$(cat /tmp/fb_token.txt)"
+      exit 1
+    fi
   fi
 
   if [[ "$DEPLOY_TARGET" == "backend" || "$DEPLOY_TARGET" == "all" ]]; then
@@ -184,40 +190,95 @@ run_tests() {
   log_ok "Todos os testes passaram"
 }
 
-# ─── Build do Frontend ────────────────────────────────────────────────────────
-build_frontend() {
-  log_step "Build do Frontend (Next.js export estático)"
+# ─── Build da imagem Docker do Frontend ─────────────────────────────────────
+build_frontend_image() {
+  log_step "Build da imagem Docker → ${FRONTEND_FULL_IMAGE}"
 
   if $DRY_RUN; then
-    log_warn "[DRY-RUN] npm run build seria executado em ${FRONTEND_DIR}"
+    log_warn "[DRY-RUN] docker build do frontend seria executado"
     return 0
   fi
 
-  cd "${FRONTEND_DIR}"
-
-  # Instala dependências com cache limpo se package-lock mudou
-  log_info "Instalando dependências npm..."
-  npm ci --prefer-offline --no-audit 2>&1 | tail -3
-
-  # Variáveis de build (injetadas como NEXT_PUBLIC_*)
-  local api_url="${NEXT_PUBLIC_API_URL:-https://atlas-backend-${GCP_PROJECT}.${GCP_REGION}.run.app}"
+  # Obtém a URL do backend para NEXT_PUBLIC_API_URL (necessário em build time)
+  local api_url="${NEXT_PUBLIC_API_URL:-}"
+  if [[ -z "$api_url" ]]; then
+    log_info "NEXT_PUBLIC_API_URL não definido — consultando Cloud Run..."
+    api_url=$(gcloud run services describe "${CLOUD_RUN_SERVICE}" \
+      --project="${GCP_PROJECT}" \
+      --region="${GCP_REGION}" \
+      --format="value(status.url)" 2>/dev/null || echo "")
+    if [[ -z "$api_url" ]]; then
+      log_error "Não foi possível determinar NEXT_PUBLIC_API_URL. Defina a variável ou faça deploy do backend primeiro."
+      exit 1
+    fi
+  fi
   log_info "NEXT_PUBLIC_API_URL=${api_url}"
 
-  NEXT_PUBLIC_API_URL="${api_url}" \
-  NEXT_PUBLIC_ENV="${ENVIRONMENT}" \
-    npm run build 2>&1
+  # Configura Docker para autenticar no GCR
+  gcloud auth configure-docker --quiet 2>&1
 
-  # Garante que o diretório de saída existe
-  [[ -d "out" ]] || { log_error "Build falhou: diretório 'out' não encontrado"; exit 1; }
+  docker build \
+    --file "${FRONTEND_DIR}/Dockerfile" \
+    --build-arg "NEXT_PUBLIC_API_URL=${api_url}" \
+    --tag "${FRONTEND_FULL_IMAGE}" \
+    --tag "${FRONTEND_FULL_IMAGE_LATEST}" \
+    --label "git.commit=${IMAGE_TAG}" \
+    --label "build.timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --label "build.environment=${ENVIRONMENT}" \
+    "${FRONTEND_DIR}" 2>&1
 
-  local file_count
-  file_count=$(find out -type f | grep -c "" || echo "0")
-  log_ok "Build concluído: ${file_count} arquivos em ./out/"
-
-  cd "${SCRIPT_DIR}"
+  log_ok "Imagem construída: ${FRONTEND_FULL_IMAGE}"
 }
 
-# ─── Deploy Firebase Hosting ──────────────────────────────────────────────────
+# ─── Push da imagem do Frontend para GCR ─────────────────────────────────────
+push_frontend_image() {
+  log_step "Push do Frontend para Container Registry"
+
+  if $DRY_RUN; then
+    log_warn "[DRY-RUN] docker push do frontend seria executado"
+    return 0
+  fi
+
+  docker push "${FRONTEND_FULL_IMAGE}" 2>&1
+  docker push "${FRONTEND_FULL_IMAGE_LATEST}" 2>&1
+
+  log_ok "Imagem publicada em: ${FRONTEND_FULL_IMAGE}"
+}
+
+# ─── Deploy Cloud Run (Frontend) ──────────────────────────────────────────────
+deploy_frontend_cloud_run() {
+  log_step "Deploy Cloud Run → ${FRONTEND_SERVICE} (${GCP_REGION})"
+
+  if $DRY_RUN; then
+    log_warn "[DRY-RUN] gcloud run deploy do frontend seria executado"
+    return 0
+  fi
+
+  gcloud run deploy "${FRONTEND_SERVICE}" \
+    --image="${FRONTEND_FULL_IMAGE}" \
+    --project="${GCP_PROJECT}" \
+    --region="${GCP_REGION}" \
+    --platform=managed \
+    --allow-unauthenticated \
+    --port=3000 \
+    --memory=512Mi \
+    --cpu=1 \
+    --min-instances=0 \
+    --max-instances=5 \
+    --concurrency=80 \
+    --timeout=60 \
+    --labels="environment=${ENVIRONMENT},commit=${IMAGE_TAG}" \
+    --quiet 2>&1
+
+  local service_url
+  service_url=$(gcloud run services describe "${FRONTEND_SERVICE}" \
+    --project="${GCP_PROJECT}" \
+    --region="${GCP_REGION}" \
+    --format="value(status.url)" 2>/dev/null || echo "")
+  log_ok "Frontend Cloud Run: ${service_url}"
+}
+
+# ─── Deploy Firebase Hosting (atualiza configuração CDN/rewrites) ────────────
 deploy_frontend() {
   log_step "Deploy Firebase Hosting → site: ${FIREBASE_SITE}"
 
@@ -241,13 +302,9 @@ deploy_frontend() {
     log_info "Usando FIREBASE_TOKEN (modo CI)"
   fi
 
-  if $DRY_RUN; then
-    firebase_opts+=(--debug)
-  fi
-
   firebase "${firebase_opts[@]}" 2>&1
 
-  log_ok "Frontend deployado em:"
+  log_ok "Firebase Hosting atualizado:"
   echo -e "  ${GREEN}https://${FIREBASE_SITE}.web.app${NC}"
   echo -e "  ${GREEN}https://${FIREBASE_SITE}.firebaseapp.com${NC}"
 
@@ -303,18 +360,20 @@ deploy_backend() {
     return 0
   fi
 
-  # Monta as env vars para Cloud Run (Secret Manager em produção)
-  local env_vars="ENVIRONMENT=${ENVIRONMENT}"
-  env_vars+=",CORS_ORIGINS=https://${FIREBASE_SITE}.web.app,https://${FIREBASE_SITE}.firebaseapp.com"
+  # Monta as env vars para Cloud Run.
+  # Usa "^|^" como delimitador para suportar valores com vírgulas (ex: CORS_ORIGINS).
+  # Referência: https://cloud.google.com/sdk/gcloud/reference/topic/escaping
+  local cors_value="https://${FIREBASE_SITE}.web.app,https://${FIREBASE_SITE}.firebaseapp.com"
+  local env_vars="^|^ENVIRONMENT=${ENVIRONMENT}|CORS_ORIGINS=${cors_value}"
 
   if [[ -n "${DATABASE_URL:-}" ]]; then
-    env_vars+=",DATABASE_URL=${DATABASE_URL}"
+    env_vars+="|DATABASE_URL=${DATABASE_URL}"
   fi
   if [[ -n "${SECRET_KEY:-}" ]]; then
-    env_vars+=",SECRET_KEY=${SECRET_KEY}"
+    env_vars+="|SECRET_KEY=${SECRET_KEY}"
   fi
   if [[ -n "${GCS_BUCKET_NAME:-}" ]]; then
-    env_vars+=",GCS_BUCKET_NAME=${GCS_BUCKET_NAME}"
+    env_vars+="|GCS_BUCKET_NAME=${GCS_BUCKET_NAME}"
   fi
 
   gcloud run deploy "${CLOUD_RUN_SERVICE}" \
@@ -410,7 +469,14 @@ print_summary() {
   echo ""
 
   if [[ "$DEPLOY_TARGET" == "frontend" || "$DEPLOY_TARGET" == "all" ]]; then
+    local fe_url="N/A"
+    if command -v gcloud &>/dev/null; then
+      fe_url=$(gcloud run services describe "${FRONTEND_SERVICE}" \
+        --project="${GCP_PROJECT}" --region="${GCP_REGION}" \
+        --format="value(status.url)" 2>/dev/null || echo "N/A")
+    fi
     echo -e "  ${GREEN}🌐 Frontend:${NC} https://${FIREBASE_SITE}.web.app"
+    [[ "$fe_url" != "N/A" ]] && echo -e "  ${GREEN}   Cloud Run:${NC} ${fe_url}"
   fi
 
   if [[ "$DEPLOY_TARGET" == "backend" || "$DEPLOY_TARGET" == "all" ]]; then
@@ -446,7 +512,9 @@ main() {
 
   case "$DEPLOY_TARGET" in
     frontend)
-      build_frontend
+      build_frontend_image
+      push_frontend_image
+      deploy_frontend_cloud_run
       deploy_frontend
       health_check frontend
       ;;
@@ -459,10 +527,12 @@ main() {
       ;;
     all)
       run_tests
-      build_frontend
       build_backend_image
       push_backend_image
       deploy_backend
+      build_frontend_image
+      push_frontend_image
+      deploy_frontend_cloud_run
       deploy_frontend
       health_check all
       ;;

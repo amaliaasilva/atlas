@@ -21,6 +21,10 @@ export interface Unit {
   name: string;
   code: string;
   status: 'planning' | 'pre_opening' | 'active' | 'closed';
+  opening_date?: string; // "YYYY-MM-DD" — data de inauguração
+  slots_per_hour?: number;
+  hours_open_weekday?: number;
+  hours_open_saturday?: number;
   city?: string;
   state?: string;
   area_m2?: number;
@@ -42,6 +46,8 @@ export interface BudgetVersion {
   status: 'draft' | 'published' | 'archived';
   horizon_start: string;
   horizon_end: string;
+  projection_horizon_years?: number;
+  effective_start_date?: string;
 }
 
 export interface AssumptionCategory {
@@ -215,3 +221,43 @@ export interface PaginatedResponse<T> {
   page: number;
   size: number;
 }
+
+// ── Contratos de Financiamento (ARCH-02 / GAP-06) ───────────────────────────
+
+export interface FinancingContract {
+  id: string;
+  budget_version_id: string;
+  name: string;
+  description?: string;
+  financed_amount: number;
+  monthly_rate: number;       // ex: 0.012 = 1.2% a.m.
+  term_months: number;        // 0 = pagamento único
+  grace_period_months: number;
+  down_payment_pct: number;   // ex: 0.20 = 20% de entrada
+  start_date?: string;        // "YYYY-MM-DD"
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type FinancingContractInput = Omit<FinancingContract, 'id' | 'created_at' | 'updated_at'>;
+
+// ── Planos de Serviço (ARCH-06 / GAP-02) ─────────────────────────────────
+
+export interface ServicePlan {
+  id: string;
+  business_id: string;
+  name: string;
+  code: string;
+  description?: string;
+  price_per_hour: number;     // R$/hora
+  target_mix_pct: number;    // 0.0–1.0
+  min_classes_month: number;
+  max_classes_month: number;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ServicePlanInput = Omit<ServicePlan, 'id' | 'created_at' | 'updated_at'>;

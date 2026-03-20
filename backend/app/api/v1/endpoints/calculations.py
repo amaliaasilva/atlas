@@ -10,8 +10,11 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.api.v1.deps import get_current_user
 from app.models.user import User
+from app.models.unit import Unit
 from app.models.budget_version import BudgetVersion
 from app.models.assumption import AssumptionValue, AssumptionDefinition
+from app.models.financing_contract import FinancingContract
+from app.models.service_plan import ServicePlan
 from app.services.financial_engine import FinancialEngine
 from app.services.financial_engine.models import (
     FinancialInputs,
@@ -20,9 +23,12 @@ from app.services.financial_engine.models import (
     VariableCostInputs,
     CapexInputs,
     FinancingInputs,
+    FinancingContractInputs,
+    ServicePlanMix,
     TaxInputs,
 )
 from app.services.financial_engine.consolidator import consolidate_business
+from app.services.financial_engine.utils import generate_horizon_periods
 
 router = APIRouter()
 
@@ -66,15 +72,75 @@ def _build_inputs_for_version(
     """
     Constrói a lista de FinancialInputs por período e o CapexInputs
     a partir dos assumption_values de uma versão.
+
+    ETAPA-1: Usa opening_date + projection_horizon_years para gerar o
+    horizonte de 120 meses, independentemente de quantos AssumptionValues
+    com period_date existirem.
     """
     values = _load_assumption_values(version_id, db)
 
-    # Descobre os períodos disponíveis (YYYY-MM) dos valores mensais
-    periods = sorted(set(period for (_, period) in values.keys() if period is not None))
+    # ── ETAPA-1: Gera horizonte temporal a partir da data de abertura ──────
+    version = db.query(BudgetVersion).filter(BudgetVersion.id == version_id).first()
+    unit = db.query(Unit).filter(Unit.id == version.unit_id).first() if version else None
 
-    if not periods:
-        # Sem dados de período, usa apenas premissas estáticas em um período fictício
-        periods = ["2026-08"]
+    opening = None
+    if version and version.effective_start_date:
+        opening = version.effective_start_date
+    elif unit and unit.opening_date:
+        opening = unit.opening_date
+
+    horizon_years = (version.projection_horizon_years or 10) if version else 10
+
+    if opening:
+        periods = generate_horizon_periods(opening, horizon_years)
+    else:
+        # Fallback: usa períodos já gravados nos assumption_values
+        periods = sorted(set(p for (_, p) in values.keys() if p is not None))
+        if not periods:
+            periods = ["2026-11"]
+
+    # ── ARCH-02: Carrega múltiplos contratos de financiamento ──────────────
+    db_contracts = (
+        db.query(FinancingContract)
+        .filter(FinancingContract.budget_version_id == version_id)
+        .order_by(FinancingContract.sort_order)
+        .all()
+    ) if version else []
+
+    contract_inputs: list[FinancingContractInputs] = [
+        FinancingContractInputs(
+            name=c.name,
+            financed_amount=c.financed_amount,
+            monthly_rate=c.monthly_rate,
+            term_months=c.term_months,
+            grace_period_months=c.grace_period_months,
+            down_payment_pct=c.down_payment_pct,
+            start_offset_months=0,  # TODO: derivar de c.start_date vs opening
+        )
+        for c in db_contracts
+    ]
+
+    # ── GAP-02: Carrega mix de planos de serviço (Bronze/Prata/Ouro/Diamante) ─
+    db_plans: list[ServicePlan] = []
+    if unit:
+        db_plans = (
+            db.query(ServicePlan)
+            .filter(
+                ServicePlan.business_id == unit.business_id,
+                ServicePlan.is_active == True,
+            )
+            .order_by(ServicePlan.sort_order)
+            .all()
+        )
+
+    service_plan_mix: list[ServicePlanMix] = [
+        ServicePlanMix(
+            name=sp.name,
+            price_per_hour=sp.price_per_hour,
+            mix_pct=sp.target_mix_pct,
+        )
+        for sp in db_plans
+    ] if db_plans else []
 
     capex = CapexInputs(
         equipment_value=_get(values, "valor_equipamentos"),
@@ -86,6 +152,7 @@ def _build_inputs_for_version(
         other_capex=_get(values, "outros_capex"),
     )
 
+    # Legado: contrato único (usado apenas se não houver FinancingContract cadastrados)
     financing = FinancingInputs(
         financed_amount=_get(values, "valor_financiado"),
         monthly_interest_rate=_get(values, "taxa_juros_mensal"),
@@ -106,6 +173,8 @@ def _build_inputs_for_version(
             working_days_month=int(_get(values, "dias_uteis_mes", p, default=22)),
             saturdays_month=int(_get(values, "sabados_mes", p, default=4)),
             avg_price_per_hour=float(_get(values, "preco_medio_hora", p, default=60.0)),
+            # GAP-02: mix real de planos (Bronze/Prata/Ouro/Diamante) do banco
+            service_plans=service_plan_mix,
             # ── Legado (mantido para compat. de versões antigas) ──────────────
             max_students=int(_get(values, "alunos_capacidade_maxima", p, default=0)),
             occupancy_rate=_get(values, "taxa_ocupacao", p, default=0.0),
@@ -177,6 +246,8 @@ def _build_inputs_for_version(
                 fixed_costs=fixed,
                 variable_costs=variable,
                 capex=capex,
+                # ARCH-02: múltiplos contratos têm prioridade sobre legado
+                financing_contracts=contract_inputs,
                 financing=financing,
                 taxes=TaxInputs(tax_rate_on_revenue=tax_rate),
             )
