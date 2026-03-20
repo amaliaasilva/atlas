@@ -1,6 +1,7 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { unitsApi } from '@/lib/api';
 import { useNavStore } from '@/store/auth';
@@ -8,13 +9,28 @@ import { Topbar } from '@/components/layout/Topbar';
 import { LoadingScreen } from '@/components/ui/Spinner';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { MapPin, ChevronRight, Plus } from 'lucide-react';
+import { MapPin, ChevronRight, Plus, X } from 'lucide-react';
+
+const EMPTY_FORM = {
+  name: '',
+  code: '',
+  city: '',
+  state: '',
+  opening_date: '',
+  slots_per_hour: 10,
+  hours_open_weekday: 17,
+  hours_open_saturday: 7,
+};
 
 export default function UnitsPage() {
   const router = useRouter();
   const params = useSearchParams();
   const qBusinessId = params.get('business_id') ?? '';
   const { businessId, setUnit } = useNavStore();
+  const queryClient = useQueryClient();
+
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
 
   const effectiveBusinessId = qBusinessId || businessId || '';
 
@@ -23,6 +39,24 @@ export default function UnitsPage() {
     queryFn: () => unitsApi.list(effectiveBusinessId),
     enabled: !!effectiveBusinessId,
   });
+
+  const createMutation = useMutation({
+    mutationFn: (data: typeof form & { business_id: string }) => unitsApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['units', effectiveBusinessId] });
+      setShowModal(false);
+      setForm(EMPTY_FORM);
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name || !form.code) return;
+    createMutation.mutate({
+      ...form,
+      business_id: effectiveBusinessId,
+    });
+  };
 
   if (isLoading) return <LoadingScreen />;
 
@@ -35,7 +69,7 @@ export default function UnitsPage() {
             <h2 className="text-lg font-semibold text-gray-900">Unidades</h2>
             <p className="text-sm text-gray-500 mt-0.5">{units?.length ?? 0} unidades cadastradas</p>
           </div>
-          <Button size="sm">
+          <Button size="sm" onClick={() => setShowModal(true)} disabled={!effectiveBusinessId}>
             <Plus className="h-4 w-4" /> Nova Unidade
           </Button>
         </div>
@@ -65,6 +99,11 @@ export default function UnitsPage() {
                     {unit.area_m2 ? ` · ${unit.area_m2}m²` : ''}
                   </p>
                 )}
+                {unit.opening_date && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Abertura: {new Date(unit.opening_date + 'T00:00:00').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+                  </p>
+                )}
               </div>
               <div className="flex items-center justify-end mt-4 text-brand-500 opacity-0 group-hover:opacity-100 transition-opacity">
                 <span className="text-xs">Ver cenários</span>
@@ -89,6 +128,122 @@ export default function UnitsPage() {
           </div>
         )}
       </div>
+
+      {/* Modal Nova Unidade */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">Nova Unidade</h3>
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSubmit} className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="atlas-label">Nome da Unidade *</label>
+                  <input
+                    className="atlas-input"
+                    placeholder="Ex: Laboratório"
+                    value={form.name}
+                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="atlas-label">Código *</label>
+                  <input
+                    className="atlas-input uppercase"
+                    placeholder="LAB"
+                    value={form.code}
+                    onChange={e => setForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="atlas-label">Data de Abertura</label>
+                  <input
+                    type="date"
+                    className="atlas-input"
+                    value={form.opening_date}
+                    onChange={e => setForm(f => ({ ...f, opening_date: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="atlas-label">Cidade</label>
+                  <input
+                    className="atlas-input"
+                    placeholder="São Paulo"
+                    value={form.city}
+                    onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="atlas-label">Estado</label>
+                  <input
+                    className="atlas-input uppercase"
+                    placeholder="SP"
+                    maxLength={2}
+                    value={form.state}
+                    onChange={e => setForm(f => ({ ...f, state: e.target.value.toUpperCase() }))}
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Capacidade</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="atlas-label">Slots/hora</label>
+                    <input
+                      type="number"
+                      className="atlas-input"
+                      min={1}
+                      value={form.slots_per_hour}
+                      onChange={e => setForm(f => ({ ...f, slots_per_hour: +e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="atlas-label">Horas/dia útil</label>
+                    <input
+                      type="number"
+                      className="atlas-input"
+                      min={1}
+                      max={24}
+                      value={form.hours_open_weekday}
+                      onChange={e => setForm(f => ({ ...f, hours_open_weekday: +e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="atlas-label">Horas/sábado</label>
+                    <input
+                      type="number"
+                      className="atlas-input"
+                      min={0}
+                      max={24}
+                      value={form.hours_open_saturday}
+                      onChange={e => setForm(f => ({ ...f, hours_open_saturday: +e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={createMutation.isPending}>
+                  {createMutation.isPending ? 'Criando...' : 'Criar Unidade'}
+                </Button>
+              </div>
+              {createMutation.isError && (
+                <p className="text-xs text-red-500 text-center">Erro ao criar unidade. Verifique os dados.</p>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }

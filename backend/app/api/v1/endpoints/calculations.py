@@ -29,6 +29,7 @@ from app.services.financial_engine.models import (
 )
 from app.services.financial_engine.consolidator import consolidate_business
 from app.services.financial_engine.utils import generate_horizon_periods
+from app.services.financial_engine.expander import expand_assumption
 
 router = APIRouter()
 
@@ -98,6 +99,31 @@ def _build_inputs_for_version(
         periods = sorted(set(p for (_, p) in values.keys() if p is not None))
         if not periods:
             periods = ["2026-11"]
+
+    # ── ETAPA-2: Expande premissas via growth_rule ─────────────────────────
+    # Carrega todas as AssumptionDefinitions que têm growth_rule definido.
+    # Para cada uma, gera valores expandidos por período — sem sobrescrever
+    # valores explicitamente salvos pelo usuário.
+    if unit:
+        defns_with_rule = (
+            db.query(AssumptionDefinition)
+            .filter(
+                AssumptionDefinition.business_id == unit.business_id,
+                AssumptionDefinition.growth_rule.isnot(None),
+            )
+            .all()
+        )
+        base_year = opening.year if opening else (int(periods[0][:4]) if periods else 2026)
+        for defn in defns_with_rule:
+            # Base value: valor estático explícito do usuário > default da definição
+            base = values.get((defn.code, None))
+            if base is None:
+                base = defn.default_value or 0.0
+            expanded = expand_assumption(defn.growth_rule, float(base), periods, base_year)
+            for period, val in expanded.items():
+                # Só preenche se NÃO houver valor explícito para esse período
+                if (defn.code, period) not in values:
+                    values[(defn.code, period)] = val
 
     # ── ARCH-02: Carrega múltiplos contratos de financiamento ──────────────
     db_contracts = (

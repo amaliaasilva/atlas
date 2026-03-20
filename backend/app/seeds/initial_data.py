@@ -269,6 +269,8 @@ ASSUMPTION_DEFINITIONS = {
             0.0,
             True,
             "monthly",
+            # ETAPA-2: curva de ocupação padrão — 10 anos
+            {"type": "curve", "values": [0.03, 0.12, 0.25, 0.40, 0.50, 0.60, 0.70, 0.75, 0.75, 0.75]},
         ),
         (
             "ticket_medio_plano_mensal",
@@ -361,6 +363,8 @@ ASSUMPTION_DEFINITIONS = {
             19000.0,
             True,
             "monthly",
+            # ETAPA-2: reajuste de 10% ao ano (IGP-M estimado)
+            {"type": "compound_growth", "rate": 0.10},
         ),
         (
             "condominio_mensal",
@@ -380,6 +384,7 @@ ASSUMPTION_DEFINITIONS = {
             1980.0,
             True,
             "static",
+            {"type": "compound_growth", "rate": 0.05},
         ),
         (
             "salario_recepcao",
@@ -389,6 +394,7 @@ ASSUMPTION_DEFINITIONS = {
             2200.0,
             True,
             "static",
+            {"type": "compound_growth", "rate": 0.05},
         ),
         (
             "salario_marketing",
@@ -398,6 +404,7 @@ ASSUMPTION_DEFINITIONS = {
             0.0,
             True,
             "static",
+            {"type": "compound_growth", "rate": 0.05},
         ),
         (
             "salario_comercial",
@@ -407,8 +414,18 @@ ASSUMPTION_DEFINITIONS = {
             0.0,
             True,
             "static",
+            {"type": "compound_growth", "rate": 0.05},
         ),
-        ("salario_gerente", "Salário - Gerente", "currency", "R$", 0.0, True, "static"),
+        (
+            "salario_gerente",
+            "Salário - Gerente",
+            "currency",
+            "R$",
+            0.0,
+            True,
+            "static",
+            {"type": "compound_growth", "rate": 0.05},
+        ),
         (
             "salario_educador_fisico",
             "Salário - Educador Físico",
@@ -417,8 +434,18 @@ ASSUMPTION_DEFINITIONS = {
             0.0,
             True,
             "static",
+            {"type": "compound_growth", "rate": 0.05},
         ),
-        ("pro_labore", "Pró-labore", "currency", "R$", 5000.0, True, "static"),
+        (
+            "pro_labore",
+            "Pró-labore",
+            "currency",
+            "R$",
+            5000.0,
+            True,
+            "static",
+            {"type": "compound_growth", "rate": 0.05},
+        ),
         (
             "encargos_folha_pct",
             "Encargos sobre folha CLT (% — inclui INSS+FGTS+férias+13°)",
@@ -1150,13 +1177,14 @@ def run_seeds(db: Session):
 
     # 8. Assumption Definitions
     defn_count = 0
+    defn_updated = 0
     for cat_code, definitions in ASSUMPTION_DEFINITIONS.items():
         cat = cat_ids.get(cat_code)
         if not cat:
             continue
-        for idx, (code, name, dtype, uom, default, editable, periodicity) in enumerate(
-            definitions
-        ):
+        for idx, defn_tuple in enumerate(definitions):
+            code, name, dtype, uom, default, editable, periodicity = defn_tuple[:7]
+            growth_rule = defn_tuple[7] if len(defn_tuple) > 7 else None
             existing = (
                 db.query(AssumptionDefinition)
                 .filter(
@@ -1179,11 +1207,17 @@ def run_seeds(db: Session):
                     periodicity=periodicity,
                     applies_to="version",
                     sort_order=idx,
+                    growth_rule=growth_rule,
                 )
                 db.add(defn)
                 defn_count += 1
+            elif growth_rule is not None and existing.growth_rule is None:
+                # ETAPA-2: upsert growth_rule em definições já existentes
+                existing.growth_rule = growth_rule
+                db.add(existing)
+                defn_updated += 1
     db.commit()
-    print(f"  ✓ {defn_count} definições de premissas criadas")
+    print(f"  ✓ {defn_count} definições de premissas criadas, {defn_updated} atualizadas com growth_rule")
 
     # 9. Line Item Definitions
     li_count = 0
