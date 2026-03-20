@@ -260,8 +260,8 @@ def get_results(
     return [
         {
             "period_date": r.period_date,
-            "line_item_code": li.code,
-            "line_item_name": li.name,
+            "metric_code": li.code,
+            "metric_name": li.name,
             "category": li.category,
             "value": r.value,
         }

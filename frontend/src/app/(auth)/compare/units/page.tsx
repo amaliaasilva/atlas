@@ -25,7 +25,7 @@ const COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#3b82f6','#8b5cf6','#ec
 
 export default function CompareUnitsPage() {
   const [metric, setMetric] = useState('net_result');
-  const { businessId, scenarioId } = useNavStore();
+  const { businessId, scenarioId, setScenario } = useNavStore();
 
   const { data: scenarios } = useQuery({
     queryKey: ['scenarios', businessId],
@@ -72,7 +72,7 @@ export default function CompareUnitsPage() {
             <Select
               label=""
               value={scenarioId ?? ''}
-              onChange={() => {}}
+              onChange={(e) => setScenario(e.target.value)}
               options={scenarios.map((s) => ({ value: s.id, label: s.name }))}
               className="w-56"
             />
