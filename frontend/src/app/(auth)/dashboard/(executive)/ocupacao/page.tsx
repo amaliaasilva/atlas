@@ -13,7 +13,7 @@ import { Users, Target, TrendingUp, Activity } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 
 export default function OcupacaoPage() {
-  const { businessId, scenarioId, year } = useDashboardFilters();
+  const { businessId, scenarioId, year, periodStart, periodEnd } = useDashboardFilters();
 
   const { data: dashboard, isLoading } = useQuery({
     queryKey: ['dashboard-consolidated', businessId, scenarioId],
@@ -22,7 +22,12 @@ export default function OcupacaoPage() {
   });
 
   const ts = dashboard?.time_series ?? [];
-  const filteredTs = year ? ts.filter((d) => d.period.startsWith(year)) : ts;
+  const filteredTs = ts.filter((d) => {
+    if (periodStart && d.period < periodStart) return false;
+    if (periodEnd && d.period > periodEnd) return false;
+    if (!periodStart && !periodEnd && year) return d.period.startsWith(year);
+    return true;
+  });
 
   // Métricas de ocupação
   const latestPeriod = filteredTs[filteredTs.length - 1];

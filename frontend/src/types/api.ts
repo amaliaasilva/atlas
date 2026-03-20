@@ -108,7 +108,11 @@ export interface KPISummary {
 }
 
 export interface DashboardUnit {
-  version: BudgetVersion;
+  version_id: string;
+  unit_id: string;
+  unit_name: string | null;
+  scenario_id: string;
+  status: string;
   kpis: KPISummary;
   time_series: TimeSeries[];
 }

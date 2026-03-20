@@ -52,7 +52,7 @@ const SCENARIO_STYLES: Record<string, {
 // ── page ─────────────────────────────────────────────────────────────────────
 
 export default function ProjecoesPage() {
-  const { businessId, scenarioId, year } = useDashboardFilters();
+  const { businessId, scenarioId, year, periodStart, periodEnd } = useDashboardFilters();
   const [activeTab, setActiveTab] = useState<'receita' | 'lucro'>('receita');
 
   // Cenários disponíveis para o negócio
@@ -83,7 +83,12 @@ export default function ProjecoesPage() {
   });
 
   const ts = primaryDashboard?.time_series ?? [];
-  const filteredTs = year ? ts.filter((d) => d.period.startsWith(year)) : ts;
+  const filteredTs = ts.filter((d) => {
+    if (periodStart && d.period < periodStart) return false;
+    if (periodEnd && d.period > periodEnd) return false;
+    if (!periodStart && !periodEnd && year) return d.period.startsWith(year);
+    return true;
+  });
 
   // Agrega por ano para o cenário primário
   const primaryAnnual = aggregateByYear(

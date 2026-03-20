@@ -32,7 +32,7 @@ function aggregateByYear(ts: Array<{ period: string; revenue: number; profit: nu
 }
 
 export default function CrescimentoPage() {
-  const { businessId, scenarioId, year } = useDashboardFilters();
+  const { businessId, scenarioId, year, periodStart, periodEnd } = useDashboardFilters();
 
   const { data: dashboard, isLoading } = useQuery({
     queryKey: ['dashboard-consolidated', businessId, scenarioId],
@@ -56,8 +56,13 @@ export default function CrescimentoPage() {
 
   const annualData = aggregateByYear(seriesData);
 
-  // Filtra por ano se selecionado
-  const filteredTs = year ? ts.filter((d) => d.period.startsWith(year)) : ts;
+  // Filtra por intervalo de período ou ano
+  const filteredTs = ts.filter((d) => {
+    if (periodStart && d.period < periodStart) return false;
+    if (periodEnd && d.period > periodEnd) return false;
+    if (!periodStart && !periodEnd && year) return d.period.startsWith(year);
+    return true;
+  });
 
   // CAGR de receita (se houver pelo menos 2 anos)
   const revenueCAGR =

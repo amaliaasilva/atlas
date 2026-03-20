@@ -173,18 +173,24 @@ def units_comparison(
     units = db.query(Unit).filter(Unit.business_id == business_id).all()
     unit_map = {u.id: u.name for u in units}
 
-    # Busca versões publicadas
-    versions = (
+    # Busca melhor versão por unidade (publicada > rascunho > planejamento)
+    all_active_versions = (
         db.query(BudgetVersion)
         .join(Unit, BudgetVersion.unit_id == Unit.id)
         .filter(
             Unit.business_id == business_id,
             BudgetVersion.scenario_id == scenario_id,
-            BudgetVersion.status == "published",
             BudgetVersion.is_active == True,
         )
         .all()
     )
+    status_priority = {"published": 0, "draft": 1, "planning": 2}
+    best_by_unit: dict[str, BudgetVersion] = {}
+    for v in all_active_versions:
+        existing = best_by_unit.get(v.unit_id)
+        if existing is None or status_priority.get(v.status, 9) < status_priority.get(existing.status, 9):
+            best_by_unit[v.unit_id] = v
+    versions = list(best_by_unit.values())
 
     chart_data = []
     for version in versions:

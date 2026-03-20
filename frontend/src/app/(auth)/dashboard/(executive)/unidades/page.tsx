@@ -16,11 +16,12 @@ const METRICS = [
   { key: 'net_result', label: 'Lucro Líquido', formatter: formatCurrency },
   { key: 'revenue_total', label: 'Faturamento', formatter: formatCurrency },
   { key: 'ebitda', label: 'EBITDA', formatter: formatCurrency },
-  { key: 'break_even_students', label: 'Alunos Breakeven', formatter: (v: number) => formatNumber(v, 0) },
+  { key: 'occupancy_rate', label: 'Ocupação Média', formatter: (v: number) => formatPercent(v) },
+  { key: 'capacity_hours_month', label: 'Capacidade (h/mês)', formatter: (v: number) => formatNumber(v, 0) },
 ];
 
 export default function UnidadesPage() {
-  const { businessId, scenarioId, year } = useDashboardFilters();
+  const { businessId, scenarioId, year, periodStart, periodEnd } = useDashboardFilters();
   const [selectedMetric, setSelectedMetric] = useState<string>('net_result');
 
   const { data: comparisonData, isLoading } = useQuery({
@@ -37,15 +38,18 @@ export default function UnidadesPage() {
 
   const unitData = comparisonData?.units ?? [];
 
-  // Filtra por ano se selecionado
-  const filteredUnitData = year
-    ? unitData.map((u) => ({
-        ...u,
-        total: Object.entries(u.series)
-          .filter(([period]) => period.startsWith(year))
-          .reduce((acc, [, v]) => acc + v, 0),
-      }))
-    : unitData;
+  // Filtra por intervalo de período ou ano
+  const filteredUnitData = unitData.map((u) => ({
+    ...u,
+    total: Object.entries(u.series)
+      .filter(([period]) => {
+        if (periodStart && period < periodStart) return false;
+        if (periodEnd && period > periodEnd) return false;
+        if (!periodStart && !periodEnd && year) return period.startsWith(year);
+        return true;
+      })
+      .reduce((acc, [, v]) => acc + v, 0),
+  }));
 
   const sortedUnits = [...filteredUnitData].sort((a, b) => b.total - a.total);
   const bestUnit = sortedUnits[0];

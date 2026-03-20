@@ -43,13 +43,12 @@ function FilterSelect({ label, value, onChange, options, placeholder = 'Todos', 
   );
 }
 
-// Gera opções de anos (últimos 5 anos + próximos 3)
-function generateYearOptions() {
-  const current = new Date().getFullYear();
-  return Array.from({ length: 8 }, (_, i) => {
-    const y = current - 4 + i;
-    return { value: String(y), label: String(y) };
-  });
+// Anos de projeção do negócio (2026–2036)
+function generateProjectionYears() {
+  return Array.from({ length: 11 }, (_, i) => ({
+    value: String(2026 + i),
+    label: String(2026 + i),
+  }));
 }
 
 interface GlobalFiltersProps {
@@ -153,18 +152,32 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
           />
         )}
 
-        {/* Ano */}
+        {/* Período De */}
         <FilterSelect
-          label="Ano"
-          value={filters.year ?? ''}
-          onChange={(v) => filters.setYear(v || null)}
-          options={generateYearOptions()}
-          placeholder="Todos os anos"
+          label="De"
+          value={filters.periodStart ? filters.periodStart.slice(0, 4) : ''}
+          onChange={(v) => {
+            filters.setYear(v || null);
+            filters.setPeriodRange(v ? `${v}-01` : null, filters.periodEnd);
+          }}
+          options={generateProjectionYears()}
+          placeholder="Início"
+        />
+
+        {/* Período Até */}
+        <FilterSelect
+          label="Até"
+          value={filters.periodEnd ? filters.periodEnd.slice(0, 4) : ''}
+          onChange={(v) => {
+            filters.setPeriodRange(filters.periodStart, v ? `${v}-12` : null);
+          }}
+          options={generateProjectionYears()}
+          placeholder="Final"
         />
       </div>
 
       {/* Reset */}
-      {(filters.businessId || filters.scenarioId || filters.unitId || filters.year) && (
+      {(filters.businessId || filters.scenarioId || filters.unitId || filters.year || filters.periodStart) && (
         <>
           <div className="h-5 w-px bg-gray-200 shrink-0" />
           <button
@@ -172,6 +185,7 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
               filters.setScenarioId(null);
               filters.setUnitId(null);
               filters.setYear(null);
+              filters.setPeriodRange(null, null);
             }}
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
           >
