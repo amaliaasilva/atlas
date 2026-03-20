@@ -63,11 +63,20 @@ export interface AssumptionDefinition {
   category_id: string;
   name: string;
   code: string;
-  data_type: 'float' | 'integer' | 'percentage' | 'boolean' | 'string';
+  data_type: 'float' | 'integer' | 'percentage' | 'boolean' | 'string' | 'currency' | 'numeric';
   unit_of_measure?: string;
   default_value?: number | string;
   is_required: boolean;
   display_order: number;
+  /** Periodicidade da premissa: 'static' | 'monthly' | 'one_time' | 'yearly' */
+  periodicity?: string;
+  /** ARCH-04: regra de crescimento para expansão automática ({type, rate?, values?}) */
+  growth_rule?: {
+    type: 'compound_growth' | 'curve' | 'flat';
+    rate?: number;
+    base_year?: number;
+    values?: number[];
+  } | null;
 }
 
 export interface AssumptionValue {

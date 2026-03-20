@@ -4,13 +4,13 @@ import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { assumptionsApi, versionsApi, calculationsApi, financingContractsApi } from '@/lib/api';
-import type { AssumptionValue, FinancingContract } from '@/types/api';
+import type { AssumptionValue, FinancingContract, AssumptionDefinition } from '@/types/api';
 import { Topbar } from '@/components/layout/Topbar';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
 import { LoadingScreen } from '@/components/ui/Spinner';
 import { formatPeriod, getErrorMessage } from '@/lib/utils';
-import { Save, PlayCircle, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { Save, PlayCircle, ChevronDown, ChevronRight, Plus, Trash2, TrendingUp, Zap } from 'lucide-react';
 
 // ── Gera lista de períodos entre dois meses ────────────────────────────────────
 function generatePeriods(start: string, end: string): string[] {
@@ -26,6 +26,50 @@ function generatePeriods(start: string, end: string): string[] {
   return periods;
 }
 
+// ── Adiciona N meses a um "YYYY-MM" string ───────────────────────────────────
+function addMonths(yyyymm: string, n: number): string {
+  const [sy, sm] = yyyymm.split('-').map(Number);
+  let y = sy, m = sm + n;
+  while (m > 12) { m -= 12; y++; }
+  while (m < 1) { m += 12; y--; }
+  return `${y}-${String(m).padStart(2, '0')}`;
+}
+
+// ── Computa valor expandido pelo growth_rule (client-side preview) ─────────────
+function computeAutoValue(
+  def: AssumptionDefinition,
+  baseValue: number,
+  period: string,
+  allPeriods: string[],
+): number {
+  const rule = def.growth_rule;
+  if (!rule || !allPeriods.length) return baseValue;
+
+  if (rule.type === 'compound_growth') {
+    const rate = rule.rate ?? 0;
+    const baseYear = parseInt(allPeriods[0].slice(0, 4));
+    const year = parseInt(period.slice(0, 4));
+    return baseValue * Math.pow(1 + rate, Math.max(0, year - baseYear));
+  }
+  if (rule.type === 'curve') {
+    const values = rule.values ?? [];
+    if (!values.length) return baseValue;
+    const idx = allPeriods.indexOf(period);
+    const yearIdx = idx >= 0 ? Math.floor(idx / 12) : 0;
+    return values[Math.min(yearIdx, values.length - 1)];
+  }
+  return baseValue;
+}
+
+// ── Formata label resumido da growth_rule ─────────────────────────────────────
+function growthRuleLabel(rule: AssumptionDefinition['growth_rule']): string | null {
+  if (!rule) return null;
+  if (rule.type === 'compound_growth' && rule.rate != null)
+    return `+${(rule.rate * 100).toFixed(0)}% a.a.`;
+  if (rule.type === 'curve') return 'curva';
+  return null;
+}
+
 export default function BudgetVersionClient() {
   const { versionId } = useParams<{ versionId: string }>();
   const router = useRouter();
@@ -34,6 +78,7 @@ export default function BudgetVersionClient() {
   const [pendingChanges, setPendingChanges] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
+  const [selectedYear, setSelectedYear] = useState<string>('');
   const [showAddContract, setShowAddContract] = useState(false);
   const [newContract, setNewContract] = useState({
     name: '',
@@ -92,12 +137,29 @@ export default function BudgetVersionClient() {
     },
   });
 
-  const periods = useMemo(() => {
-    if (!version?.horizon_start || !version?.horizon_end) return [];
-    return generatePeriods(version.horizon_start, version.horizon_end);
+  // ── Horizonte completo: 10 anos a partir do início (não usa horizon_end do DB) ──
+  const allPeriods = useMemo(() => {
+    if (!version?.horizon_start) return [];
+    const horizonYears = version.projection_horizon_years ?? 10;
+    const end = addMonths(version.horizon_start, horizonYears * 12 - 1);
+    return generatePeriods(version.horizon_start, end);
   }, [version]);
 
-  // Map valores: "code::period" → value
+  // Anos disponíveis para navegação
+  const availableYears = useMemo(
+    () => [...new Set(allPeriods.map((p) => p.slice(0, 4)))],
+    [allPeriods],
+  );
+
+  const activeYear = selectedYear || availableYears[0] || '';
+
+  // Períodos visíveis (12 meses do ano selecionado)
+  const visiblePeriods = useMemo(
+    () => allPeriods.filter((p) => p.startsWith(activeYear)),
+    [allPeriods, activeYear],
+  );
+
+  // Map valores: "code::period" → value; "code::static" para period_date=null
   const valueMap = useMemo(() => {
     const m: Record<string, number> = {};
     values?.forEach((v) => {
@@ -107,19 +169,65 @@ export default function BudgetVersionClient() {
     return m;
   }, [values]);
 
+  // Valores base por definição (static > primeiro período > default)
+  const baseValues = useMemo(() => {
+    const result: Record<string, number> = {};
+    definitions?.forEach((def) => {
+      result[def.code] =
+        valueMap[`${def.code}::static`] ??
+        (allPeriods[0] ? valueMap[`${def.code}::${allPeriods[0]}`] : undefined) ??
+        (typeof def.default_value === 'number' ? def.default_value : 0);
+    });
+    return result;
+  }, [definitions, valueMap, allPeriods]);
+
+  // Valores auto-expandidos pelo growth_rule (preview client-side)
+  const autoValues = useMemo(() => {
+    const result: Record<string, number> = {};
+    if (!definitions || !allPeriods.length) return result;
+    definitions.forEach((def) => {
+      if (!def.growth_rule) return;
+      const base = baseValues[def.code] ?? 0;
+      allPeriods.forEach((p) => {
+        result[`${def.code}::${p}`] = computeAutoValue(def, base, p, allPeriods);
+      });
+    });
+    return result;
+  }, [definitions, baseValues, allPeriods]);
+
+  type CellInfo = { value: number; isAuto: boolean };
+
   const getCellValue = useCallback(
-    (code: string, period: string): number => {
+    (code: string, period: string, periodicity?: string): CellInfo => {
+      // Premissas estáticas usam sempre a chave 'static'
+      if (periodicity === 'static') {
+        const k = `${code}::static`;
+        if (k in pendingChanges) return { value: pendingChanges[k], isAuto: false };
+        if (k in valueMap) return { value: valueMap[k], isAuto: false };
+        // Fallback ao auto/default
+        const autoKey = `${code}::${period}`;
+        if (autoKey in autoValues) return { value: autoValues[autoKey], isAuto: true };
+        return { value: baseValues[code] ?? 0, isAuto: true };
+      }
+
       const pendKey = `${code}::${period}`;
-      if (pendKey in pendingChanges) return pendingChanges[pendKey];
-      return valueMap[pendKey] ?? valueMap[`${code}::static`] ?? 0;
+      if (pendKey in pendingChanges) return { value: pendingChanges[pendKey], isAuto: false };
+      if (pendKey in valueMap) return { value: valueMap[pendKey], isAuto: false };
+      const staticKey = `${code}::static`;
+      if (staticKey in pendingChanges) return { value: pendingChanges[staticKey], isAuto: false };
+      if (staticKey in valueMap) return { value: valueMap[staticKey], isAuto: false };
+      if (pendKey in autoValues) return { value: autoValues[pendKey], isAuto: true };
+      return { value: baseValues[code] ?? 0, isAuto: true };
     },
-    [pendingChanges, valueMap],
+    [pendingChanges, valueMap, autoValues, baseValues],
   );
 
-  const handleCellChange = (code: string, period: string, raw: string) => {
+  // Para defs estáticas: editar qualquer célula atualiza o valor estático global
+  const handleCellChange = (code: string, period: string, raw: string, periodicity?: string) => {
     const num = parseFloat(raw.replace(',', '.'));
     if (!isNaN(num)) {
-      setPendingChanges((prev) => ({ ...prev, [`${code}::${period}`]: num }));
+      const key = periodicity === 'static' ? `${code}::static` : `${code}::${period}`;
+      setPendingChanges((prev) => ({ ...prev, [key]: num }));
     }
   };
 
@@ -131,7 +239,7 @@ export default function BudgetVersionClient() {
     });
   };
 
-  // Bulk upsert
+  // Bulk upsert — salva apenas mudanças pendentes
   const handleSave = async () => {
     if (!definitions || !values) return;
     setSaving(true);
@@ -185,6 +293,7 @@ export default function BudgetVersionClient() {
             <StatusBadge status={version.status} />
             <span className="text-sm text-gray-500">
               {version.horizon_start} → {version.horizon_end}
+              <span className="ml-2 text-gray-400">({availableYears.length} anos · {allPeriods.length} meses)</span>
             </span>
             {hasChanges && (
               <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
@@ -209,7 +318,41 @@ export default function BudgetVersionClient() {
           </div>
         )}
 
-        {/* Tabela de premissas */}
+        {/* Legenda */}
+        <div className="flex items-center gap-4 mb-2 text-xs text-gray-500">
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3 rounded bg-amber-100 border border-amber-300" />
+            Editado manualmente
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3 rounded bg-blue-50 border border-blue-200" />
+            <Zap className="h-2.5 w-2.5 text-blue-400" />
+            Auto-expandido (growth_rule)
+          </span>
+          <span className="flex items-center gap-1">
+            <TrendingUp className="h-3 w-3 text-emerald-500" />
+            Regra de crescimento ativa
+          </span>
+        </div>
+
+        {/* Navegação por ano */}
+        <div className="flex items-center gap-1 mb-3 flex-wrap">
+          {availableYears.map((yr) => (
+            <button
+              key={yr}
+              onClick={() => setSelectedYear(yr)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                yr === activeYear
+                  ? 'bg-brand-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {yr}
+            </button>
+          ))}
+        </div>
+
+        {/* Tabela de premissas para o ano selecionado */}
         <div className="flex-1 overflow-auto rounded-xl border border-gray-200 bg-white">
           <table className="w-full text-sm border-collapse">
             <thead className="sticky top-0 z-10">
@@ -217,7 +360,10 @@ export default function BudgetVersionClient() {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 sticky left-0 bg-gray-50 min-w-[240px]">
                   Premissa
                 </th>
-                {periods.map((p) => (
+                <th className="px-2 py-3 text-center text-xs font-semibold text-gray-400 min-w-[50px] whitespace-nowrap">
+                  Regra
+                </th>
+                {visiblePeriods.map((p) => (
                   <th key={p} className="px-2 py-3 text-center text-xs font-semibold text-gray-500 min-w-[90px] whitespace-nowrap">
                     {formatPeriod(p)}
                   </th>
@@ -242,7 +388,7 @@ export default function BudgetVersionClient() {
                       className="bg-gray-100 cursor-pointer hover:bg-gray-200 transition-colors"
                       onClick={() => toggleCategory(cat.id)}
                     >
-                      <td className="px-4 py-2 sticky left-0 bg-inherit" colSpan={periods.length + 1}>
+                      <td className="px-4 py-2 sticky left-0 bg-inherit" colSpan={visiblePeriods.length + 2}>
                         <div className="flex items-center gap-2">
                           {collapsed
                             ? <ChevronRight className="h-3.5 w-3.5 text-gray-500" />
@@ -260,11 +406,28 @@ export default function BudgetVersionClient() {
                             {def.unit_of_measure && (
                               <span className="text-xs text-gray-400">({def.unit_of_measure})</span>
                             )}
+                            {def.periodicity === 'static' && (
+                              <span className="text-xs bg-gray-100 text-gray-400 px-1 rounded">fixo</span>
+                            )}
                           </div>
                         </td>
-                        {periods.map((period) => {
-                          const val = getCellValue(def.code, period);
-                          const changed = `${def.code}::${period}` in pendingChanges;
+                        {/* Coluna da regra de crescimento */}
+                        <td className="px-1 py-1 text-center">
+                          {def.growth_rule ? (
+                            <span className="inline-flex items-center gap-0.5 text-xs text-emerald-600 font-medium whitespace-nowrap">
+                              <TrendingUp className="h-2.5 w-2.5" />
+                              {growthRuleLabel(def.growth_rule)}
+                            </span>
+                          ) : (
+                            <span className="text-gray-300 text-xs">—</span>
+                          )}
+                        </td>
+                        {visiblePeriods.map((period) => {
+                          const { value: val, isAuto } = getCellValue(def.code, period, def.periodicity);
+                          const pendKey = def.periodicity === 'static'
+                            ? `${def.code}::static`
+                            : `${def.code}::${period}`;
+                          const changed = pendKey in pendingChanges;
                           return (
                             <td key={period} className="px-1 py-1 text-center">
                               <input
@@ -272,13 +435,16 @@ export default function BudgetVersionClient() {
                                 step="any"
                                 defaultValue={val}
                                 key={`${def.code}::${period}::${val}`}
-                                onChange={(e) => handleCellChange(def.code, period, e.target.value)}
+                                onChange={(e) => handleCellChange(def.code, period, e.target.value, def.periodicity)}
+                                title={isAuto && def.growth_rule ? `Auto: ${growthRuleLabel(def.growth_rule)}` : undefined}
                                 className={`
                                   w-full text-right text-xs px-2 py-1 rounded border
                                   focus:outline-none focus:ring-1 focus:ring-brand-400
                                   ${changed
                                     ? 'bg-amber-50 border-amber-300 text-amber-800'
-                                    : 'bg-transparent border-transparent hover:border-gray-300 text-gray-600'
+                                    : isAuto
+                                      ? 'bg-blue-50/40 border-transparent text-blue-500 italic cursor-text'
+                                      : 'bg-transparent border-transparent hover:border-gray-300 text-gray-600'
                                   }
                                 `}
                               />

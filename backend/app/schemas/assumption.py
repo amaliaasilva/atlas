@@ -44,6 +44,8 @@ class AssumptionDefinitionOut(AssumptionDefinitionBase):
     business_id: str
     category_id: str
     is_active: bool
+    # ARCH-04: regra de crescimento para expansão automática de premissas
+    growth_rule: dict | None = None
     created_at: datetime
     updated_at: datetime
 

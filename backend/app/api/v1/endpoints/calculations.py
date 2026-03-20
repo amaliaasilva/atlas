@@ -115,8 +115,12 @@ def _build_inputs_for_version(
         )
         base_year = opening.year if opening else (int(periods[0][:4]) if periods else 2026)
         for defn in defns_with_rule:
-            # Base value: valor estático explícito do usuário > default da definição
+            # Base value: valor estático explícito do usuário > primeiro período explícito > default da definição
+            # O frontend salva valores com period_date='YYYY-MM', não None.
+            # Por isso precisamos checar o primeiro período SE não houver valor estático.
             base = values.get((defn.code, None))
+            if base is None and periods:
+                base = values.get((defn.code, periods[0]))
             if base is None:
                 base = defn.default_value or 0.0
             expanded = expand_assumption(defn.growth_rule, float(base), periods, base_year)

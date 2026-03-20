@@ -112,6 +112,13 @@ class BudgetVersionOut(BaseModel):
     @computed_field  # type: ignore[misc]
     @property
     def horizon_end(self) -> str | None:
-        if self.effective_end_date:
-            return self.effective_end_date.strftime("%Y-%m")
+        """Retorna o último mês do horizonte = start + projection_horizon_years * 12 - 1.
+        Isso alinha com o que o motor financeiro realmente calcula.
+        """
+        if self.effective_start_date:
+            total_months = self.projection_horizon_years * 12 - 1
+            start = self.effective_start_date
+            y = start.year + (start.month - 1 + total_months) // 12
+            m = (start.month - 1 + total_months) % 12 + 1
+            return f"{y}-{m:02d}"
         return None

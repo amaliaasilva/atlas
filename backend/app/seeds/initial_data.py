@@ -41,6 +41,7 @@ UNITS_DATA = [
         "sort_order": 1,
         "city": "São Paulo",
         "state": "SP",
+        "status": "active",  # aberta desde jan/2026
     },
     {
         "name": "Segunda Unidade",
@@ -49,6 +50,7 @@ UNITS_DATA = [
         "sort_order": 2,
         "city": "São Paulo",
         "state": "SP",
+        "status": "pre_opening",  # abertura em jan/2027 (< 12 meses)
     },
     {
         "name": "Terceira Unidade",
@@ -57,6 +59,7 @@ UNITS_DATA = [
         "sort_order": 3,
         "city": "São Paulo",
         "state": "SP",
+        "status": "planning",
     },
     {
         "name": "Quarta Unidade",
@@ -65,6 +68,7 @@ UNITS_DATA = [
         "sort_order": 4,
         "city": "São Paulo",
         "state": "SP",
+        "status": "planning",
     },
     {
         "name": "Quinta Unidade",
@@ -73,6 +77,7 @@ UNITS_DATA = [
         "sort_order": 5,
         "city": "São Paulo",
         "state": "SP",
+        "status": "planning",
     },
     {
         "name": "Sexta Unidade",
@@ -81,6 +86,7 @@ UNITS_DATA = [
         "sort_order": 6,
         "city": "São Paulo",
         "state": "SP",
+        "status": "planning",
     },
     {
         "name": "Sétima Unidade",
@@ -89,6 +95,7 @@ UNITS_DATA = [
         "sort_order": 7,
         "city": "São Paulo",
         "state": "SP",
+        "status": "planning",
     },
     {
         "name": "Oitava Unidade",
@@ -97,6 +104,7 @@ UNITS_DATA = [
         "sort_order": 8,
         "city": "São Paulo",
         "state": "SP",
+        "status": "planning",
     },
 ]
 
@@ -1096,6 +1104,8 @@ def run_seeds(db: Session):
 
     # 5. Units
     unit_ids = {}
+    MUTABLE_UNIT_FIELDS = ["status", "opening_date", "sort_order", "city", "state",
+                           "slots_per_hour", "hours_open_weekday", "hours_open_saturday"]
     for u_data in UNITS_DATA:
         existing = (
             db.query(Unit)
@@ -1114,9 +1124,13 @@ def run_seeds(db: Session):
             db.add(unit)
             unit_ids[u_data["code"]] = unit
         else:
+            # Atualiza campos mutáveis (status, opening_date, etc.) para refletir configuração atual
+            for field in MUTABLE_UNIT_FIELDS:
+                if field in u_data and getattr(existing, field, None) != u_data[field]:
+                    setattr(existing, field, u_data[field])
             unit_ids[u_data["code"]] = existing
     db.commit()
-    print(f"  ✓ {len(UNITS_DATA)} unidades criadas/verificadas")
+    print(f"  ✓ {len(UNITS_DATA)} unidades criadas/atualizadas")
 
     # 6. Scenarios
     scenarios_data = [
