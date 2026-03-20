@@ -218,7 +218,6 @@ jobs:
             --service-account=${{ secrets.WIF_SERVICE_ACCOUNT }}
           env_vars: |-
             ENVIRONMENT=production
-            CORS_ORIGINS=["https://atlasfinance.web.app","https://atlasfinance.firebaseapp.com"]
           secrets: |-
             DATABASE_URL=atlas-database-url:latest
             SECRET_KEY=atlas-secret-key:latest
