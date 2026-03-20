@@ -1,6 +1,6 @@
 import uuid
 from datetime import date
-from sqlalchemy import String, Text, ForeignKey, Date, Enum as SAEnum
+from sqlalchemy import String, Text, ForeignKey, Date, Integer, Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 from app.core.database import Base
@@ -42,6 +42,10 @@ class BudgetVersion(Base, TimestampMixin):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
+    # ARCH-08: horizonte de projeção explícito
+    projection_horizon_years: Mapped[int] = mapped_column(
+        Integer, default=10, nullable=False
+    )
 
     # Relationships
     unit: Mapped["Unit"] = relationship("Unit", back_populates="budget_versions")
@@ -56,4 +60,7 @@ class BudgetVersion(Base, TimestampMixin):
         "CalculatedResult",
         back_populates="budget_version",
         cascade="all, delete-orphan",
+    )
+    financing_contracts: Mapped[list["FinancingContract"]] = relationship(
+        "FinancingContract", back_populates="budget_version", cascade="all, delete-orphan"
     )

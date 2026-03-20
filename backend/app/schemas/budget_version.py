@@ -19,6 +19,8 @@ class BudgetVersionCreate(BaseModel):
     effective_end_date: date | None = None
     status: str = "draft"
     notes: str | None = None
+    # ARCH-08: horizonte de projeção explícito
+    projection_horizon_years: int = 10
 
     @model_validator(mode="after")
     def normalise(self) -> "BudgetVersionCreate":
@@ -48,6 +50,7 @@ class BudgetVersionCreate(BaseModel):
             "effective_start_date": self.effective_start_date,
             "effective_end_date": self.effective_end_date,
             "notes": self.notes,
+            "projection_horizon_years": self.projection_horizon_years,
         }
 
 
@@ -87,6 +90,7 @@ class BudgetVersionOut(BaseModel):
     notes: str | None = None
     created_by: str | None = None
     is_active: bool
+    projection_horizon_years: int = 10
     created_at: datetime
     updated_at: datetime
 

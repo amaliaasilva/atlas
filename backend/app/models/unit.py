@@ -1,5 +1,6 @@
 import uuid
-from sqlalchemy import String, Text, Integer, ForeignKey, Enum as SAEnum
+from datetime import date
+from sqlalchemy import String, Text, Integer, ForeignKey, Date, Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 from app.core.database import Base
@@ -27,7 +28,12 @@ class Unit(Base, TimestampMixin):
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     code: Mapped[str] = mapped_column(String(50), nullable=False)
-    opening_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # ARCH-03: data completa de inauguração (mês importa para offset no consolidado)
+    opening_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # GAP-01: parâmetros operacionais do coworking
+    slots_per_hour: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    hours_open_weekday: Mapped[int] = mapped_column(Integer, default=17, nullable=False)
+    hours_open_saturday: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
     status: Mapped[str] = mapped_column(
         SAEnum(UnitStatus), nullable=False, default=UnitStatus.planning
     )

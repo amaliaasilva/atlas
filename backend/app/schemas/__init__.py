@@ -25,3 +25,9 @@ from app.schemas.assumption import (
 )
 from app.schemas.auth import Token, TokenData, LoginRequest
 from app.schemas.user import UserCreate, UserUpdate, UserOut
+from app.schemas.service_plan import ServicePlanCreate, ServicePlanUpdate, ServicePlanOut
+from app.schemas.financing_contract import (
+    FinancingContractCreate,
+    FinancingContractUpdate,
+    FinancingContractOut,
+)

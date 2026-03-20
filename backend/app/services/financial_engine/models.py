@@ -9,46 +9,89 @@ from dataclasses import dataclass, field
 
 @dataclass
 class RevenueInputs:
-    """Premissas de receita para uma unidade em um período."""
+    """
+    Premissas de receita para uma unidade de coworking B2B (venda de slots/hora para PTs).
 
+    O modelo correto (GAP-01/02) é:
+      receita = vagas_por_hora × horas_dia × dias_mes × taxa_ocupacao × preco_medio_ponderado
+    onde preco_medio_ponderado é derivado do mix de planos (ServicePlan).
+
+    Campos mantidos por compatibilidade com os dados de seed existentes (_legacy):
+    poderão ser removidos quando a Financial Engine for refatorada.
+    """
+
+    # ── Modelo Coworking B2B (NOVO — baseado no Excel) ────────────────────────
+    slots_per_hour: int = 10           # vagas simultâneas por hora (ex: 10 PTs)
+    hours_per_day_weekday: float = 17.0  # horas de funcionamento em dia útil
+    hours_per_day_saturday: float = 7.0  # horas de funcionamento no sábado
+    working_days_month: int = 22        # dias úteis no mês (aprox; calcular do calendário)
+    saturdays_month: int = 4            # sábados no mês
+    occupancy_rate: float = 0.0         # taxa de ocupação 0.0–1.0 (ex: 0.45)
+    # Preço médio ponderado (calculado via mix de ServicePlans, ou informado diretamente)
+    avg_price_per_hour: float = 0.0     # R$/hora (ex: 57.50 para mix bronze/prata/ouro/diamante)
+    # Receitas complementares
+    other_revenue: float = 0.0
+
+    # ── Legado (SmartFit-style) mantido para compatibilidade com seed ─────────
     max_students: int = 0
-    occupancy_rate: float = 0.0  # 0.0–1.0 (ex.: 0.45 = 45%)
-    avg_ticket_monthly: float = 0.0  # R$
-    avg_ticket_quarterly: float = 0.0  # R$
-    avg_ticket_annual: float = 0.0  # R$ (valor mensal equivalente)
-    mix_monthly_pct: float = 1.0  # soma mix = 1.0
+    avg_ticket_monthly: float = 0.0
+    avg_ticket_quarterly: float = 0.0
+    avg_ticket_annual: float = 0.0
+    mix_monthly_pct: float = 1.0
     mix_quarterly_pct: float = 0.0
     mix_annual_pct: float = 0.0
     num_personal_trainers: int = 0
     avg_personal_revenue_month: float = 0.0
-    other_revenue: float = 0.0
 
 
 @dataclass
 class FixedCostInputs:
-    """Premissas de custos fixos."""
+    """
+    Premissas de custos fixos mensais.
+
+    Utilities (GAP-03): modelo misto fixo + variável por ocupação.
+      custo_energia = fixed_energy_cost + max_variable_energy_cost × occ_rate × (1 - automation_reduction)
+      custo_agua    = fixed_water_cost  + max_variable_water_cost  × occ_rate
+
+    Folha (GAP-04): social_charges_rate corrigido para ~0.80 (80% sobre salário,
+      incluindo INSS empregador + FGTS + benefícios integrados).
+      pro_labore NÃO incide encargos (separado do cálculo).
+    """
 
     rent: float = 0.0
     condo_fee: float = 0.0
     iptu: float = 0.0
-    # Equipe
+
+    # ── Equipe ────────────────────────────────────────────────────────────────
     cleaning_staff_salary: float = 0.0
     receptionist_salary: float = 0.0
     marketing_staff_salary: float = 0.0
     commercial_staff_salary: float = 0.0
     manager_salary: float = 0.0
     fitness_teacher_salary: float = 0.0
-    pro_labore: float = 0.0
-    social_charges_rate: float = 0.08  # % sobre folha (FGTS 8%)
+    pro_labore: float = 0.0           # NÃO incide encargos sociais
+    # GAP-04: encargos totais reais (~80% sobre salário bruto, ex: INSS+FGTS+benefícios)
+    social_charges_rate: float = 0.80
     benefits_per_employee: float = 0.0
     num_employees: int = 0
-    # Utilities
+
+    # ── Utilities (modelo misto — GAP-03) ─────────────────────────────────────
+    # Energia: parcela fixa + parcela variável proporcional à ocupação
+    fixed_energy_cost: float = 0.0           # R$/mês (custo base independente de ocupação)
+    max_variable_energy_cost: float = 0.0    # R$/mês a 100% ocupação
+    automation_reduction: float = 0.0        # 0.0–1.0 (ex: 0.20 = 20% de economia por automação)
+    # Água: parcela fixa + parcela variável proporcional à ocupação
+    fixed_water_cost: float = 0.0
+    max_variable_water_cost: float = 0.0
+    internet_phone: float = 0.0
+
+    # Legado (mantido por compatibilidade com seed — remover após refatoração do engine)
     electricity_kwh: float = 0.0
     electricity_rate: float = 0.0
     water_m3: float = 0.0
     water_rate: float = 0.0
-    internet_phone: float = 0.0
-    # Administrative
+
+    # ── Administrative ────────────────────────────────────────────────────────
     office_supplies: float = 0.0
     hygiene_cleaning: float = 0.0
     management_software: float = 0.0
@@ -94,7 +137,11 @@ class CapexInputs:
 
 @dataclass
 class FinancingInputs:
-    """Premissas de financiamento."""
+    """
+    Premissas de financiamento — LEGADO (único contrato).
+    Mantido para compatibilidade com seed existente.
+    Use FinancingContract (entidade ORM) para os múltiplos contratos reais (GAP-06/ARCH-02).
+    """
 
     financed_amount: float = 0.0
     monthly_interest_rate: float = 0.0  # ex.: 0.015 = 1.5% a.m.

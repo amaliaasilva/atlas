@@ -21,3 +21,5 @@ from app.models.consolidated_result import ConsolidatedResult  # noqa
 from app.models.import_job import ImportJob, ImportMapping  # noqa
 from app.models.audit_log import AuditLog  # noqa
 from app.models.user import User, Role, UserRole  # noqa
+from app.models.service_plan import ServicePlan  # noqa
+from app.models.financing_contract import FinancingContract  # noqa

@@ -56,3 +56,6 @@ class Business(Base, TimestampMixin):
     consolidated_results: Mapped[list["ConsolidatedResult"]] = relationship(
         "ConsolidatedResult", back_populates="business"
     )
+    service_plans: Mapped[list["ServicePlan"]] = relationship(
+        "ServicePlan", back_populates="business", cascade="all, delete-orphan"
+    )

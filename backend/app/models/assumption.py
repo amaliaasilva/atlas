@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     Enum as SAEnum,
+    JSON,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -106,6 +107,12 @@ class AssumptionDefinition(Base, TimestampMixin):
     )
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # ARCH-01: granularidade explícita (monthly / yearly / one_time)
+    granularity: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="monthly"
+    )
+    # ARCH-04: regra de progressão anual (JSON: {type, rate, base_year, …})
+    growth_rule: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # Relationships
     business: Mapped["Business"] = relationship(

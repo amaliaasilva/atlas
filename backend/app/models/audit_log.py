@@ -37,6 +37,16 @@ class AuditLog(Base):
     )
     ip_address: Mapped[str | None] = mapped_column(String(50), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # ARCH-07: rastrear qual versão de orçamento foi afetada pela mudança
+    budget_version_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("budget_versions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     # Relationships
     performer: Mapped["User | None"] = relationship("User", foreign_keys=[performed_by])
+    budget_version: Mapped["BudgetVersion | None"] = relationship(
+        "BudgetVersion", foreign_keys=[budget_version_id]
+    )
