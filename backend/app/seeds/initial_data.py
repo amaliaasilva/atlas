@@ -984,14 +984,14 @@ LINE_ITEM_DEFINITIONS = [
         False,
     ),
     # ── KPIs B2B Coworking ────────────────────────────────────────────────────
-    ("occupancy_rate",         "Taxa de Ocupação (%)",               "kpi", "kpi", 61, True,  False, True),
-    ("capacity_hours_month",   "Capacidade (horas/mês)",             "kpi", "kpi", 62, False, False, False),
-    ("active_hours_month",     "Horas Vendidas (horas/mês)",         "kpi", "kpi", 63, False, False, False),
-    ("break_even_revenue",     "Break-even Receita (R$)",            "kpi", "kpi", 64, True,  True,  False),
-    ("break_even_occupancy_pct", "Break-even Ocupação (%)",          "kpi", "kpi", 65, True,  False, True),
-    ("contribution_margin_pct", "Margem de Contribuição (%)",        "kpi", "kpi", 66, True,  False, True),
-    ("net_margin",             "Margem Líquida (%)",                 "kpi", "kpi", 67, True,  False, True),
-    ("active_students",        "Slots Ativos / Horas Vendidas (int)","kpi", "kpi", 68, False, False, False),
+    ("occupancy_rate",         "Taxa de Ocupação (%)",               "result", "kpi", 61, True,  False, True),
+    ("capacity_hours_month",   "Capacidade (horas/mês)",             "result", "kpi", 62, False, False, False),
+    ("active_hours_month",     "Horas Vendidas (horas/mês)",         "result", "kpi", 63, False, False, False),
+    ("break_even_revenue",     "Break-even Receita (R$)",            "result", "kpi", 64, True,  True,  False),
+    ("break_even_occupancy_pct", "Break-even Ocupação (%)",          "result", "kpi", 65, True,  False, True),
+    ("contribution_margin_pct", "Margem de Contribuição (%)",        "result", "kpi", 66, True,  False, True),
+    ("net_margin",             "Margem Líquida (%)",                 "result", "kpi", 67, True,  False, True),
+    ("active_students",        "Slots Ativos / Horas Vendidas (int)","result", "kpi", 68, False, False, False),
 ]
 
 

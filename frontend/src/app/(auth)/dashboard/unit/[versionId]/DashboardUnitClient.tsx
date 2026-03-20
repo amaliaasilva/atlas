@@ -122,7 +122,10 @@ export default function DashboardUnitClient() {
             {/* Gráficos */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <RevenueChart data={ts} />
-              <OccupancyChart data={ts} />
+              <OccupancyChart
+                data={ts}
+                breakEvenOccupancy={kpis?.break_even_occupancy_pct ?? undefined}
+              />
             </div>
 
             {/* Métricas de payback */}

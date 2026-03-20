@@ -65,12 +65,23 @@ def unit_dashboard(
     for r, li in results:
         by_code[li.code][r.period_date] = r.value
 
-    # KPI totais (soma de todos os períodos)
+    # KPI totais (soma de todos os períodos para métricas monetárias)
     kpis = {}
     for code in KPI_CODES:
         kpis[code] = round(sum(by_code.get(code, {}).values()), 2)
 
-    # Última ocupação disponível
+    # Para KPIs de taxa/percentual, usar o ÚLTIMO período (não a soma)
+    SNAPSHOT_KPI_CODES = {
+        "occupancy_rate", "break_even_occupancy_pct", "contribution_margin_pct",
+        "break_even_revenue", "break_even_students", "capacity_hours_month",
+    }
+    if all_periods := sorted(set(r.period_date for r, _ in results)):
+        last_period = all_periods[-1]
+        for code in SNAPSHOT_KPI_CODES:
+            if code in by_code and last_period in by_code[code]:
+                kpis[code] = by_code[code][last_period]
+
+    # net_margin = Resultado / Receita acumulada (métrica de retorno total)
     kpis["net_margin"] = (
         round(kpis["net_result"] / kpis["revenue_total"], 4)
         if kpis.get("revenue_total", 0) > 0
@@ -121,10 +132,22 @@ def business_consolidated_dashboard(
         by_code[row.metric_code][row.period_date] = row.value
 
     kpis = {code: round(sum(by_code.get(code, {}).values()), 2) for code in KPI_CODES}
+
+    SNAPSHOT_KPI_CODES = {
+        "occupancy_rate", "break_even_occupancy_pct", "contribution_margin_pct",
+        "break_even_revenue", "break_even_students", "capacity_hours_month",
+    }
+    all_periods_cons = sorted(set(row.period_date for row in rows))
+    if all_periods_cons:
+        last_p = all_periods_cons[-1]
+        for code in SNAPSHOT_KPI_CODES:
+            if code in by_code and last_p in by_code[code]:
+                kpis[code] = by_code[code][last_p]
+
     if kpis.get("revenue_total", 0) > 0:
         kpis["net_margin"] = round(kpis["net_result"] / kpis["revenue_total"], 4)
 
-    all_periods = sorted(set(row.period_date for row in rows))
+    all_periods = all_periods_cons
     time_series = [
         {"period": p, **{code: by_code.get(code, {}).get(p, 0.0) for code in KPI_CODES}}
         for p in all_periods
