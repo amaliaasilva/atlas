@@ -57,7 +57,7 @@ export default function BudgetVersionClient() {
   });
 
   const periods = useMemo(() => {
-    if (!version) return [];
+    if (!version?.horizon_start || !version?.horizon_end) return [];
     return generatePeriods(version.horizon_start, version.horizon_end);
   }, [version]);
 
