@@ -21,12 +21,15 @@ from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.core.security import get_password_hash
+from datetime import date
+
 from app.models.organization import Organization
 from app.models.business import Business
 from app.models.unit import Unit
 from app.models.scenario import Scenario
 from app.models.assumption import AssumptionCategory, AssumptionDefinition
 from app.models.line_item import LineItemDefinition
+from app.models.service_plan import ServicePlan
 from app.models.user import User, Role
 
 
@@ -34,7 +37,7 @@ UNITS_DATA = [
     {
         "name": "Laboratório",
         "code": "LAB",
-        "opening_year": 2026,
+        "opening_date": date(2026, 1, 1),
         "sort_order": 1,
         "city": "São Paulo",
         "state": "SP",
@@ -42,7 +45,7 @@ UNITS_DATA = [
     {
         "name": "Segunda Unidade",
         "code": "UNIT02",
-        "opening_year": 2027,
+        "opening_date": date(2027, 1, 1),
         "sort_order": 2,
         "city": "São Paulo",
         "state": "SP",
@@ -50,7 +53,7 @@ UNITS_DATA = [
     {
         "name": "Terceira Unidade",
         "code": "UNIT03",
-        "opening_year": 2027,
+        "opening_date": date(2027, 7, 1),
         "sort_order": 3,
         "city": "São Paulo",
         "state": "SP",
@@ -58,7 +61,7 @@ UNITS_DATA = [
     {
         "name": "Quarta Unidade",
         "code": "UNIT04",
-        "opening_year": 2028,
+        "opening_date": date(2028, 1, 1),
         "sort_order": 4,
         "city": "São Paulo",
         "state": "SP",
@@ -66,7 +69,7 @@ UNITS_DATA = [
     {
         "name": "Quinta Unidade",
         "code": "UNIT05",
-        "opening_year": 2028,
+        "opening_date": date(2028, 7, 1),
         "sort_order": 5,
         "city": "São Paulo",
         "state": "SP",
@@ -74,7 +77,7 @@ UNITS_DATA = [
     {
         "name": "Sexta Unidade",
         "code": "UNIT06",
-        "opening_year": 2029,
+        "opening_date": date(2029, 1, 1),
         "sort_order": 6,
         "city": "São Paulo",
         "state": "SP",
@@ -82,7 +85,7 @@ UNITS_DATA = [
     {
         "name": "Sétima Unidade",
         "code": "UNIT07",
-        "opening_year": 2029,
+        "opening_date": date(2029, 7, 1),
         "sort_order": 7,
         "city": "São Paulo",
         "state": "SP",
@@ -90,10 +93,57 @@ UNITS_DATA = [
     {
         "name": "Oitava Unidade",
         "code": "UNIT08",
-        "opening_year": 2030,
+        "opening_date": date(2030, 1, 1),
         "sort_order": 8,
         "city": "São Paulo",
         "state": "SP",
+    },
+]
+
+SERVICE_PLANS_DATA = [
+    {
+        "name": "Diamante",
+        "code": "DIAMANTE",
+        "description": "Plano premium — instrutores certificados, espaços exclusivos",
+        "price_per_hour": 65.0,
+        "target_mix_pct": 0.40,
+        "min_classes_month": 200,
+        "max_classes_month": None,
+        "sort_order": 1,
+        "is_active": True,
+    },
+    {
+        "name": "Ouro",
+        "code": "OURO",
+        "description": "Plano intermediário-alto",
+        "price_per_hour": 60.0,
+        "target_mix_pct": 0.30,
+        "min_classes_month": 110,
+        "max_classes_month": 200,
+        "sort_order": 2,
+        "is_active": True,
+    },
+    {
+        "name": "Prata",
+        "code": "PRATA",
+        "description": "Plano intermediário",
+        "price_per_hour": 55.0,
+        "target_mix_pct": 0.20,
+        "min_classes_month": 41,
+        "max_classes_month": 70,
+        "sort_order": 3,
+        "is_active": True,
+    },
+    {
+        "name": "Bronze",
+        "code": "BRONZE",
+        "description": "Plano de entrada",
+        "price_per_hour": 50.0,
+        "target_mix_pct": 0.10,
+        "min_classes_month": 4,
+        "max_classes_month": 40,
+        "sort_order": 4,
+        "is_active": True,
     },
 ]
 
@@ -1022,6 +1072,28 @@ def run_seeds(db: Session):
             li_count += 1
     db.commit()
     print(f"  ✓ {li_count} line items criados")
+
+    # 10. Service Plans
+    sp_count = 0
+    for sp_data in SERVICE_PLANS_DATA:
+        existing = (
+            db.query(ServicePlan)
+            .filter(
+                ServicePlan.business_id == business.id,
+                ServicePlan.code == sp_data["code"],
+            )
+            .first()
+        )
+        if not existing:
+            sp = ServicePlan(
+                id=str(uuid.uuid4()),
+                business_id=business.id,
+                **sp_data,
+            )
+            db.add(sp)
+            sp_count += 1
+    db.commit()
+    print(f"  ✓ {sp_count} planos de serviço criados/verificados")
 
     print("\n=== Seeds concluídos com sucesso! ===")
     print(f"  Organização:  {org.id}")
