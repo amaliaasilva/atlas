@@ -38,7 +38,7 @@ def create_budget_version(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    version = BudgetVersion(**data.model_dump(), created_by=current_user.id)
+    version = BudgetVersion(**data.to_db(), created_by=current_user.id)
     db.add(version)
     db.commit()
     db.refresh(version)

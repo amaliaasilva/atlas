@@ -84,3 +84,30 @@ class AssumptionValueBulkUpdate(BaseModel):
     """Batch update for a full set of assumption values for a budget version."""
 
     values: list[AssumptionValueCreate]
+
+
+# ── Schemas compatíveis com o frontend ────────────────────────────────────────
+
+class AssumptionValueFrontend(BaseModel):
+    """Response schema com os nomes de campo que o frontend espera."""
+
+    id: str
+    assumption_definition_id: str
+    code: str
+    period_date: str | None = None
+    numeric_value: float | None = None
+    text_value: str | None = None
+    source_type: str = "manual"
+
+    model_config = {"from_attributes": True}
+
+
+class BulkUpsertItem(BaseModel):
+    """Item enviado pelo frontend no POST /values/{version_id}/bulk."""
+
+    assumption_definition_id: str
+    code: str | None = None
+    period_date: str | None = None
+    numeric_value: float | None = None
+    text_value: str | None = None
+    source_type: str = "manual"

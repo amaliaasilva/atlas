@@ -1,35 +1,113 @@
-from datetime import datetime, date
-from pydantic import BaseModel, Field
+from calendar import monthrange
+from datetime import date, datetime
+
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 
-class BudgetVersionBase(BaseModel):
-    version_name: str = Field(..., min_length=2, max_length=100)
-    status: str = "draft"
-    effective_start_date: date | None = None
-    effective_end_date: date | None = None
-    notes: str | None = None
+class BudgetVersionCreate(BaseModel):
+    """Aceita tanto o formato do frontend (name, horizon_*) quanto o legado (version_name, effective_*)."""
 
-
-class BudgetVersionCreate(BudgetVersionBase):
     unit_id: str
     scenario_id: str
+    # Campos do frontend
+    name: str | None = Field(None, min_length=2, max_length=100)
+    horizon_start: str | None = None  # "YYYY-MM"
+    horizon_end: str | None = None    # "YYYY-MM"
+    # Campos legados (API direta)
+    version_name: str | None = Field(None, min_length=2, max_length=100)
+    effective_start_date: date | None = None
+    effective_end_date: date | None = None
+    status: str = "draft"
+    notes: str | None = None
+
+    @model_validator(mode="after")
+    def normalise(self) -> "BudgetVersionCreate":
+        # name → version_name
+        if self.name and not self.version_name:
+            self.version_name = self.name
+        if not self.version_name:
+            raise ValueError("'name' ou 'version_name' é obrigatório")
+        # horizon_start → effective_start_date
+        if self.horizon_start and not self.effective_start_date:
+            self.effective_start_date = datetime.strptime(
+                self.horizon_start + "-01", "%Y-%m-%d"
+            ).date()
+        # horizon_end → effective_end_date (último dia do mês)
+        if self.horizon_end and not self.effective_end_date:
+            dt = datetime.strptime(self.horizon_end + "-01", "%Y-%m-%d")
+            last_day = monthrange(dt.year, dt.month)[1]
+            self.effective_end_date = date(dt.year, dt.month, last_day)
+        return self
+
+    def to_db(self) -> dict:
+        return {
+            "unit_id": self.unit_id,
+            "scenario_id": self.scenario_id,
+            "version_name": self.version_name,
+            "status": self.status,
+            "effective_start_date": self.effective_start_date,
+            "effective_end_date": self.effective_end_date,
+            "notes": self.notes,
+        }
 
 
 class BudgetVersionUpdate(BaseModel):
     version_name: str | None = None
+    name: str | None = None          # alias frontend
     status: str | None = None
     notes: str | None = None
     effective_start_date: date | None = None
     effective_end_date: date | None = None
+    horizon_start: str | None = None
+    horizon_end: str | None = None
+
+    @model_validator(mode="after")
+    def normalise(self) -> "BudgetVersionUpdate":
+        if self.name and not self.version_name:
+            self.version_name = self.name
+        if self.horizon_start and not self.effective_start_date:
+            self.effective_start_date = datetime.strptime(
+                self.horizon_start + "-01", "%Y-%m-%d"
+            ).date()
+        if self.horizon_end and not self.effective_end_date:
+            dt = datetime.strptime(self.horizon_end + "-01", "%Y-%m-%d")
+            last_day = monthrange(dt.year, dt.month)[1]
+            self.effective_end_date = date(dt.year, dt.month, last_day)
+        return self
 
 
-class BudgetVersionOut(BudgetVersionBase):
+class BudgetVersionOut(BaseModel):
     id: str
     unit_id: str
     scenario_id: str
-    created_by: str | None
+    version_name: str
+    status: str
+    effective_start_date: date | None = None
+    effective_end_date: date | None = None
+    notes: str | None = None
+    created_by: str | None = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    # Campos compatíveis com o frontend
+    @computed_field  # type: ignore[misc]
+    @property
+    def name(self) -> str:
+        return self.version_name
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def horizon_start(self) -> str | None:
+        if self.effective_start_date:
+            return self.effective_start_date.strftime("%Y-%m")
+        return None
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def horizon_end(self) -> str | None:
+        if self.effective_end_date:
+            return self.effective_end_date.strftime("%Y-%m")
+        return None
