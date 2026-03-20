@@ -18,9 +18,15 @@ from app.services.financial_engine.models import (
 from app.services.financial_engine.revenue import calculate_gross_revenue
 from app.services.financial_engine.fixed_costs import calculate_total_fixed_costs
 from app.services.financial_engine.variable_costs import calculate_total_variable_costs
-from app.services.financial_engine.financing import get_payment_for_period
+from app.services.financial_engine.financing import (
+    get_payment_for_period,
+    get_multi_contract_payment,
+)
 from app.services.financial_engine.kpi import (
     calculate_break_even_students,
+    calculate_break_even_revenue,
+    calculate_break_even_occupancy_pct,
+    calculate_contribution_margin_pct,
     calculate_ebitda,
     calculate_burn_rate,
     calculate_payback_months,
@@ -77,13 +83,17 @@ class FinancialEngine:
             result.personal_training_revenue = rev["personal_training_revenue"]
             result.other_revenue = rev["other_revenue"]
             result.active_students = rev["active_students"]
+            result.capacity_hours_month = rev["capacity_hours_month"]
+            result.active_hours_month = rev["active_hours_month"]
+            result.avg_price_per_hour = rev["avg_price_per_hour"]
             result.occupancy_rate = inp.revenue.occupancy_rate
 
-            # 2. Custos fixos
+            # 2. Custos fixos (passa occupancy_rate para modelo misto de utilities)
+            occ = inp.revenue.occupancy_rate
             if not inp.is_pre_operational:
-                fc = calculate_total_fixed_costs(inp.fixed_costs)
+                fc = calculate_total_fixed_costs(inp.fixed_costs, occ)
             else:
-                # Em pré-operacional, paga aluguel + setup mínimo
+                # Pré-operacional: apenas aluguel e custos base (ocupação = 0)
                 from app.services.financial_engine.models import FixedCostInputs
 
                 pre_op = FixedCostInputs(
@@ -91,7 +101,7 @@ class FinancialEngine:
                     condo_fee=inp.fixed_costs.condo_fee,
                     iptu=inp.fixed_costs.iptu,
                 )
-                fc = calculate_total_fixed_costs(pre_op)
+                fc = calculate_total_fixed_costs(pre_op, 0.0)
 
             result.total_fixed_costs = fc["total_fixed_costs"]
             result.rent_total = fc["rent_total"]
@@ -103,7 +113,7 @@ class FinancialEngine:
             result.insurance_costs = fc["insurance_costs"]
             result.other_fixed_costs = fc["other_fixed_costs"]
 
-            # 3. Custos variáveis
+            # 3. Custos variáveis (active_students = horas vendidas no modelo B2B)
             vc = calculate_total_variable_costs(
                 inp.variable_costs,
                 result.active_students,
@@ -119,9 +129,13 @@ class FinancialEngine:
                 result.gross_revenue * inp.taxes.tax_rate_on_revenue, 2
             )
 
-            # 5. Financiamento
+            # 5. Financiamento — múltiplos contratos ou contrato único
             financing_month_offset += 1
-            fin = get_payment_for_period(inp.financing, financing_month_offset)
+            if inp.financing_contracts:
+                fin = get_multi_contract_payment(inp.financing_contracts, financing_month_offset)
+            else:
+                fin = get_payment_for_period(inp.financing, financing_month_offset)
+                fin.setdefault("contracts", [])
             result.financing_payment = fin["payment"]
             result.financing_principal = fin["principal"]
             result.financing_interest = fin["interest"]
@@ -133,30 +147,98 @@ class FinancialEngine:
                 + result.taxes_on_revenue,
                 2,
             )
-            result.operating_result = round(
-                result.gross_revenue - result.total_costs, 2
-            )
-            result.net_result = round(
-                result.operating_result - result.financing_payment, 2
-            )
+            result.operating_result = round(result.gross_revenue - result.total_costs, 2)
+            result.net_result = round(result.operating_result - result.financing_payment, 2)
             if result.gross_revenue > 0:
                 result.net_margin = round(result.net_result / result.gross_revenue, 4)
 
             # 7. KPIs
-            avg_ticket = inp.revenue.avg_ticket_monthly or 1.0
-            var_per_student = (
-                inp.variable_costs.hygiene_kit_per_student
-                + avg_ticket * inp.variable_costs.sales_commission_rate
+            var_pct = (
+                result.total_variable_costs / result.gross_revenue
+                if result.gross_revenue > 0
+                else 0.0
             )
-            result.break_even_students = calculate_break_even_students(
-                result.total_fixed_costs,
-                avg_ticket,
-                var_per_student,
-                inp.taxes.tax_rate_on_revenue,
+            result.break_even_revenue = calculate_break_even_revenue(
+                result.total_fixed_costs, var_pct, inp.taxes.tax_rate_on_revenue
+            )
+            result.break_even_occupancy_pct = calculate_break_even_occupancy_pct(
+                result.break_even_revenue,
+                result.capacity_hours_month,
+                result.avg_price_per_hour,
+            )
+            result.contribution_margin_pct = calculate_contribution_margin_pct(
+                result.gross_revenue, result.total_variable_costs, result.taxes_on_revenue
+            )
+            # break_even_students = classes/horas necessárias (compat. legado)
+            result.break_even_students = int(
+                result.break_even_occupancy_pct * result.capacity_hours_month
+                if result.capacity_hours_month > 0
+                else calculate_break_even_students(
+                    result.total_fixed_costs,
+                    result.avg_price_per_hour or 1.0,
+                    inp.variable_costs.hygiene_kit_per_student,
+                    inp.taxes.tax_rate_on_revenue,
+                )
             )
             result.ebitda = calculate_ebitda(result)
             result.burn_rate = calculate_burn_rate(result)
 
+            # 8. Trilha de cálculo auditavel
+            result.calculation_trace = {
+                "period": inp.period,
+                "revenue": {
+                    "formula": "capacity_hours × occupancy_rate × avg_price_per_hour + other_revenue",
+                    "slots_per_hour": inp.revenue.slots_per_hour,
+                    "working_days_month": inp.revenue.working_days_month,
+                    "saturdays_month": inp.revenue.saturdays_month,
+                    "hours_per_day_weekday": inp.revenue.hours_per_day_weekday,
+                    "hours_per_day_saturday": inp.revenue.hours_per_day_saturday,
+                    "capacity_hours_month": result.capacity_hours_month,
+                    "occupancy_rate": occ,
+                    "active_hours_month": result.active_hours_month,
+                    "avg_price_per_hour": result.avg_price_per_hour,
+                    "service_plans": [
+                        {"name": p.name, "price": p.price_per_hour, "mix": p.mix_pct}
+                        for p in inp.revenue.service_plans
+                    ],
+                    "cowork_revenue": rev.get("cowork_revenue", 0.0),
+                    "other_revenue": result.other_revenue,
+                },
+                "fixed_costs": {
+                    "rent": result.rent_total,
+                    "staff": result.staff_costs,
+                    "utilities": result.utility_costs,
+                    "admin": result.admin_costs,
+                    "marketing": result.marketing_costs,
+                    "equipment": result.equipment_costs,
+                    "insurance": result.insurance_costs,
+                    "other": result.other_fixed_costs,
+                    "detail": fc.get("detail", {}),
+                },
+                "variable_costs": {
+                    "hygiene_kit": result.hygiene_kit_cost,
+                    "sales_commission": result.sales_commission_cost,
+                    "other": result.other_variable_costs,
+                },
+                "taxes": {
+                    "tax_rate": inp.taxes.tax_rate_on_revenue,
+                    "taxes_on_revenue": result.taxes_on_revenue,
+                },
+                "financing": {
+                    "total_payment": result.financing_payment,
+                    "principal": result.financing_principal,
+                    "interest": result.financing_interest,
+                    "contracts": fin.get("contracts", []),
+                },
+                "kpis": {
+                    "break_even_revenue": result.break_even_revenue,
+                    "break_even_occupancy_pct": result.break_even_occupancy_pct,
+                    "contribution_margin_pct": result.contribution_margin_pct,
+                    "operating_result": result.operating_result,
+                    "net_result": result.net_result,
+                    "ebitda": result.ebitda,
+                },
+            }
             period_results.append(result)
 
         outputs.periods = period_results
@@ -207,6 +289,12 @@ class FinancialEngine:
             annual[year]["operating_result"] += p.operating_result
             annual[year]["net_result"] += p.net_result
             annual[year]["ebitda"] += p.ebitda
+            annual[year]["burn_rate"] += p.burn_rate
+            # Para KPIs de único período, usamos o último mês do ano (dez)
+            annual[year]["_last_break_even_revenue"] = p.break_even_revenue
+            annual[year]["_last_occupancy_rate"] = p.occupancy_rate
+            annual[year]["_last_break_even_occupancy"] = p.break_even_occupancy_pct
+            annual[year]["_last_capacity_hours"] = p.capacity_hours_month
 
         result = {}
         for year, data in annual.items():
@@ -223,7 +311,12 @@ class FinancialEngine:
                 "operating_result": round(data["operating_result"], 2),
                 "net_result": round(net, 2),
                 "ebitda": round(data["ebitda"], 2),
+                "burn_rate": round(data["burn_rate"], 2),
                 "net_margin": round(net / rev, 4) if rev > 0 else 0.0,
+                "break_even_revenue": round(data["_last_break_even_revenue"], 2),
+                "break_even_occupancy_pct": round(data["_last_break_even_occupancy"], 4),
+                "occupancy_rate": round(data["_last_occupancy_rate"], 4),
+                "capacity_hours_month": round(data["_last_capacity_hours"], 2),
             }
         return result
 
@@ -278,6 +371,8 @@ class FinancialEngine:
                 "ebitda": period.ebitda,
                 "break_even_students": float(period.break_even_students),
             }
+            # trace com todos os KPIs — persiste apenas na linha do net_result
+            trace = period.calculation_trace
             for code, value in period_data.items():
                 if code not in code_to_id:
                     continue
@@ -289,7 +384,8 @@ class FinancialEngine:
                         line_item_id=code_to_id[code],
                         period_date=period.period,
                         value=float(value),
-                        calculation_trace=None,
+                        # trace apenas nas linhas de resultado final
+                        calculation_trace=trace if code == "net_result" else None,
                     )
                 )
 

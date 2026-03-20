@@ -8,6 +8,37 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class ServicePlanMix:
+    """
+    Representa um plano de serviço no mix de receita (ex: Bronze/Prata/Ouro/Diamante).
+    O preço médio ponderado é derivado de Σ(price_per_hour × mix_pct).
+    """
+
+    name: str = ""
+    price_per_hour: float = 0.0  # R$/hora para este plano
+    mix_pct: float = 0.0          # participação no mix 0.0–1.0 (deve somar 1.0)
+
+
+@dataclass
+class FinancingContractInputs:
+    """
+    Premissas de um contrato de financiamento individual.
+    Permite modelar múltiplos contratos por BudgetVersion (ARCH-02/GAP-06).
+
+    start_offset_months: meses a partir do mês 1 do horizonte em que este
+    contrato passa a ter prestações (0 = começa imediatamente).
+    """
+
+    name: str = ""
+    financed_amount: float = 0.0
+    monthly_rate: float = 0.0           # ex.: 0.012 = 1.2% a.m.
+    term_months: int = 0
+    grace_period_months: int = 0
+    down_payment_pct: float = 0.0       # % de entrada já paga (ex: 0.20 = 20%)
+    start_offset_months: int = 0        # offset desde o início do horizonte
+
+
+@dataclass
 class RevenueInputs:
     """
     Premissas de receita para uma unidade de coworking B2B (venda de slots/hora para PTs).
@@ -20,19 +51,25 @@ class RevenueInputs:
     poderão ser removidos quando a Financial Engine for refatorada.
     """
 
-    # ── Modelo Coworking B2B (NOVO — baseado no Excel) ────────────────────────
-    slots_per_hour: int = 10           # vagas simultâneas por hora (ex: 10 PTs)
-    hours_per_day_weekday: float = 17.0  # horas de funcionamento em dia útil
-    hours_per_day_saturday: float = 7.0  # horas de funcionamento no sábado
-    working_days_month: int = 22        # dias úteis no mês (aprox; calcular do calendário)
-    saturdays_month: int = 4            # sábados no mês
-    occupancy_rate: float = 0.0         # taxa de ocupação 0.0–1.0 (ex: 0.45)
-    # Preço médio ponderado (calculado via mix de ServicePlans, ou informado diretamente)
-    avg_price_per_hour: float = 0.0     # R$/hora (ex: 57.50 para mix bronze/prata/ouro/diamante)
-    # Receitas complementares
+    # ── Modelo Coworking B2B ───────────────────────────────────────────────────
+    # Campos operacionais da unidade (espelhados de Unit para o engine)
+    slots_per_hour: int = 10              # vagas simultâneas por hora
+    hours_per_day_weekday: float = 17.0   # horário seg–sex (ex: 05h–22h = 17h)
+    hours_per_day_saturday: float = 7.0   # horário sábado (ex: 08h–15h = 7h)
+    working_days_month: int = 22          # dias úteis no mês (seg–sex, sem feriados)
+    saturdays_month: int = 4              # sábados no mês
+    occupancy_rate: float = 0.0           # taxa de ocupação 0.0–1.0
+
+    # Mix de planos de serviço (Bronze/Prata/Ouro/Diamante).
+    # Se preenchido, calcula avg_price_per_hour automaticamente.
+    service_plans: list["ServicePlanMix"] = field(default_factory=list)
+    # Preço médio manual (usado se service_plans estiver vazio)
+    avg_price_per_hour: float = 0.0
+
+    # Outras receitas fixas mensais (ex: locação de sala)
     other_revenue: float = 0.0
 
-    # ── Legado (SmartFit-style) mantido para compatibilidade com seed ─────────
+    # ── Legado (mantido para compatibilidade) ─────────────────────────────────
     max_students: int = 0
     avg_ticket_monthly: float = 0.0
     avg_ticket_quarterly: float = 0.0
@@ -165,9 +202,12 @@ class FinancialInputs:
     fixed_costs: FixedCostInputs = field(default_factory=FixedCostInputs)
     variable_costs: VariableCostInputs = field(default_factory=VariableCostInputs)
     capex: CapexInputs = field(default_factory=CapexInputs)
+    # Múltiplos contratos de financiamento (ARCH-02). Se preenchido, sobrescreve `financing`.
+    financing_contracts: list["FinancingContractInputs"] = field(default_factory=list)
+    # Legado — contrato único
     financing: FinancingInputs = field(default_factory=FinancingInputs)
     taxes: TaxInputs = field(default_factory=TaxInputs)
-    # Ramp-up override (se False, usa o cálculo padrão via occupancy_rate)
+    # Se True, apenas aluguel incide (período pré-operacional antes da inauguração)
     is_pre_operational: bool = False
 
 
@@ -214,12 +254,26 @@ class PeriodResult:
     net_result: float = 0.0  # Resultado Operacional - Financiamento
     net_margin: float = 0.0  # Net Result / Gross Revenue
 
-    # KPIs
-    active_students: int = 0
+    # KPIs — Coworking B2B
+    active_students: int = 0             # Equivalente a horas vendidas (compat.)
     occupancy_rate: float = 0.0
-    break_even_students: int = 0
-    burn_rate: float = 0.0  # Queima mensal (resultado negativo)
+    capacity_hours_month: float = 0.0    # Horas totais disponíveis no mês
+    active_hours_month: float = 0.0      # Horas efetivamente vendidas
+    avg_price_per_hour: float = 0.0      # Preço médio ponderado do mix
+
+    # Breakeven
+    break_even_students: int = 0         # Horas/mês para break-even (compat.)
+    break_even_revenue: float = 0.0      # Receita mínima para break-even (R$)
+    break_even_occupancy_pct: float = 0.0  # Ocupação mínima para break-even
+
+    # Margem
+    contribution_margin_pct: float = 0.0  # Margem de contribuição (%)
+
+    burn_rate: float = 0.0               # Queima mensal (resultado negativo)
     ebitda: float = 0.0
+
+    # Trilha de cálculo auditavel por período
+    calculation_trace: dict = field(default_factory=dict)
 
 
 @dataclass
