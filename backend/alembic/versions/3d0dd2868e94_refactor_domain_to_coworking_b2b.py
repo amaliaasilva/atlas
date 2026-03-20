@@ -35,7 +35,7 @@ def upgrade() -> None:
     op.execute(
         """
         UPDATE units
-        SET opening_date = CAST(opening_year AS TEXT) || '-01-01'
+        SET opening_date = (CAST(opening_year AS TEXT) || '-01-01')::date
         WHERE opening_year IS NOT NULL
         """
     )
