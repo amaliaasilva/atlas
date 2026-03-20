@@ -43,7 +43,8 @@ export interface BudgetVersion {
   unit_id: string;
   scenario_id: string;
   name: string;
-  status: 'draft' | 'published' | 'archived';
+  status: 'draft' | 'published' | 'archived' | 'planning';
+  is_active: boolean;
   horizon_start: string;
   horizon_end: string;
   projection_horizon_years?: number;
