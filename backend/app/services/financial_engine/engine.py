@@ -370,6 +370,15 @@ class FinancialEngine:
                 "net_result": period.net_result,
                 "ebitda": period.ebitda,
                 "break_even_students": float(period.break_even_students),
+                # KPIs B2B Coworking
+                "occupancy_rate": period.occupancy_rate,
+                "capacity_hours_month": period.capacity_hours_month,
+                "active_hours_month": period.active_hours_month,
+                "break_even_revenue": period.break_even_revenue,
+                "break_even_occupancy_pct": period.break_even_occupancy_pct,
+                "contribution_margin_pct": period.contribution_margin_pct,
+                "net_margin": period.net_margin,
+                "active_students": float(period.active_students),
             }
             # trace com todos os KPIs — persiste apenas na linha do net_result
             trace = period.calculation_trace

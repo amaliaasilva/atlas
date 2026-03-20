@@ -99,17 +99,25 @@ def _build_inputs_for_version(
     for period in periods:
         p = period  # alias
         revenue = RevenueInputs(
-            max_students=int(_get(values, "alunos_capacidade_maxima", p)),
-            occupancy_rate=_get(values, "taxa_ocupacao", p),
-            avg_ticket_monthly=_get(values, "ticket_medio_plano_mensal", p),
-            avg_ticket_quarterly=_get(values, "ticket_medio_plano_trimestral", p),
-            avg_ticket_annual=_get(values, "ticket_medio_plano_anual", p),
+            # ── B2B Coworking (slot/hora) ──────────────────────────────────────
+            slots_per_hour=int(_get(values, "slots_por_hora", p, default=10)),
+            hours_per_day_weekday=float(_get(values, "horas_dia_util", p, default=17.0)),
+            hours_per_day_saturday=float(_get(values, "horas_dia_sabado", p, default=7.0)),
+            working_days_month=int(_get(values, "dias_uteis_mes", p, default=22)),
+            saturdays_month=int(_get(values, "sabados_mes", p, default=4)),
+            avg_price_per_hour=float(_get(values, "preco_medio_hora", p, default=60.0)),
+            # ── Legado (mantido para compat. de versões antigas) ──────────────
+            max_students=int(_get(values, "alunos_capacidade_maxima", p, default=0)),
+            occupancy_rate=_get(values, "taxa_ocupacao", p, default=0.0),
+            avg_ticket_monthly=_get(values, "ticket_medio_plano_mensal", p, default=0.0),
+            avg_ticket_quarterly=_get(values, "ticket_medio_plano_trimestral", p, default=0.0),
+            avg_ticket_annual=_get(values, "ticket_medio_plano_anual", p, default=0.0),
             mix_monthly_pct=_get(values, "mix_plano_mensal_pct", p, default=1.0),
-            mix_quarterly_pct=_get(values, "mix_plano_trimestral_pct", p),
-            mix_annual_pct=_get(values, "mix_plano_anual_pct", p),
-            num_personal_trainers=int(_get(values, "num_personal_trainers", p)),
-            avg_personal_revenue_month=_get(values, "receita_media_personal_mes", p),
-            other_revenue=_get(values, "outras_receitas", p),
+            mix_quarterly_pct=_get(values, "mix_plano_trimestral_pct", p, default=0.0),
+            mix_annual_pct=_get(values, "mix_plano_anual_pct", p, default=0.0),
+            num_personal_trainers=int(_get(values, "num_personal_trainers", p, default=0)),
+            avg_personal_revenue_month=_get(values, "receita_media_personal_mes", p, default=0.0),
+            other_revenue=_get(values, "outras_receitas", p, default=0.0),
         )
 
         fixed = FixedCostInputs(
@@ -123,13 +131,21 @@ def _build_inputs_for_version(
             manager_salary=_get(values, "salario_gerente", p),
             fitness_teacher_salary=_get(values, "salario_educador_fisico", p),
             pro_labore=_get(values, "pro_labore", p),
-            social_charges_rate=_get(values, "encargos_folha_pct", p, default=0.08),
+            social_charges_rate=_get(values, "encargos_folha_pct", p, default=0.80),
             benefits_per_employee=_get(values, "beneficios_por_funcionario", p),
             num_employees=int(_get(values, "num_funcionarios", p)),
-            electricity_kwh=_get(values, "kwh_consumo_mensal", p),
-            electricity_rate=_get(values, "tarifa_kwh", p),
-            water_m3=_get(values, "consumo_agua_m3_mensal", p),
-            water_rate=_get(values, "tarifa_agua_m3", p),
+            # ── Energia: modelo misto (fixo + variável × ocupação) ─────────────
+            fixed_energy_cost=_get(values, "custo_energia_fixo", p, default=0.0),
+            max_variable_energy_cost=_get(values, "custo_energia_variavel_max", p, default=0.0),
+            automation_reduction=_get(values, "automacao_reducao_pct", p, default=0.0),
+            # ── Água: modelo misto (fixo + variável × ocupação) ────────────────
+            fixed_water_cost=_get(values, "custo_agua_fixo", p, default=0.0),
+            max_variable_water_cost=_get(values, "custo_agua_variavel_max", p, default=0.0),
+            # ── Legado (kWh × tarifa) — usado se fixo/variável = 0 ────────────
+            electricity_kwh=_get(values, "kwh_consumo_mensal", p, default=0.0),
+            electricity_rate=_get(values, "tarifa_kwh", p, default=0.0),
+            water_m3=_get(values, "consumo_agua_m3_mensal", p, default=0.0),
+            water_rate=_get(values, "tarifa_agua_m3", p, default=0.0),
             internet_phone=_get(values, "internet_telefonia_mensal", p),
             office_supplies=_get(values, "material_escritorio", p),
             hygiene_cleaning=_get(values, "higiene_limpeza_mensal", p),

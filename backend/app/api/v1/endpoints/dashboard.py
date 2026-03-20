@@ -28,6 +28,14 @@ KPI_CODES = [
     "net_result",
     "ebitda",
     "break_even_students",
+    # KPIs B2B Coworking
+    "occupancy_rate",
+    "capacity_hours_month",
+    "active_hours_month",
+    "break_even_revenue",
+    "break_even_occupancy_pct",
+    "contribution_margin_pct",
+    "net_margin",
 ]
 
 
