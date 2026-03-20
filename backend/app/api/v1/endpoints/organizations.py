@@ -14,7 +14,7 @@ from app.schemas.organization import (
 router = APIRouter()
 
 
-@router.get("/", response_model=list[OrganizationOut])
+@router.get("", response_model=list[OrganizationOut])
 def list_organizations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -27,7 +27,7 @@ def list_organizations(
     )
 
 
-@router.post("/", response_model=OrganizationOut, status_code=201)
+@router.post("", response_model=OrganizationOut, status_code=201)
 def create_organization(
     data: OrganizationCreate,
     db: Session = Depends(get_db),

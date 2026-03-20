@@ -10,7 +10,7 @@ from app.schemas.unit import UnitCreate, UnitUpdate, UnitOut
 router = APIRouter()
 
 
-@router.get("/", response_model=list[UnitOut])
+@router.get("", response_model=list[UnitOut])
 def list_units(
     business_id: str | None = Query(None),
     db: Session = Depends(get_db),
@@ -22,7 +22,7 @@ def list_units(
     return q.order_by(Unit.sort_order, Unit.name).all()
 
 
-@router.post("/", response_model=UnitOut, status_code=201)
+@router.post("", response_model=UnitOut, status_code=201)
 def create_unit(
     data: UnitCreate,
     db: Session = Depends(get_db),

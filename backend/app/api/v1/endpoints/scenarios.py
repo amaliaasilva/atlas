@@ -10,7 +10,7 @@ from app.schemas.scenario import ScenarioCreate, ScenarioUpdate, ScenarioOut
 router = APIRouter()
 
 
-@router.get("/", response_model=list[ScenarioOut])
+@router.get("", response_model=list[ScenarioOut])
 def list_scenarios(
     business_id: str | None = Query(None),
     db: Session = Depends(get_db),
@@ -22,7 +22,7 @@ def list_scenarios(
     return q.order_by(Scenario.name).all()
 
 
-@router.post("/", response_model=ScenarioOut, status_code=201)
+@router.post("", response_model=ScenarioOut, status_code=201)
 def create_scenario(
     data: ScenarioCreate,
     db: Session = Depends(get_db),

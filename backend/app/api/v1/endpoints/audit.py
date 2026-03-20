@@ -13,7 +13,7 @@ from app.models.audit_log import AuditLog
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("")
 def list_audit_logs(
     entity_type: str | None = Query(None),
     entity_id: str | None = Query(None),

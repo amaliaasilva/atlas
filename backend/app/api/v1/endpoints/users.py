@@ -17,7 +17,7 @@ def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
-@router.get("/", response_model=list[UserOut])
+@router.get("", response_model=list[UserOut])
 def list_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_superuser),
@@ -25,7 +25,7 @@ def list_users(
     return db.query(User).order_by(User.full_name).all()
 
 
-@router.post("/", response_model=UserOut, status_code=201)
+@router.post("", response_model=UserOut, status_code=201)
 def create_user(
     data: UserCreate,
     db: Session = Depends(get_db),

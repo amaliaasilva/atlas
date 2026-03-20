@@ -10,7 +10,7 @@ from app.schemas.business import BusinessCreate, BusinessUpdate, BusinessOut
 router = APIRouter()
 
 
-@router.get("/", response_model=list[BusinessOut])
+@router.get("", response_model=list[BusinessOut])
 def list_businesses(
     organization_id: str | None = Query(None),
     db: Session = Depends(get_db),
@@ -22,7 +22,7 @@ def list_businesses(
     return q.order_by(Business.name).all()
 
 
-@router.post("/", response_model=BusinessOut, status_code=201)
+@router.post("", response_model=BusinessOut, status_code=201)
 def create_business(
     data: BusinessCreate,
     db: Session = Depends(get_db),

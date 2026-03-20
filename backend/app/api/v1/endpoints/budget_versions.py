@@ -14,7 +14,7 @@ from app.schemas.budget_version import (
 router = APIRouter()
 
 
-@router.get("/", response_model=list[BudgetVersionOut])
+@router.get("", response_model=list[BudgetVersionOut])
 def list_budget_versions(
     unit_id: str | None = Query(None),
     scenario_id: str | None = Query(None),
@@ -32,7 +32,7 @@ def list_budget_versions(
     return q.order_by(BudgetVersion.created_at.desc()).all()
 
 
-@router.post("/", response_model=BudgetVersionOut, status_code=201)
+@router.post("", response_model=BudgetVersionOut, status_code=201)
 def create_budget_version(
     data: BudgetVersionCreate,
     db: Session = Depends(get_db),
