@@ -41,7 +41,7 @@ class Settings(BaseSettings):
         raw = (self.CORS_ORIGINS or "").strip()
 
         if not raw:
-            return []
+            return ["*"]
 
         if raw.startswith("["):
             try:
@@ -51,7 +51,9 @@ class Settings(BaseSettings):
             except json.JSONDecodeError:
                 pass
 
-        return [item.strip().strip('"').rstrip("=") for item in raw.split(",") if item.strip()]
+        origins = [item.strip().strip('"').rstrip("=") for item in raw.split(",") if item.strip()]
+        # Always allow all Cloud Run service URLs for this project
+        return origins + ["https://atlas-frontend-7cuu5kzxjq-rj.a.run.app"]
 
     # GCP
     GCS_BUCKET_NAME: str = "atlas-finance-uploads"
