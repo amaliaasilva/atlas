@@ -22,7 +22,7 @@ interface DRERow {
 
 const DRE_STRUCTURE: DRERow[] = [
   { code: 'revenue_total',          label: 'Receita Bruta',              indent: 0, bold: true },
-  { code: 'membership_revenue',     label: '  Mensalidades',             indent: 1 },
+  { code: 'membership_revenue',     label: '  Receita de Horas (Coworking)',  indent: 1 },
   { code: 'personal_training_revenue', label: '  Personal Training',     indent: 1 },
   { code: 'other_revenue',          label: '  Outras Receitas',          indent: 1 },
   { code: 'taxes_on_revenue',       label: '(-) Impostos (Simples)',     indent: 0 },

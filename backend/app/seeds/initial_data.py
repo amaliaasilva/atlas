@@ -30,6 +30,7 @@ from app.models.scenario import Scenario
 from app.models.assumption import AssumptionCategory, AssumptionDefinition
 from app.models.line_item import LineItemDefinition
 from app.models.service_plan import ServicePlan
+from app.models.budget_version import BudgetVersion
 from app.models.user import User, Role
 
 
@@ -1292,6 +1293,50 @@ def run_seeds(db: Session):
             sp_count += 1
     db.commit()
     print(f"  ✓ {sp_count} planos de serviço criados/verificados")
+
+    # 11. Budget Versions — uma por unidade × cenário, com effective_start_date = opening_date
+    opening_by_code = {u["code"]: u["opening_date"] for u in UNITS_DATA}
+    scenario_label = {
+        "Base": "Base",
+        "Conservador": "Conservador",
+        "Agressivo": "Agressivo",
+    }
+    bv_created = 0
+    bv_updated = 0
+    for s_name, scenario_obj in scenario_ids.items():
+        for code, unit_obj in unit_ids.items():
+            opening = opening_by_code.get(code)
+            if not opening:
+                continue
+            existing_bv = (
+                db.query(BudgetVersion)
+                .filter(
+                    BudgetVersion.unit_id == unit_obj.id,
+                    BudgetVersion.scenario_id == scenario_obj.id,
+                    BudgetVersion.is_active == True,
+                )
+                .first()
+            )
+            if not existing_bv:
+                bv = BudgetVersion(
+                    id=str(uuid.uuid4()),
+                    unit_id=unit_obj.id,
+                    scenario_id=scenario_obj.id,
+                    version_name=f"Orçamento {scenario_label[s_name]} — {unit_obj.name}",
+                    status="published",
+                    effective_start_date=opening,
+                    projection_horizon_years=10,
+                    created_by=admin.id,
+                )
+                db.add(bv)
+                bv_created += 1
+            else:
+                # Corrige effective_start_date se estiver errado (ex: todas em 2026-01)
+                if existing_bv.effective_start_date != opening:
+                    existing_bv.effective_start_date = opening
+                    bv_updated += 1
+    db.commit()
+    print(f"  ✓ {bv_created} versões de orçamento criadas, {bv_updated} datas corrigidas")
 
     print("\n=== Seeds concluídos com sucesso! ===")
     print(f"  Organização:  {org.id}")

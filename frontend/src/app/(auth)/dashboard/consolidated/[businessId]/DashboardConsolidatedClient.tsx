@@ -78,7 +78,7 @@ export default function DashboardConsolidatedClient() {
                 icon={<Target className="h-4 w-4" />}
               />
               <KpiCard
-                label="Total Alunos"
+                label="Horas Vendidas (slots)"
                 value={formatNumber(kpis?.active_students ?? 0)}
                 icon={<Users className="h-4 w-4" />}
                 sub={kpis?.occupancy_rate ? formatPercent(kpis.occupancy_rate) + ' ocupação' : undefined}

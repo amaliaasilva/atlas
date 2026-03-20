@@ -1,6 +1,7 @@
 'use client';
 
-import { useQuery, useQueries } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { unitsApi, versionsApi, scenariosApi } from '@/lib/api';
 import { useNavStore } from '@/store/auth';
@@ -8,9 +9,10 @@ import { Topbar } from '@/components/layout/Topbar';
 import { LoadingScreen } from '@/components/ui/Spinner';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Input, Select } from '@/components/ui/Input';
 import { EmptyState } from '@/components/dashboard/EmptyState';
-import type { BudgetVersion } from '@/types/api';
-import { FileSpreadsheet, Plus, ChevronRight, MapPin, Calendar, Lock, Edit3, Archive } from 'lucide-react';
+import type { BudgetVersion, Unit, Scenario } from '@/types/api';
+import { FileSpreadsheet, Plus, ChevronRight, MapPin, Calendar, Lock, Edit3, Archive, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const STATUS_META: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
@@ -19,9 +21,115 @@ const STATUS_META: Record<string, { label: string; icon: React.ReactNode; cls: s
   archived:  { label: 'Arquivado', icon: <Archive className="h-3.5 w-3.5" />, cls: 'bg-amber-50 text-amber-600 border border-amber-200' },
 };
 
+// ── Modal: Criar Nova Versão ──────────────────────────────────────────────────
+
+interface CreateVersionModalProps {
+  units: Unit[];
+  scenarios: Scenario[];
+  onClose: () => void;
+  onCreated: (versionId: string, scenarioId: string) => void;
+}
+
+function CreateVersionModal({ units, scenarios, onClose, onCreated }: CreateVersionModalProps) {
+  const queryClient = useQueryClient();
+  const activeUnits = units.filter((u) => u.status !== 'closed');
+
+  const [unitId, setUnitId] = useState(activeUnits[0]?.id ?? '');
+  const [scenId, setScenId] = useState(scenarios[0]?.id ?? '');
+  const [versionName, setVersionName] = useState('');
+  const [horizonStart, setHorizonStart] = useState('');
+
+  // Auto-populate opening date and name when unit/scenario changes
+  useEffect(() => {
+    const unit = units.find((u) => u.id === unitId);
+    const scen = scenarios.find((s) => s.id === scenId);
+    if (unit?.opening_date) {
+      const d = new Date(unit.opening_date);
+      setHorizonStart(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    if (unit && scen && !versionName) {
+      setVersionName(`Orçamento ${scen.name} — ${unit.name}`);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unitId, scenId]);
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      versionsApi.create({
+        unit_id: unitId,
+        scenario_id: scenId,
+        name: versionName || `Orçamento — ${new Date().toLocaleDateString('pt-BR')}`,
+        horizon_start: horizonStart || '2026-01',
+        status: 'draft',
+        projection_horizon_years: 10,
+      } as Partial<BudgetVersion>),
+    onSuccess: (newVersion) => {
+      queryClient.invalidateQueries({ queryKey: ['versions'] });
+      onCreated(newVersion.id, scenId);
+    },
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900">Nova Versão de Orçamento</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <Select
+            label="Unidade"
+            value={unitId}
+            onChange={(e) => { setUnitId(e.target.value); setVersionName(''); }}
+            options={activeUnits.map((u) => ({ value: u.id, label: `${u.name} (${u.code})` }))}
+          />
+          <Select
+            label="Cenário"
+            value={scenId}
+            onChange={(e) => { setScenId(e.target.value); setVersionName(''); }}
+            options={scenarios.map((s) => ({ value: s.id, label: s.name }))}
+          />
+          <Input
+            label="Nome da versão"
+            value={versionName}
+            onChange={(e) => setVersionName(e.target.value)}
+            placeholder="Ex: Orçamento Agressivo — Laboratório"
+          />
+          <Input
+            label="Início do horizonte (YYYY-MM)"
+            value={horizonStart}
+            onChange={(e) => setHorizonStart(e.target.value)}
+            placeholder="Ex: 2026-01"
+            hint="Padrão: data de abertura da unidade"
+          />
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+          <Button variant="ghost" size="sm" onClick={onClose}>Cancelar</Button>
+          <Button
+            size="sm"
+            onClick={() => mutation.mutate()}
+            loading={mutation.isPending}
+            disabled={!unitId || !scenId}
+          >
+            <Plus className="h-4 w-4" /> Criar Versão
+          </Button>
+        </div>
+        {mutation.isError && (
+          <p className="px-6 pb-4 text-xs text-red-500">
+            Erro ao criar versão. Verifique os dados e tente novamente.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function BudgetPage() {
   const router = useRouter();
   const { businessId, scenarioId, setScenario, setVersion } = useNavStore();
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const { data: units = [], isLoading: loadingUnits } = useQuery({
     queryKey: ['units', businessId],
@@ -68,6 +176,19 @@ export default function BudgetPage() {
 
   return (
     <>
+      {showCreateModal && (
+        <CreateVersionModal
+          units={units}
+          scenarios={scenarios}
+          onClose={() => setShowCreateModal(false)}
+          onCreated={(vId, sId) => {
+            setShowCreateModal(false);
+            setScenario(sId);
+            setVersion(vId);
+            router.push(`/budget/${vId}`);
+          }}
+        />
+      )}
       <Topbar title="Orçamentos" />
       <div className="flex-1 p-6 space-y-6 max-w-6xl">
 
@@ -81,7 +202,7 @@ export default function BudgetPage() {
           </div>
           <Button
             size="sm"
-            onClick={() => router.push('/scenarios')}
+            onClick={() => setShowCreateModal(true)}
           >
             <Plus className="h-4 w-4" /> Nova Versão
           </Button>

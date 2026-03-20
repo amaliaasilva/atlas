@@ -417,11 +417,11 @@ export default function EstrategicoPage() {
                   formatter={formatCurrency}
                 />
                 <BulletChartItem
-                  label="Alunos vs Breakeven"
+                  label="Horas Vendidas vs Breakeven"
                   current={latestStudents}
                   breakeven={Math.round(avgBreakevenStudents)}
                   max={Math.max(latestStudents * 1.5, avgBreakevenStudents * 1.3, 1)}
-                  formatter={(v) => `${Math.round(v)} alunos`}
+                  formatter={(v) => `${Math.round(v)} horas/slots`}
                 />
 
                 {/* Caption */}
@@ -612,7 +612,7 @@ export default function EstrategicoPage() {
                   {gapToBreakeven > 0 && (
                     <li className="flex items-start gap-1.5">
                       <AlertCircle className="h-3 w-3 shrink-0 mt-0.5" />
-                      Faltam {formatNumber(Math.ceil(gapToBreakeven))} alunos para atingir o breakeven
+                      Faltam {formatNumber(Math.ceil(gapToBreakeven))} horas/slots para atingir o breakeven
                     </li>
                   )}
                   {margin < 0.05 && margin >= 0 && (
@@ -699,7 +699,7 @@ export default function EstrategicoPage() {
                   a:
                     totalProfit >= 0
                       ? `Já atingido — operação com ${formatCurrency(totalProfit)} de superávit`
-                      : `${formatCurrency(revenueGapToBreakeven)} de receita adicional necessária (${formatNumber(Math.ceil(gapToBreakeven))} alunos)`,
+                      : `${formatCurrency(revenueGapToBreakeven)} de receita adicional necessária (${formatNumber(Math.ceil(gapToBreakeven))} horas/slots)`,
                   ok: totalProfit >= 0,
                 },
                 {

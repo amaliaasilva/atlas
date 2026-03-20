@@ -78,7 +78,7 @@ export default function OcupacaoPage() {
         <div>
           <h2 className="text-lg font-bold text-gray-900">Ocupação da Rede</h2>
           <p className="text-sm text-gray-400 mt-0.5">
-            Quantidade de alunos ativos em relação à capacidade máxima
+            Horas vendidas (slots ocupados) em relação à capacidade máxima da rede
           </p>
         </div>
 
@@ -106,13 +106,13 @@ export default function OcupacaoPage() {
                 accentColor={avgOccupancy > 0.6 ? 'emerald' : avgOccupancy > 0.35 ? 'amber' : 'rose'}
               />
               <MetricCard
-                label="Alunos Atuais"
+                label="Horas Vendidas"
                 value={formatNumber(currentStudents)}
                 trend={gapToBreakeven < 0 ? 'up' : 'down'}
                 icon={<Users className="h-4 w-4" />}
                 accentColor="sky"
-                sub={`Breakeven: ${formatNumber(Math.round(breakevenStudents))} alunos`}
-                tooltip="Alunos ativos no último período calculado"
+                sub={`Breakeven: ${formatNumber(Math.round(breakevenStudents))} horas/slots`}
+                tooltip="Horas/slots vendidos no último período calculado"
               />
               <MetricCard
                 label="Gap para Breakeven"
@@ -120,8 +120,8 @@ export default function OcupacaoPage() {
                 trend={gapToBreakeven <= 0 ? 'up' : 'down'}
                 icon={<Target className="h-4 w-4" />}
                 accentColor={gapToBreakeven <= 0 ? 'emerald' : 'amber'}
-                sub={gapToBreakeven > 0 ? 'alunos faltando para breakeven' : 'Operação no breakeven ou acima'}
-                tooltip="Diferença entre alunos atuais e alunos necessários para break-even"
+                sub={gapToBreakeven > 0 ? 'horas faltando para breakeven' : 'Operação no breakeven ou acima'}
+                tooltip="Diferença entre horas vendidas e horas necessárias para break-even"
               />
             </>
           )}
@@ -140,7 +140,7 @@ export default function OcupacaoPage() {
                 <OccupancyLineChart
                   data={filteredTs}
                   breakevenStudents={Math.round(breakevenStudents)}
-                  title="Alunos e Ocupação — Evolução"
+                  title="Horas Vendidas e Ocupação — Evolução"
                 />
               ) : (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
@@ -153,11 +153,11 @@ export default function OcupacaoPage() {
                 {filteredTs.length > 0 ? (
                   <div className="space-y-4">
                     <BulletChartItem
-                      label="Alunos Ativos"
+                      label="Horas Vendidas"
                       current={currentStudents}
                       breakeven={Math.round(breakevenStudents)}
                       max={Math.max(currentStudents * 1.5, breakevenStudents * 1.2, 1)}
-                      formatter={(v) => `${Math.round(v)} alunos`}
+                      formatter={(v) => `${Math.round(v)} horas/slots`}
                     />
                     <BulletChartItem
                       label="Taxa de Ocupação"
@@ -181,12 +181,12 @@ export default function OcupacaoPage() {
                         <p className={`text-sm font-bold ${gapToBreakeven <= 0 ? 'text-emerald-800' : 'text-amber-800'}`}>
                           {gapToBreakeven <= 0
                             ? 'Ocupação suficiente para breakeven'
-                            : `Faltam ${formatNumber(Math.ceil(gapToBreakeven))} alunos para breakeven`}
+                            : `Faltam ${formatNumber(Math.ceil(gapToBreakeven))} horas para breakeven`}
                         </p>
                       </div>
                       <p className={`text-xs ${gapToBreakeven <= 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
                         {gapToBreakeven <= 0
-                          ? `Superávit de ${formatNumber(Math.abs(Math.floor(gapToBreakeven)))} alunos acima do ponto de equilíbrio`
+                          ? `Superávit de ${formatNumber(Math.abs(Math.floor(gapToBreakeven)))} horas acima do ponto de equilíbrio`
                           : `Gap de ${formatPercent(occupancyGap)} na taxa de ocupação`}
                       </p>
                     </div>
@@ -210,7 +210,7 @@ export default function OcupacaoPage() {
                 <thead>
                   <tr className="bg-gray-50">
                     <th className="text-left text-xs font-semibold text-gray-500 px-6 py-3 uppercase tracking-wider">Período</th>
-                    <th className="text-right text-xs font-semibold text-gray-500 px-6 py-3 uppercase tracking-wider">Alunos</th>
+                    <th className="text-right text-xs font-semibold text-gray-500 px-6 py-3 uppercase tracking-wider">Horas Vendidas</th>
                     <th className="text-right text-xs font-semibold text-gray-500 px-6 py-3 uppercase tracking-wider">Ocupação</th>
                     <th className="text-right text-xs font-semibold text-gray-500 px-6 py-3 uppercase tracking-wider">Breakeven</th>
                     <th className="text-right text-xs font-semibold text-gray-500 px-6 py-3 uppercase tracking-wider">Gap</th>
@@ -225,7 +225,7 @@ export default function OcupacaoPage() {
                       <tr key={d.period} className="border-t border-gray-50 hover:bg-gray-50/80 transition-colors">
                         <td className="px-6 py-3 text-sm font-medium text-gray-700">{d.period}</td>
                         <td className="px-6 py-3 text-sm text-right tabular-nums text-gray-900">
-                          {formatNumber(students)}
+                          {formatNumber(students)} h
                         </td>
                         <td className="px-6 py-3 text-sm text-right tabular-nums">
                           <span className={`font-semibold ${(d.occupancy_rate ?? 0) >= 0.7 ? 'text-emerald-600' : (d.occupancy_rate ?? 0) >= 0.4 ? 'text-amber-600' : 'text-rose-500'}`}>

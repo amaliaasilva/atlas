@@ -31,7 +31,7 @@ export function OccupancyLineChart({
 }: OccupancyLineChartProps) {
   const chartData = data.map((d) => ({
     period: formatPeriod(d.period),
-    alunos: d.active_students ?? 0,
+    alunos: d.active_students ?? 0,  // active_students = horas/slots vendidas no período
     ocupacao: Math.round((d.occupancy_rate ?? 0) * 100),
     breakeven: breakevenStudents,
   }));
@@ -58,7 +58,7 @@ export function OccupancyLineChart({
           <Line
             type="monotone"
             dataKey="alunos"
-            name="Alunos Ativos"
+            name="Horas Vendidas"
             stroke="#6366f1"
             strokeWidth={2.5}
             dot={false}

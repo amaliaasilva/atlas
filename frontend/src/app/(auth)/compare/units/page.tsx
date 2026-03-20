@@ -17,7 +17,7 @@ const METRIC_OPTIONS = [
   { value: 'net_result',    label: 'Resultado Líquido' },
   { value: 'gross_revenue', label: 'Receita Bruta' },
   { value: 'ebitda',        label: 'EBITDA' },
-  { value: 'active_students', label: 'Alunos Ativos' },
+  { value: 'active_students', label: 'Horas Vendidas' },
   { value: 'occupancy_rate', label: 'Taxa de Ocupação' },
 ];
 

@@ -19,7 +19,7 @@ const METRIC_OPTIONS = [
   { value: 'net_result',     label: 'Resultado Líquido' },
   { value: 'gross_revenue',  label: 'Receita Bruta' },
   { value: 'ebitda',         label: 'EBITDA' },
-  { value: 'active_students',label: 'Alunos Ativos' },
+  { value: 'active_students',label: 'Horas Vendidas' },
 ];
 
 const LINE_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#14b8a6'];
