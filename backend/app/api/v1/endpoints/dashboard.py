@@ -131,27 +131,44 @@ def business_consolidated_dashboard(
     for row in rows:
         by_code[row.metric_code][row.period_date] = row.value
 
-    kpis = {code: round(sum(by_code.get(code, {}).values()), 2) for code in KPI_CODES}
+    # Métricas somáveis diretamente do ConsolidatedResult
+    SUMMABLE = [c for c in KPI_CODES if c not in {
+        "occupancy_rate", "break_even_occupancy_pct", "contribution_margin_pct", "net_margin"
+    }]
+    kpis = {code: round(sum(by_code.get(code, {}).values()), 2) for code in SUMMABLE}
 
-    SNAPSHOT_KPI_CODES = {
-        "occupancy_rate", "break_even_occupancy_pct", "contribution_margin_pct",
-        "break_even_revenue", "break_even_students", "capacity_hours_month",
-    }
+    # Deriva métricas percentuais a partir dos somáveis
+    total_cap = kpis.get("capacity_hours_month", 0)
+    total_act = kpis.get("active_hours_month", 0)
+    kpis["occupancy_rate"] = round(total_act / total_cap, 4) if total_cap > 0 else 0.0
+    rev = kpis.get("revenue_total", 0)
+    net = kpis.get("net_result", 0)
+    vc = kpis.get("total_variable_costs", 0)
+    tax = kpis.get("taxes_on_revenue", 0)
+    kpis["net_margin"] = round(net / rev, 4) if rev > 0 else 0.0
+    kpis["contribution_margin_pct"] = round((rev - vc - tax) / rev, 4) if rev > 0 else 0.0
+    be_rev = kpis.get("break_even_revenue", 0)
+    kpis["break_even_occupancy_pct"] = round(be_rev / (total_cap * (rev / max(total_act, 1))), 4) if total_cap > 0 and total_act > 0 else 0.0
+
     all_periods_cons = sorted(set(row.period_date for row in rows))
-    if all_periods_cons:
-        last_p = all_periods_cons[-1]
-        for code in SNAPSHOT_KPI_CODES:
-            if code in by_code and last_p in by_code[code]:
-                kpis[code] = by_code[code][last_p]
-
-    if kpis.get("revenue_total", 0) > 0:
-        kpis["net_margin"] = round(kpis["net_result"] / kpis["revenue_total"], 4)
-
     all_periods = all_periods_cons
-    time_series = [
-        {"period": p, **{code: by_code.get(code, {}).get(p, 0.0) for code in KPI_CODES}}
-        for p in all_periods
-    ]
+
+    # Série temporal — deriva percentuais por período
+    time_series = []
+    for p in all_periods:
+        entry = {code: by_code.get(code, {}).get(p, 0.0) for code in SUMMABLE}
+        entry["period"] = p
+        p_cap = entry.get("capacity_hours_month", 0.0)
+        p_act = entry.get("active_hours_month", 0.0)
+        p_rev = entry.get("revenue_total", 0.0)
+        p_net = entry.get("net_result", 0.0)
+        p_vc = entry.get("total_variable_costs", 0.0)
+        p_tax = entry.get("taxes_on_revenue", 0.0)
+        entry["occupancy_rate"] = round(p_act / p_cap, 4) if p_cap > 0 else 0.0
+        entry["net_margin"] = round(p_net / p_rev, 4) if p_rev > 0 else 0.0
+        entry["contribution_margin_pct"] = round((p_rev - p_vc - p_tax) / p_rev, 4) if p_rev > 0 else 0.0
+        entry["break_even_occupancy_pct"] = 0.0  # derivado nos KPIs globais
+        time_series.append(entry)
 
     return {
         "business_id": business_id,

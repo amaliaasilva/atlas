@@ -20,7 +20,17 @@ CONSOLIDATED_METRICS = [
     "operating_result",
     "net_result",
     "ebitda",
+    # KPIs B2B Coworking — somáveis por período
+    "capacity_hours_month",
+    "active_hours_month",
+    "break_even_revenue",
+    "break_even_students",
+    "active_students",
 ]
+
+# Métricas que NÃO devem ser somadas no consolidado;
+# são derivadas pelo dashboard a partir dos somáveis acima.
+DERIVED_METRICS = {"occupancy_rate", "break_even_occupancy_pct", "contribution_margin_pct", "net_margin"}
 
 
 def consolidate_business(

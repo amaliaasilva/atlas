@@ -73,6 +73,8 @@ export default function CrescimentoPage() {
         ) - 1
       : 0;
 
+  const singleYear = annualData.length < 2;
+
   // Crescimento YoY do último vs penúltimo ano
   const lastYear = annualData[annualData.length - 1];
   const prevYear = annualData[annualData.length - 2];
@@ -111,21 +113,22 @@ export default function CrescimentoPage() {
               <>
                 <MetricCard
                   label="Crescimento YoY"
-                  value={formatPercent(yoyGrowth)}
-                  trend={yoyGrowth > 0 ? 'up' : yoyGrowth < 0 ? 'down' : 'neutral'}
-                  trendValue={yoyGrowth !== 0 ? `${yoyGrowth > 0 ? '+' : ''}${formatPercent(yoyGrowth)}` : undefined}
+                  value={singleYear ? '—' : formatPercent(yoyGrowth)}
+                  trend={singleYear ? 'neutral' : yoyGrowth > 0 ? 'up' : yoyGrowth < 0 ? 'down' : 'neutral'}
+                  trendValue={!singleYear && yoyGrowth !== 0 ? `${yoyGrowth > 0 ? '+' : ''}${formatPercent(yoyGrowth)}` : undefined}
                   icon={<TrendingUp className="h-4 w-4" />}
-                  accentColor={yoyGrowth > 0.1 ? 'emerald' : yoyGrowth > 0 ? 'amber' : 'rose'}
+                  accentColor={singleYear ? 'sky' : yoyGrowth > 0.1 ? 'emerald' : yoyGrowth > 0 ? 'amber' : 'rose'}
+                  sub={singleYear ? 'Primeiro ano — sem base de comparação' : undefined}
                   tooltip="Crescimento de receita do último ano em relação ao anterior"
                   size="lg"
                 />
                 <MetricCard
                   label="CAGR de Receita"
-                  value={formatPercent(revenueCAGR)}
-                  trend={revenueCAGR > 0 ? 'up' : 'neutral'}
+                  value={singleYear ? '—' : formatPercent(revenueCAGR)}
+                  trend={singleYear ? 'neutral' : revenueCAGR > 0 ? 'up' : 'neutral'}
                   icon={<BarChart2 className="h-4 w-4" />}
                   accentColor="indigo"
-                  sub={`${annualData.length} anos de dados`}
+                  sub={singleYear ? 'Dados insuficientes (< 2 anos)' : `${annualData.length} anos de dados`}
                   tooltip="Taxa de crescimento composta anual da receita"
                   size="lg"
                 />

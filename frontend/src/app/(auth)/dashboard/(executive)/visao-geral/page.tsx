@@ -14,7 +14,9 @@ import { DollarSign, TrendingUp, Target, Building2, BarChart2, TrendingDown, Clo
 const STATUS_PRIORITY: Record<string, number> = { published: 0, draft: 1, planning: 2 };
 
 export default function VisaoGeralPage() {
-  const { businessId, scenarioId, unitId, periodStart, periodEnd, year } = useDashboardFilters();
+  const { businessId, scenarioId, selectedUnitIds, periodStart, periodEnd, year } = useDashboardFilters();
+  // single-unit: quando exatamente 1 unidade selecionada
+  const unitId = selectedUnitIds.length === 1 ? selectedUnitIds[0] : null;
 
   // Dashboard consolidado (rede inteira)
   const { data: dashboard, isLoading } = useQuery({
