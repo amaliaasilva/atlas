@@ -114,10 +114,10 @@ export const calculationsApi = {
 export const dashboardApi = {
   unit: (version_id: string): Promise<DashboardUnit> =>
     api.get<DashboardUnit>(`/dashboard/unit/${version_id}`).then((r) => r.data),
-  consolidated: (business_id: string, scenario_id: string): Promise<DashboardConsolidated> =>
+  consolidated: (business_id: string, scenario_id: string, unit_ids: string[] = []): Promise<DashboardConsolidated> =>
     api
       .get<DashboardConsolidated>(`/dashboard/business/${business_id}/consolidated`, {
-        params: { scenario_id },
+        params: { scenario_id, ...(unit_ids.length > 0 ? { unit_ids } : {}) },
       })
       .then((r) => r.data),
   unitsComparison: (business_id: string, scenario_id: string, metric = 'net_result'): Promise<UnitsComparisonResponse> =>

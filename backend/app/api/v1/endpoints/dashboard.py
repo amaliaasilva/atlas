@@ -11,7 +11,6 @@ from app.core.database import get_db
 from app.api.v1.deps import get_current_user
 from app.models.user import User
 from app.models.calculated_result import CalculatedResult
-from app.models.consolidated_result import ConsolidatedResult
 from app.models.line_item import LineItemDefinition
 from app.models.budget_version import BudgetVersion
 from app.models.unit import Unit
@@ -113,66 +112,118 @@ def unit_dashboard(
 def business_consolidated_dashboard(
     business_id: str,
     scenario_id: str = Query(...),
+    unit_ids: list[str] = Query(default=[]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """KPIs consolidados de um negócio para um cenário."""
-    rows = (
-        db.query(ConsolidatedResult)
+    """KPIs consolidados de um negócio para um cenário.
+
+    Agrega live a partir de CalculatedResult (melhor versão por unidade:
+    published > draft > planning). Se unit_ids fornecido, filtra essas unidades.
+    """
+    # Busca unidades do negócio (filtrando por unit_ids se fornecido)
+    units_query = db.query(Unit).filter(Unit.business_id == business_id)
+    if unit_ids:
+        units_query = units_query.filter(Unit.id.in_(unit_ids))
+    units_list = units_query.all()
+
+    if not units_list:
+        return {"business_id": business_id, "scenario_id": scenario_id, "kpis": {}, "time_series": []}
+
+    # Melhor versão ativa por unidade (published > draft > planning)
+    all_versions = (
+        db.query(BudgetVersion)
         .filter(
-            ConsolidatedResult.business_id == business_id,
-            ConsolidatedResult.scenario_id == scenario_id,
+            BudgetVersion.unit_id.in_([u.id for u in units_list]),
+            BudgetVersion.scenario_id == scenario_id,
+            BudgetVersion.is_active.is_(True),
         )
-        .order_by(ConsolidatedResult.period_date)
         .all()
     )
+    status_priority = {"published": 0, "draft": 1, "planning": 2}
+    best_by_unit: dict[str, BudgetVersion] = {}
+    for v in all_versions:
+        existing = best_by_unit.get(v.unit_id)
+        if existing is None or status_priority.get(v.status, 9) < status_priority.get(existing.status, 9):
+            best_by_unit[v.unit_id] = v
 
-    by_code: dict[str, dict[str, float]] = defaultdict(dict)
-    for row in rows:
-        by_code[row.metric_code][row.period_date] = row.value
+    version_ids = [v.id for v in best_by_unit.values()]
+    if not version_ids:
+        return {"business_id": business_id, "scenario_id": scenario_id, "kpis": {}, "time_series": []}
 
-    # Métricas somáveis diretamente do ConsolidatedResult
+    # Métricas somáveis (excluindo derivadas percentuais)
     SUMMABLE = [c for c in KPI_CODES if c not in {
         "occupancy_rate", "break_even_occupancy_pct", "contribution_margin_pct", "net_margin"
     }]
-    kpis = {code: round(sum(by_code.get(code, {}).values()), 2) for code in SUMMABLE}
 
-    # Deriva métricas percentuais a partir dos somáveis
+    # Agregação live diretamente de CalculatedResult
+    raw_results = (
+        db.query(CalculatedResult.period_date, LineItemDefinition.code, CalculatedResult.value)
+        .join(LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id)
+        .filter(
+            CalculatedResult.budget_version_id.in_(version_ids),
+            LineItemDefinition.code.in_(SUMMABLE),
+        )
+        .all()
+    )
+
+    # Agrega: soma de todas as unidades por (período, métrica)
+    agg: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    all_periods_set: set[str] = set()
+    for period_date, code, value in raw_results:
+        agg[code][period_date] += value
+        all_periods_set.add(period_date)
+
+    # KPIs totais acumulados
+    kpis: dict[str, float] = {code: round(sum(agg.get(code, {}).values()), 2) for code in SUMMABLE}
+
+    # Deriva métricas percentuais (ponderadas pela capacidade agregada)
     total_cap = kpis.get("capacity_hours_month", 0)
     total_act = kpis.get("active_hours_month", 0)
-    kpis["occupancy_rate"] = round(total_act / total_cap, 4) if total_cap > 0 else 0.0
     rev = kpis.get("revenue_total", 0)
     net = kpis.get("net_result", 0)
     vc = kpis.get("total_variable_costs", 0)
     tax = kpis.get("taxes_on_revenue", 0)
+    be_rev = kpis.get("break_even_revenue", 0)
+    avg_price_per_hour = rev / max(total_act, 1)
+
+    kpis["occupancy_rate"] = round(total_act / total_cap, 4) if total_cap > 0 else 0.0
     kpis["net_margin"] = round(net / rev, 4) if rev > 0 else 0.0
     kpis["contribution_margin_pct"] = round((rev - vc - tax) / rev, 4) if rev > 0 else 0.0
-    be_rev = kpis.get("break_even_revenue", 0)
-    kpis["break_even_occupancy_pct"] = round(be_rev / (total_cap * (rev / max(total_act, 1))), 4) if total_cap > 0 and total_act > 0 else 0.0
-
-    all_periods_cons = sorted(set(row.period_date for row in rows))
-    all_periods = all_periods_cons
+    kpis["break_even_occupancy_pct"] = (
+        round(be_rev / (total_cap * avg_price_per_hour), 4)
+        if total_cap > 0 and avg_price_per_hour > 0 else 0.0
+    )
 
     # Série temporal — deriva percentuais por período
+    all_periods = sorted(all_periods_set)
     time_series = []
     for p in all_periods:
-        entry = {code: by_code.get(code, {}).get(p, 0.0) for code in SUMMABLE}
-        entry["period"] = p
-        p_cap = entry.get("capacity_hours_month", 0.0)
-        p_act = entry.get("active_hours_month", 0.0)
-        p_rev = entry.get("revenue_total", 0.0)
-        p_net = entry.get("net_result", 0.0)
-        p_vc = entry.get("total_variable_costs", 0.0)
-        p_tax = entry.get("taxes_on_revenue", 0.0)
+        entry: dict[str, object] = {"period": p}
+        for code in SUMMABLE:
+            entry[code] = agg.get(code, {}).get(p, 0.0)
+        p_cap = float(entry.get("capacity_hours_month", 0.0))  # type: ignore[arg-type]
+        p_act = float(entry.get("active_hours_month", 0.0))  # type: ignore[arg-type]
+        p_rev = float(entry.get("revenue_total", 0.0))  # type: ignore[arg-type]
+        p_net = float(entry.get("net_result", 0.0))  # type: ignore[arg-type]
+        p_vc = float(entry.get("total_variable_costs", 0.0))  # type: ignore[arg-type]
+        p_tax = float(entry.get("taxes_on_revenue", 0.0))  # type: ignore[arg-type]
+        p_act_h = float(entry.get("active_hours_month", 0.0))  # type: ignore[arg-type]
+        p_be_rev = float(entry.get("break_even_revenue", 0.0))  # type: ignore[arg-type]
+        p_avg_price = p_rev / max(p_act_h, 1)
         entry["occupancy_rate"] = round(p_act / p_cap, 4) if p_cap > 0 else 0.0
         entry["net_margin"] = round(p_net / p_rev, 4) if p_rev > 0 else 0.0
         entry["contribution_margin_pct"] = round((p_rev - p_vc - p_tax) / p_rev, 4) if p_rev > 0 else 0.0
-        entry["break_even_occupancy_pct"] = 0.0  # derivado nos KPIs globais
+        entry["break_even_occupancy_pct"] = (
+            round(p_be_rev / (p_cap * p_avg_price), 4)
+            if p_cap > 0 and p_avg_price > 0 else 0.0
+        )
         time_series.append(entry)
 
     return {
         "business_id": business_id,
         "scenario_id": scenario_id,
+        "unit_ids": [u.id for u in units_list],
         "kpis": kpis,
         "time_series": time_series,
     }

@@ -7,6 +7,18 @@ const BASE_URL = _raw.startsWith('http') ? _raw.replace(/^http:\/\//, 'https://'
 export const api = axios.create({
   baseURL: `${BASE_URL}/api/v1`,
   headers: { 'Content-Type': 'application/json' },
+  // FastAPI espera arrays como ?key=v1&key=v2 (sem colchetes)
+  paramsSerializer: (params) => {
+    const sp = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (Array.isArray(value)) {
+        value.forEach((v) => sp.append(key, String(v)));
+      } else if (value !== null && value !== undefined) {
+        sp.set(key, String(value));
+      }
+    }
+    return sp.toString();
+  },
 });
 
 // ── Interceptor: injeta Bearer token ────────────────────────────────────────

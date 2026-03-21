@@ -17,12 +17,14 @@ export default function VisaoGeralPage() {
   const { businessId, scenarioId, selectedUnitIds, periodStart, periodEnd, year } = useDashboardFilters();
   // single-unit: quando exatamente 1 unidade selecionada
   const unitId = selectedUnitIds.length === 1 ? selectedUnitIds[0] : null;
+  // multi-unit: passa filtro ao consolidado; se vazio = rede inteira
+  const multiUnitIds = selectedUnitIds.length > 1 ? selectedUnitIds : [];
 
-  // Dashboard consolidado (rede inteira)
+  // Dashboard consolidado (rede inteira ou unidades filtradas)
   const { data: dashboard, isLoading } = useQuery({
-    queryKey: ['dashboard-consolidated', businessId, scenarioId],
-    queryFn: () => dashboardApi.consolidated(businessId!, scenarioId!),
-    enabled: !!businessId && !!scenarioId,
+    queryKey: ['dashboard-consolidated', businessId, scenarioId, multiUnitIds],
+    queryFn: () => dashboardApi.consolidated(businessId!, scenarioId!, multiUnitIds),
+    enabled: !!businessId && !!scenarioId && !unitId,
   });
 
   // Versões da unidade selecionada
