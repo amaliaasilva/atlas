@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { businessesApi, scenariosApi, unitsApi, versionsApi } from '@/lib/api';
+import { businessesApi, scenariosApi, unitsApi } from '@/lib/api';
 import { useDashboardFilters } from '@/store/dashboard';
 import { useNavStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
-import { SlidersHorizontal, RefreshCw, ChevronDown, Check, FileText } from 'lucide-react';
+import { SlidersHorizontal, RefreshCw, ChevronDown, Check } from 'lucide-react';
 
 interface SelectProps {
   label: string;
@@ -213,13 +213,6 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
     enabled: !!filters.businessId && showUnit,
   });
 
-  // Busca versões de orçamento do business (para o seletor rápido de versão)
-  const { data: allVersions = [] } = useQuery({
-    queryKey: ['versions-by-business', filters.businessId, filters.scenarioId],
-    queryFn: () => versionsApi.listByBusiness(filters.businessId!, filters.scenarioId ?? undefined),
-    enabled: !!filters.businessId,
-  });
-
   const scenarioTypeLabel: Record<string, string> = {
     base: 'Base',
     conservative: 'Conservador',
@@ -233,7 +226,8 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
   return (
     <div
       className={cn(
-        'bg-white border-b border-gray-100 px-6 py-3',
+        'border-b border-gray-200/80 px-6 py-3',
+        'bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/80',
         'flex items-center gap-4 flex-wrap',
         className,
       )}
@@ -271,36 +265,6 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
           }))}
           disabled={!filters.businessId}
         />
-
-        {/* Versão de Orçamento — seletor rápido */}
-        {allVersions.length > 0 && (
-          <div className="flex flex-col gap-1 min-w-[200px]">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
-              <FileText className="h-3 w-3" /> Versão Ativa
-            </label>
-            <select
-              value={nav.versionId ?? ''}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (v) nav.setVersion(v);
-              }}
-              className={cn(
-                'text-sm bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-gray-700',
-                'focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400',
-                'hover:border-gray-300 transition-colors',
-                nav.versionId ? 'border-indigo-300 text-indigo-700 bg-indigo-50' : '',
-              )}
-            >
-              <option value="">Selecionar versão...</option>
-              {allVersions.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                  {v.status === 'published' ? ' ✓' : v.status === 'draft' ? ' (rascunho)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
 
         {/* Unidade — multiselect */}
         {showUnit && (

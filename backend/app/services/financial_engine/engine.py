@@ -96,6 +96,17 @@ class FinancialEngine:
             ]  # preço/hora não escala
             result.occupancy_rate = inp.revenue.occupancy_rate
 
+            # Auto-depreciação (GAP-05): calcula a partir do CAPEX quando o usuário
+            # não informou depreciacao_equipamentos explicitamente (valor == 0).
+            if (
+                inp.fixed_costs.depreciation_equipment == 0
+                and capex.equipment_value > 0
+                and capex.equipment_useful_life_months > 0
+            ):
+                inp.fixed_costs.depreciation_equipment = round(
+                    capex.equipment_value / capex.equipment_useful_life_months, 2
+                )
+
             # 2. Custos fixos (passa occupancy_rate para modelo misto de utilities)
             occ = inp.revenue.occupancy_rate
             if not inp.is_pre_operational:

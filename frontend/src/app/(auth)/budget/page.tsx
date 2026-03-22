@@ -21,6 +21,13 @@ const STATUS_META: Record<string, { label: string; icon: React.ReactNode; cls: s
   archived:  { label: 'Arquivado', icon: <Archive className="h-3.5 w-3.5" />, cls: 'bg-amber-50 text-amber-600 border border-amber-200' },
 };
 
+function formatDateBr(dateStr?: string | null): string {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('pt-BR');
+}
+
 // ── Modal: Criar Nova Versão ──────────────────────────────────────────────────
 
 interface CreateVersionModalProps {
@@ -171,6 +178,14 @@ export default function BudgetPage() {
     (acc, r) => acc + r.versions.filter((v) => v.status === 'draft').length,
     0,
   );
+  const activeUnitsCount = activeUnits.length;
+  const today = new Date();
+  const orderedOpenings = [...activeUnits]
+    .filter((u): u is Unit & { opening_date: string } => !!u.opening_date)
+    .sort((a, b) => new Date(a.opening_date).getTime() - new Date(b.opening_date).getTime());
+  const nextOpening =
+    orderedOpenings.find((u) => new Date(u.opening_date).getTime() >= today.getTime()) ??
+    orderedOpenings[orderedOpenings.length - 1];
 
   if (loadingUnits) return <LoadingScreen />;
 
@@ -210,17 +225,30 @@ export default function BudgetPage() {
 
         {/* Resumo KPIs */}
         {totalVersions > 0 && (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { label: 'Total de versões', value: totalVersions, color: 'text-gray-900' },
               { label: 'Publicadas', value: publishedCount, color: 'text-emerald-600' },
               { label: 'Rascunhos', value: draftCount, color: 'text-gray-500' },
+              { label: 'Unidades ativas', value: activeUnitsCount, color: 'text-brand-700' },
             ].map(({ label, value, color }) => (
               <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 text-center">
                 <p className={cn('text-3xl font-bold tabular-nums', color)}>{value}</p>
                 <p className="text-xs text-gray-400 mt-1 uppercase tracking-wide font-medium">{label}</p>
               </div>
             ))}
+          </div>
+        )}
+
+        {businessId && nextOpening && (
+          <div className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 via-cyan-50 to-white px-5 py-4">
+            <p className="text-xs uppercase tracking-wide font-semibold text-blue-700">Próxima janela de abertura</p>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <p className="text-sm text-blue-900 font-semibold">
+                {nextOpening.code} · {nextOpening.name}
+              </p>
+              <p className="text-sm text-blue-700 font-medium">{formatDateBr(nextOpening.opening_date)}</p>
+            </div>
           </div>
         )}
 
@@ -275,6 +303,10 @@ export default function BudgetPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <StatusBadge status={unit.status} />
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
+                        <Calendar className="h-3 w-3" />
+                        Abertura: {formatDateBr(unit.opening_date)}
+                      </span>
                       <span className="text-xs text-gray-400">{versions.length} versão{versions.length !== 1 ? 'ões' : ''}</span>
                     </div>
                   </div>

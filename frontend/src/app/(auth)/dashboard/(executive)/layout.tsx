@@ -8,10 +8,12 @@ export default function ExecutiveDashboardLayout({
 }) {
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
-      {/* Sub-navegação entre dashboards */}
-      <DashboardNav />
-      {/* Filtros globais */}
-      <GlobalFilters showUnit />
+      <div className="sticky top-0 z-30">
+        {/* Sub-navegação entre dashboards */}
+        <DashboardNav />
+        {/* Filtros globais */}
+        <GlobalFilters showUnit />
+      </div>
       {/* Conteúdo da página */}
       <div className="flex-1 overflow-auto bg-gray-50/50">
         {children}

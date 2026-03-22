@@ -38,7 +38,7 @@ export function DashboardNav() {
   const pathname = usePathname();
 
   return (
-    <div className="bg-white border-b border-gray-100 px-4">
+    <div className="px-4 border-b border-gray-200/80 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
       <div className="flex items-center gap-0.5 overflow-x-auto scrollbar-none">
         {navItems.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + '/');
