@@ -79,14 +79,21 @@ class FinancialEngine:
 
             # 1. Receita
             rev = calculate_gross_revenue(inp.revenue)
-            result.gross_revenue = rev["gross_revenue"]
-            result.membership_revenue = rev["membership_revenue"]
-            result.personal_training_revenue = rev["personal_training_revenue"]
-            result.other_revenue = rev["other_revenue"]
-            result.active_students = rev["active_students"]
-            result.capacity_hours_month = rev["capacity_hours_month"]
-            result.active_hours_month = rev["active_hours_month"]
-            result.avg_price_per_hour = rev["avg_price_per_hour"]
+            frac = (
+                inp.month_fraction
+            )  # 1.0 na maioria dos meses; < 1.0 no mês de abertura parcial
+            result.gross_revenue = round(rev["gross_revenue"] * frac, 2)
+            result.membership_revenue = round(rev["membership_revenue"] * frac, 2)
+            result.personal_training_revenue = round(
+                rev["personal_training_revenue"] * frac, 2
+            )
+            result.other_revenue = round(rev["other_revenue"] * frac, 2)
+            result.active_students = int(rev["active_students"] * frac)
+            result.capacity_hours_month = round(rev["capacity_hours_month"] * frac, 2)
+            result.active_hours_month = round(rev["active_hours_month"] * frac, 2)
+            result.avg_price_per_hour = rev[
+                "avg_price_per_hour"
+            ]  # preço/hora não escala
             result.occupancy_rate = inp.revenue.occupancy_rate
 
             # 2. Custos fixos (passa occupancy_rate para modelo misto de utilities)
@@ -114,19 +121,19 @@ class FinancialEngine:
             result.insurance_costs = fc["insurance_costs"]
             result.other_fixed_costs = fc["other_fixed_costs"]
 
-            # 3. Custos variáveis (active_students = horas vendidas no modelo B2B)
+            # 3. Custos variáveis (escala junto com a receita no mês parcial)
             vc = calculate_total_variable_costs(
                 inp.variable_costs,
                 result.active_students,
                 result.gross_revenue,
             )
-            result.total_variable_costs = vc["total_variable_costs"]
-            result.hygiene_kit_cost = vc["hygiene_kit_cost"]
-            result.sales_commission_cost = vc["sales_commission_cost"]
-            result.card_fee_cost = vc["card_fee_cost"]
-            result.other_variable_costs = vc["other_variable_costs"]
+            result.total_variable_costs = round(vc["total_variable_costs"] * frac, 2)
+            result.hygiene_kit_cost = round(vc["hygiene_kit_cost"] * frac, 2)
+            result.sales_commission_cost = round(vc["sales_commission_cost"] * frac, 2)
+            result.card_fee_cost = round(vc["card_fee_cost"] * frac, 2)
+            result.other_variable_costs = round(vc["other_variable_costs"] * frac, 2)
 
-            # 4. Impostos
+            # 4. Impostos (escala com a receita)
             result.taxes_on_revenue = round(
                 result.gross_revenue * inp.taxes.tax_rate_on_revenue, 2
             )

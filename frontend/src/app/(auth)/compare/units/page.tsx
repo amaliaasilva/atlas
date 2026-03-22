@@ -14,9 +14,9 @@ import {
 } from 'recharts';
 
 const METRIC_OPTIONS = [
-  { value: 'net_result',    label: 'Resultado Líquido' },
-  { value: 'gross_revenue', label: 'Receita Bruta' },
-  { value: 'ebitda',        label: 'EBITDA' },
+  { value: 'net_result',     label: 'Resultado Líquido' },
+  { value: 'revenue_total',  label: 'Receita Bruta' },
+  { value: 'ebitda',         label: 'EBITDA' },
   { value: 'active_students', label: 'Horas Vendidas' },
   { value: 'occupancy_rate', label: 'Taxa de Ocupação' },
 ];
@@ -53,7 +53,7 @@ export default function CompareUnitsPage() {
   });
 
   const isPercent = metric === 'occupancy_rate';
-  const isCurrency = ['net_result', 'gross_revenue', 'ebitda'].includes(metric);
+  const isCurrency = ['net_result', 'revenue_total', 'ebitda'].includes(metric);
 
   return (
     <>

@@ -17,7 +17,7 @@ import {
 
 const METRIC_OPTIONS = [
   { value: 'net_result',     label: 'Resultado Líquido' },
-  { value: 'gross_revenue',  label: 'Receita Bruta' },
+  { value: 'revenue_total',  label: 'Receita Bruta' },
   { value: 'ebitda',         label: 'EBITDA' },
   { value: 'active_students',label: 'Horas Vendidas' },
 ];

@@ -47,19 +47,25 @@ export interface BudgetVersion {
   unit_id: string;
   scenario_id: string;
   name: string;
-  status: 'draft' | 'published' | 'archived' | 'planning';
+  version_name?: string; // alias do backend (= name)
+  status: 'draft' | 'published' | 'archived';
   is_active: boolean;
   horizon_start: string;
   horizon_end: string;
   projection_horizon_years?: number;
   effective_start_date?: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface AssumptionCategory {
   id: string;
   name: string;
   code: string;
-  display_order: number;
+  sort_order: number;
+  /** @deprecated use sort_order */
+  display_order?: number;
 }
 
 export interface AssumptionDefinition {
@@ -70,8 +76,12 @@ export interface AssumptionDefinition {
   data_type: 'float' | 'integer' | 'percentage' | 'boolean' | 'string' | 'currency' | 'numeric';
   unit_of_measure?: string;
   default_value?: number | string;
-  is_required: boolean;
-  display_order: number;
+  /** @deprecated use editable */
+  is_required?: boolean;
+  editable?: boolean;
+  sort_order: number;
+  /** @deprecated use sort_order */
+  display_order?: number;
   /** Periodicidade da premissa: 'static' | 'monthly' | 'one_time' | 'yearly' */
   periodicity?: string;
   /** ARCH-04: regra de crescimento para expansão automática ({type, rate?, values?}) */

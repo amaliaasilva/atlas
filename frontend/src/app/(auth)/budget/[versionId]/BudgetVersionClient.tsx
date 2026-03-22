@@ -518,11 +518,11 @@ export default function BudgetVersionClient() {
             </thead>
             <tbody>
               {categories
-                ?.sort((a, b) => a.display_order - b.display_order)
+                ?.sort((a, b) => (a.sort_order ?? a.display_order ?? 0) - (b.sort_order ?? b.display_order ?? 0))
                 .map((cat) => {
                   const catDefs = definitions
                     ?.filter((d) => d.category_id === cat.id)
-                    .sort((a, b) => a.display_order - b.display_order) ?? [];
+                    .sort((a, b) => (a.sort_order ?? a.display_order ?? 0) - (b.sort_order ?? b.display_order ?? 0)) ?? [];
 
                   if (catDefs.length === 0) return null;
                   const collapsed = collapsedCategories.has(cat.id);

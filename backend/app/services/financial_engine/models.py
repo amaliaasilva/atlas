@@ -226,6 +226,10 @@ class FinancialInputs:
     taxes: TaxInputs = field(default_factory=TaxInputs)
     # Se True, apenas aluguel incide (período pré-operacional antes da inauguração)
     is_pre_operational: bool = False
+    # Fração do mês efetivo (0.0–1.0). Usado no mês de abertura quando opening_date.day > 1.
+    # Ex: abertura em 15/04 com 30 dias → fraction = 16/30 ≈ 0.533.
+    # Receita, custos variáveis e utilitários variáveis são escalados por este fator.
+    month_fraction: float = 1.0
 
 
 @dataclass

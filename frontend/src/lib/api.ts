@@ -76,6 +76,10 @@ export const versionsApi = {
     api
       .get<BudgetVersion[]>('/budget-versions', { params: { unit_id, scenario_id } })
       .then((r) => r.data),
+  listByBusiness: (business_id: string, scenario_id?: string): Promise<BudgetVersion[]> =>
+    api
+      .get<BudgetVersion[]>('/budget-versions', { params: { business_id, scenario_id } })
+      .then((r) => r.data),
   get: (id: string): Promise<BudgetVersion> =>
     api.get<BudgetVersion>(`/budget-versions/${id}`).then((r) => r.data),
   create: (data: Partial<BudgetVersion>): Promise<BudgetVersion> =>

@@ -22,6 +22,7 @@ router = APIRouter()
 def list_budget_versions(
     unit_id: str | None = Query(None),
     scenario_id: str | None = Query(None),
+    business_id: str | None = Query(None),
     status: str | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -31,6 +32,11 @@ def list_budget_versions(
         q = q.filter(BudgetVersion.unit_id == unit_id)
     if scenario_id:
         q = q.filter(BudgetVersion.scenario_id == scenario_id)
+    if business_id:
+        # Filtra via join com Unit
+        q = q.join(Unit, BudgetVersion.unit_id == Unit.id).filter(
+            Unit.business_id == business_id
+        )
     if status:
         q = q.filter(BudgetVersion.status == status)
     return q.order_by(BudgetVersion.created_at.desc()).all()

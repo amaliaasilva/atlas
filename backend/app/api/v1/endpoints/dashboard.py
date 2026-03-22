@@ -32,6 +32,7 @@ KPI_CODES = [
     "occupancy_rate",
     "capacity_hours_month",
     "active_hours_month",
+    "active_students",
     "break_even_revenue",
     "break_even_occupancy_pct",
     "contribution_margin_pct",
@@ -81,6 +82,7 @@ def unit_dashboard(
         "contribution_margin_pct",
         "break_even_revenue",
         "break_even_students",
+        "active_students",
         "capacity_hours_month",
         "teachers_needed_pessimistic",
         "teachers_needed_medium",
@@ -97,6 +99,14 @@ def unit_dashboard(
         round(kpis["net_result"] / kpis["revenue_total"], 4)
         if kpis.get("revenue_total", 0) > 0
         else 0.0
+    )
+    # Aliases e campos derivados esperados pelo frontend
+    kpis["gross_revenue"] = kpis.get("revenue_total", 0.0)
+    kpis["total_costs"] = round(
+        kpis.get("total_fixed_costs", 0.0)
+        + kpis.get("total_variable_costs", 0.0)
+        + kpis.get("taxes_on_revenue", 0.0),
+        2,
     )
 
     # Série temporal para gráficos
@@ -237,6 +247,14 @@ def business_consolidated_dashboard(
         round(be_rev / (total_cap * avg_price_per_hour), 4)
         if total_cap > 0 and avg_price_per_hour > 0
         else 0.0
+    )
+    # Aliases e campos derivados esperados pelo frontend
+    kpis["gross_revenue"] = kpis.get("revenue_total", 0.0)
+    kpis["total_costs"] = round(
+        kpis.get("total_fixed_costs", 0.0)
+        + kpis.get("total_variable_costs", 0.0)
+        + kpis.get("taxes_on_revenue", 0.0),
+        2,
     )
 
     # Série temporal — deriva percentuais por período

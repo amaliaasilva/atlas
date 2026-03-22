@@ -3,6 +3,8 @@ Atlas Finance — Calculations Endpoint
 Dispara o motor financeiro para recalcular uma versão de orçamento.
 """
 
+import calendar as _cal
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -103,37 +105,49 @@ def _build_inputs_for_version(
     else:
         # Fallback: usa períodos já gravados nos assumption_values
         periods = sorted(set(p for (_, p) in values.keys() if p is not None))
+
+    # Fração do mês de abertura: se a unidade abre no dia 15 de abril, apenas os
+    # dias 15–30 são contabilizados (aprox. 16/30 ≈ 0,53 do mês).
+    # Meses anteriores à abertura NÃO entram na lista de períodos.
+    if opening and opening.day > 1:
+        days_in_month = _cal.monthrange(opening.year, opening.month)[1]
+        _first_month_fraction = round(
+            (days_in_month - opening.day + 1) / days_in_month, 4
+        )
+    else:
+        _first_month_fraction = 1.0
         if not periods:
             periods = ["2026-11"]
 
     # ── ETAPA-2: Expande premissas via growth_rule ─────────────────────────
-    # Carrega todas as AssumptionDefinitions que têm growth_rule definido.
-    # Para cada uma, gera valores expandidos por período — sem sobrescrever
-    # valores explicitamente salvos pelo usuário.
+    # ETAPA-2: Expande TODAS as definições para todos os períodos.
+    # Definições COM growth_rule: aplica a regra (compound_growth, curve, etc.).
+    # Definições SEM growth_rule: propagação flat — o valor do 1º período
+    #   conhecido é repetido para todos os períodos futuros.
+    # Isso resolve o bug em que custos com periodicity="monthly" (sem growth_rule)
+    # ficavam zerados em anos além do que o usuário salvou explicitamente.
     if unit:
-        defns_with_rule = (
+        all_defns = (
             db.query(AssumptionDefinition)
-            .filter(
-                AssumptionDefinition.business_id == unit.business_id,
-                AssumptionDefinition.growth_rule.isnot(None),
-            )
+            .filter(AssumptionDefinition.business_id == unit.business_id)
             .all()
         )
         base_year = (
             opening.year if opening else (int(periods[0][:4]) if periods else 2026)
         )
-        for defn in defns_with_rule:
-            # Base value: valor estático explícito do usuário > primeiro período explícito > default da definição
-            # O frontend salva valores com period_date='YYYY-MM', não None.
-            # Por isso precisamos checar o primeiro período SE não houver valor estático.
+        for defn in all_defns:
+            # Base value: estático (period=None) > primeiro período > default_value
             base = values.get((defn.code, None))
             if base is None and periods:
-                base = values.get((defn.code, periods[0]))
+                # Tenta o primeiro período com valor existente
+                for p in periods:
+                    if (defn.code, p) in values:
+                        base = values[(defn.code, p)]
+                        break
             if base is None:
                 base = defn.default_value or 0.0
-            expanded = expand_assumption(
-                defn.growth_rule, float(base), periods, base_year
-            )
+            rule = defn.growth_rule or {"type": "flat"}
+            expanded = expand_assumption(rule, float(base), periods, base_year)
             for period, val in expanded.items():
                 # Só preenche se NÃO houver valor explícito para esse período
                 if (defn.code, period) not in values:
@@ -299,7 +313,7 @@ def _build_inputs_for_version(
     tax_rate = _get(values, "aliquota_imposto_receita", default=0.06)
 
     inputs_list = []
-    for period in periods:
+    for idx, period in enumerate(periods):
         p = period  # alias
         revenue = RevenueInputs(
             # ── B2B Coworking (slot/hora) ──────────────────────────────────────
@@ -414,6 +428,8 @@ def _build_inputs_for_version(
                 financing_contracts=contract_inputs,
                 financing=financing,
                 taxes=TaxInputs(tax_rate_on_revenue=tax_rate),
+                # Fração do mês: só < 1.0 no primeiro período quando opening.day > 1
+                month_fraction=_first_month_fraction if idx == 0 else 1.0,
             )
         )
 
