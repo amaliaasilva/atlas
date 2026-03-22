@@ -51,6 +51,10 @@ export default function OcupacaoPage() {
   const gapToBreakeven = breakevenStudents - currentStudents;
   const occupancyGap = Math.max(breakevenOccupancyRate - currentOccupancy, 0);
 
+  // Projeção simples: tendência dos 2 últimos períodos
+  const prevOccupancy = filteredTs[filteredTs.length - 2]?.occupancy_rate ?? currentOccupancy;
+  const projectedOccupancy = Math.min(Math.max(currentOccupancy + (currentOccupancy - prevOccupancy), 0), 1);
+
   if (!businessId || !scenarioId) {
     return (
       <>

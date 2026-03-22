@@ -22,7 +22,7 @@ import json
 import time
 from collections import defaultdict
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -211,7 +211,7 @@ def _run_rule_based_checks(ctx: dict[str, Any], version: BudgetVersion) -> list[
         issues.append(SanityIssue(
             severity="warning",
             code="PERSISTENT_NEGATIVE_RESULT",
-            message=f"Resultado líquido negativo em todos os 12 últimos períodos calculados.",
+            message="Resultado líquido negativo em todos os 12 últimos períodos calculados.",
             field="net_result",
             suggestion="Revise premissas de receita e custos. Verifique a curva de ocupação.",
         ))

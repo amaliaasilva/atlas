@@ -11,7 +11,9 @@ export interface Business {
   id: string;
   organization_id: string;
   name: string;
+  slug?: string;
   business_type: string;
+  description?: string;
   is_active: boolean;
 }
 

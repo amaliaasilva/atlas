@@ -1,7 +1,6 @@
 """One-off script: populate effective_start_date / effective_end_date
 for budget_versions where those fields are NULL."""
 import sys
-import os
 
 sys.path.insert(0, "/app")
 

@@ -27,7 +27,7 @@ function CreateScenarioModal({ businessId, onClose }: { businessId: string; onCl
 
   const mutation = useMutation({
     mutationFn: () =>
-      scenariosApi.create({ business_id: businessId, name, scenario_type: scenarioType, description }),
+      scenariosApi.create({ business_id: businessId, name, scenario_type: scenarioType as 'base' | 'conservative' | 'aggressive' | 'custom', description }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scenarios', businessId] });
       onClose();
