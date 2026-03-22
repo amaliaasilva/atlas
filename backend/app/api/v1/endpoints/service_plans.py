@@ -74,6 +74,19 @@ def update_plan(
         raise HTTPException(status_code=404, detail="Plano não encontrado")
     for k, v in data.model_dump(exclude_none=True).items():
         setattr(p, k, v)
+    # GAP-02b: validação Σ(target_mix_pct) == 1.0
+    if data.target_mix_pct is not None:
+        other_plans = (
+            db.query(ServicePlan)
+            .filter(ServicePlan.business_id == p.business_id, ServicePlan.id != plan_id, ServicePlan.is_active == True)
+            .all()
+        )
+        total_mix = sum(op.target_mix_pct for op in other_plans) + p.target_mix_pct
+        if not (0.999 <= total_mix <= 1.001):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Σ(target_mix_pct) deve ser 1.0 (atual: {total_mix:.3f}). Ajuste os outros planos antes.",
+            )
     db.commit()
     db.refresh(p)
     return p

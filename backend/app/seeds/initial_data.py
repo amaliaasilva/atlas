@@ -113,9 +113,9 @@ SERVICE_PLANS_DATA = [
     {
         "name": "Diamante",
         "code": "DIAMANTE",
-        "description": "Plano premium — instrutores certificados, espaços exclusivos",
-        "price_per_hour": 65.0,
-        "target_mix_pct": 0.40,
+        "description": "Plano de comprometimento máximo — maior frequência, melhor preço/hora",
+        "price_per_hour": 50.0,
+        "target_mix_pct": 0.25,
         "min_classes_month": 200,
         "max_classes_month": None,
         "sort_order": 1,
@@ -125,8 +125,8 @@ SERVICE_PLANS_DATA = [
         "name": "Ouro",
         "code": "OURO",
         "description": "Plano intermediário-alto",
-        "price_per_hour": 60.0,
-        "target_mix_pct": 0.30,
+        "price_per_hour": 55.0,
+        "target_mix_pct": 0.25,
         "min_classes_month": 110,
         "max_classes_month": 200,
         "sort_order": 2,
@@ -136,8 +136,8 @@ SERVICE_PLANS_DATA = [
         "name": "Prata",
         "code": "PRATA",
         "description": "Plano intermediário",
-        "price_per_hour": 55.0,
-        "target_mix_pct": 0.20,
+        "price_per_hour": 60.0,
+        "target_mix_pct": 0.25,
         "min_classes_month": 41,
         "max_classes_month": 70,
         "sort_order": 3,
@@ -146,9 +146,9 @@ SERVICE_PLANS_DATA = [
     {
         "name": "Bronze",
         "code": "BRONZE",
-        "description": "Plano de entrada",
-        "price_per_hour": 50.0,
-        "target_mix_pct": 0.10,
+        "description": "Plano flexível — menor compromisso, maior preço/hora",
+        "price_per_hour": 65.0,
+        "target_mix_pct": 0.25,
         "min_classes_month": 4,
         "max_classes_month": 40,
         "sort_order": 4,
@@ -219,44 +219,44 @@ ASSUMPTION_DEFINITIONS = {
             "Preço médio ponderado por hora (R$/h)",
             "currency",
             "R$/h",
-            60.0,
+            57.50,
             True,
             "static",
         ),
         # ── Mix de planos por categoria ──────────────────────────────────────
         (
             "mix_diamante_pct",
-            "Mix plano Diamante (R$65/h) — % do total",
+            "Mix plano Diamante (R$50/h) — % do total",
             "percentage",
             "%",
-            0.40,
+            0.25,
             True,
             "static",
         ),
         (
             "mix_ouro_pct",
-            "Mix plano Ouro (R$60/h) — % do total",
+            "Mix plano Ouro (R$55/h) — % do total",
             "percentage",
             "%",
-            0.30,
+            0.25,
             True,
             "static",
         ),
         (
             "mix_prata_pct",
-            "Mix plano Prata (R$55/h) — % do total",
+            "Mix plano Prata (R$60/h) — % do total",
             "percentage",
             "%",
-            0.20,
+            0.25,
             True,
             "static",
         ),
         (
             "mix_bronze_pct",
-            "Mix plano Bronze (R$50/h) — % do total",
+            "Mix plano Bronze (R$65/h) — % do total",
             "percentage",
             "%",
-            0.10,
+            0.25,
             True,
             "static",
         ),
@@ -393,7 +393,7 @@ ASSUMPTION_DEFINITIONS = {
             1980.0,
             True,
             "static",
-            {"type": "compound_growth", "rate": 0.05},
+            {"type": "compound_growth", "rate": 0.10},
         ),
         (
             "salario_recepcao",
@@ -403,7 +403,7 @@ ASSUMPTION_DEFINITIONS = {
             2200.0,
             True,
             "static",
-            {"type": "compound_growth", "rate": 0.05},
+            {"type": "compound_growth", "rate": 0.10},
         ),
         (
             "salario_marketing",
@@ -413,7 +413,7 @@ ASSUMPTION_DEFINITIONS = {
             0.0,
             True,
             "static",
-            {"type": "compound_growth", "rate": 0.05},
+            {"type": "compound_growth", "rate": 0.10},
         ),
         (
             "salario_comercial",
@@ -423,7 +423,7 @@ ASSUMPTION_DEFINITIONS = {
             0.0,
             True,
             "static",
-            {"type": "compound_growth", "rate": 0.05},
+            {"type": "compound_growth", "rate": 0.10},
         ),
         (
             "salario_gerente",
@@ -433,7 +433,7 @@ ASSUMPTION_DEFINITIONS = {
             0.0,
             True,
             "static",
-            {"type": "compound_growth", "rate": 0.05},
+            {"type": "compound_growth", "rate": 0.10},
         ),
         (
             "salario_educador_fisico",
@@ -443,7 +443,7 @@ ASSUMPTION_DEFINITIONS = {
             0.0,
             True,
             "static",
-            {"type": "compound_growth", "rate": 0.05},
+            {"type": "compound_growth", "rate": 0.10},
         ),
         (
             "pro_labore",
@@ -453,7 +453,7 @@ ASSUMPTION_DEFINITIONS = {
             5000.0,
             True,
             "static",
-            {"type": "compound_growth", "rate": 0.05},
+            {"type": "curve", "values": [5000, 5000, 5500, 5500, 6000, 6000, 6600, 6600, 7000, 7000]},
         ),
         (
             "encargos_folha_pct",
@@ -619,6 +619,7 @@ ASSUMPTION_DEFINITIONS = {
             1800.0,
             True,
             "monthly",
+            {"type": "compound_growth", "rate": 0.10},
         ),
         (
             "servicos_administrativos",
@@ -628,6 +629,7 @@ ASSUMPTION_DEFINITIONS = {
             1000.0,
             True,
             "monthly",
+            {"type": "compound_growth", "rate": 0.10},
         ),
         (
             "seguro_imovel",
@@ -637,6 +639,7 @@ ASSUMPTION_DEFINITIONS = {
             1000.0,
             True,
             "monthly",
+            {"type": "compound_growth", "rate": 0.10},
         ),
         (
             "seguro_equipamentos",
@@ -655,6 +658,7 @@ ASSUMPTION_DEFINITIONS = {
             3000.0,
             True,
             "monthly",
+            {"type": "compound_growth", "rate": 0.10},
         ),
         (
             "material_identidade_visual",
@@ -700,6 +704,7 @@ ASSUMPTION_DEFINITIONS = {
             0.0,
             True,
             "monthly",
+            {"type": "compound_growth", "rate": 0.10},
         ),
         (
             "despesas_financeiras_taxas",
@@ -796,6 +801,12 @@ ASSUMPTION_DEFINITIONS = {
             "one_time",
         ),
         ("outros_capex", "Outros CAPEX", "currency", "R$", 0.0, True, "one_time"),
+        # GAP-05: itens faltantes versus planilha
+        ("honorarios_arquiteto", "Honorários de arquiteto", "currency", "R$", 0.0, True, "one_time"),
+        ("automacao_ac", "Automação de A/C", "currency", "R$", 0.0, True, "one_time"),
+        ("branding_identidade_visual", "Branding / Identidade visual", "currency", "R$", 0.0, True, "one_time"),
+        ("vida_util_equipamentos_meses", "Vida útil dos equipamentos (meses)", "integer", "meses", 60, True, "static"),
+        ("vida_util_reforma_meses", "Vida útil da reforma (meses)", "integer", "meses", 120, True, "static"),
     ],
     "FINANCIAMENTO": [
         ("valor_financiado", "Valor financiado", "currency", "R$", 0.0, True, "static"),
@@ -826,6 +837,15 @@ ASSUMPTION_DEFINITIONS = {
             "percentage",
             "%",
             0.06,
+            True,
+            "static",
+        ),
+        (
+            "taxa_cartao_pct",
+            "Taxa adquirente de cartão de crédito (% da receita)",
+            "percentage",
+            "%",
+            0.035,
             True,
             "static",
         ),
@@ -973,6 +993,47 @@ LINE_ITEM_DEFINITIONS = [
         False,
         False,
     ),
+    (
+        "card_fee_cost",
+        "Taxa de Cartão de Crédito (3,5%)",
+        "variable_cost",
+        "card_fee",
+        23,
+        False,
+        False,
+        False,
+    ),
+    # Professores necessários — Break-even (GAP-06)
+    (
+        "teachers_needed_pessimistic",
+        "Professores Necessários (Pessimista — 1 aluno/prof)",
+        "operational",
+        "teachers",
+        24,
+        False,
+        False,
+        False,
+    ),
+    (
+        "teachers_needed_medium",
+        "Professores Necessários (Médio — 1,5 alunos/prof)",
+        "operational",
+        "teachers",
+        25,
+        False,
+        False,
+        False,
+    ),
+    (
+        "teachers_needed_optimistic",
+        "Professores Necessários (Otimista — 2 alunos/prof)",
+        "operational",
+        "teachers",
+        26,
+        False,
+        False,
+        False,
+    ),
     # Impostos
     (
         "taxes_on_revenue",
@@ -1028,6 +1089,14 @@ LINE_ITEM_DEFINITIONS = [
     ("contribution_margin_pct", "Margem de Contribuição (%)",        "result", "kpi", 66, True,  False, True),
     ("net_margin",             "Margem Líquida (%)",                 "result", "kpi", 67, True,  False, True),
     ("active_students",        "Slots Ativos / Horas Vendidas (int)","result", "kpi", 68, False, False, False),
+    # Sub-itens de staff (GAP-08)
+    ("fc_pro_labore",     "Pró-labore",                    "fixed_cost", "payroll", 120, False, False, False),
+    ("fc_clt_base",       "Folha CLT (base s/encargos)",    "fixed_cost", "payroll", 121, False, False, False),
+    ("fc_social_charges", "Encargos Sociais CLT (~80%)",    "fixed_cost", "payroll", 122, False, False, False),
+    # Sub-itens de utilities (GAP-08)
+    ("fc_electricity",    "Energia Elétrica",               "fixed_cost", "utility", 123, False, False, False),
+    ("fc_water",          "Água e Esgoto",                  "fixed_cost", "utility", 124, False, False, False),
+    ("fc_internet",       "Internet + Telefonia",           "fixed_cost", "utility", 125, False, False, False),
 ]
 
 
@@ -1067,7 +1136,7 @@ def run_seeds(db: Session):
         )
         db.add(admin)
         db.commit()
-        print("  ✓ Usuário admin criado: admin@atlasfinance.com / Atlas@2026!")
+        print("  ✓ Usuário admin criado: admin@atlasfinance.com")
     else:
         print("  ✓ Usuário admin já existe")
 
@@ -1341,7 +1410,7 @@ def run_seeds(db: Session):
     print("\n=== Seeds concluídos com sucesso! ===")
     print(f"  Organização:  {org.id}")
     print(f"  Negócio:      {business.id}")
-    print("  Login:        admin@atlasfinance.com / Atlas@2026!")
+    print("  Login:        admin@atlasfinance.com")
     return {
         "org_id": org.id,
         "business_id": business.id,

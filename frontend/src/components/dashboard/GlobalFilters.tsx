@@ -301,6 +301,27 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
       {(filters.scenarioId || filters.selectedUnitIds.length > 0 || filters.year || filters.periodStart) && (
         <>
           <div className="h-5 w-px bg-gray-200 shrink-0" />
+          {/* Presets rápidos de ano */}
+          <div className="flex items-center gap-1">
+            {['2026', '2027', '2028'].map((y) => (
+              <button
+                key={y}
+                onClick={() => {
+                  filters.setYear(y);
+                  filters.setPeriodRange(`${y}-01`, `${y}-12`);
+                }}
+                className={cn(
+                  'px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors',
+                  filters.year === y && filters.periodStart?.startsWith(y)
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                )}
+              >
+                {y}
+              </button>
+            ))}
+          </div>
+          <div className="h-5 w-px bg-gray-200 shrink-0" />
           <button
             onClick={() => {
               filters.setScenarioId(null);

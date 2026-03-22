@@ -58,10 +58,12 @@ from app.services.financial_engine.models import (
 # ─────────────────────────────────────────────────────────────────────────────
 
 ATLAS_PLANS = [
-    ServicePlanMix(name="Diamante", price_per_hour=65.0, mix_pct=0.40),
-    ServicePlanMix(name="Ouro",     price_per_hour=60.0, mix_pct=0.30),
-    ServicePlanMix(name="Prata",    price_per_hour=55.0, mix_pct=0.20),
-    ServicePlanMix(name="Bronze",   price_per_hour=50.0, mix_pct=0.10),
+    # GAP-02: Bronze = flexível = maior preço/hora; Diamante = comprometimento máximo = menor preço
+    # Mix equalizado em 25% cada. Preço médio = (50+55+60+65)/4 = R$57,50/h
+    ServicePlanMix(name="Diamante", price_per_hour=50.0, mix_pct=0.25),
+    ServicePlanMix(name="Ouro",     price_per_hour=55.0, mix_pct=0.25),
+    ServicePlanMix(name="Prata",    price_per_hour=60.0, mix_pct=0.25),
+    ServicePlanMix(name="Bronze",   price_per_hour=65.0, mix_pct=0.25),
 ]
 
 
@@ -83,9 +85,9 @@ class TestRevenueCalculator:
         assert calculate_capacity_hours_month(inp) == 4020.0
 
     def test_avg_price_per_hour_excel_reference(self):
-        """65×0.4 + 60×0.3 + 55×0.2 + 50×0.1 = R$ 60/h"""
+        """50×0.25 + 55×0.25 + 60×0.25 + 65×0.25 = R$ 57,50/h (GAP-02 corrigido)"""
         avg = calculate_avg_price_per_hour(ATLAS_PLANS)
-        assert avg == pytest.approx(60.0)
+        assert avg == pytest.approx(57.5)
 
     def test_revenue_zero_occupancy(self):
         inp = RevenueInputs(
@@ -102,7 +104,7 @@ class TestRevenueCalculator:
         assert result["capacity_hours_month"] == 4020.0
 
     def test_revenue_at_25pct_occupancy(self):
-        """4020 × 0.25 × 60 = R$ 60.300"""
+        """4020 × 0.25 × 57.50 = R$ 57.787,50 (GAP-02 corrigido)"""
         inp = RevenueInputs(
             slots_per_hour=10,
             hours_per_day_weekday=17.0,
@@ -113,10 +115,10 @@ class TestRevenueCalculator:
             occupancy_rate=0.25,
         )
         result = calculate_gross_revenue(inp)
-        assert result["gross_revenue"] == pytest.approx(60_300.0, rel=1e-3)
+        assert result["gross_revenue"] == pytest.approx(57_787.5, rel=1e-3)
 
     def test_revenue_at_full_occupancy(self):
-        """4020 × 1.0 × 60 = R$ 241.200"""
+        """4020 × 1.0 × 57.50 = R$ 231.150 (GAP-02 corrigido)"""
         inp = RevenueInputs(
             slots_per_hour=10,
             hours_per_day_weekday=17.0,
@@ -127,7 +129,7 @@ class TestRevenueCalculator:
             occupancy_rate=1.0,
         )
         result = calculate_gross_revenue(inp)
-        assert result["gross_revenue"] == pytest.approx(241_200.0, rel=1e-3)
+        assert result["gross_revenue"] == pytest.approx(231_150.0, rel=1e-3)
 
     def test_revenue_with_avg_price_direct(self):
         """Sem service_plans, usa avg_price_per_hour diretamente"""
@@ -137,11 +139,11 @@ class TestRevenueCalculator:
             hours_per_day_saturday=7.0,
             working_days_month=22,
             saturdays_month=4,
-            avg_price_per_hour=60.0,
+            avg_price_per_hour=57.5,
             occupancy_rate=0.25,
         )
         result = calculate_gross_revenue(inp)
-        assert result["gross_revenue"] == pytest.approx(60_300.0, rel=1e-3)
+        assert result["gross_revenue"] == pytest.approx(57_787.5, rel=1e-3)
 
     def test_revenue_legacy_fallback(self):
         """Fallback legado (slots_per_hour=0): usa max_students × ticket"""
@@ -214,7 +216,7 @@ class TestFixedCostsCalculator:
         assert staff["social_charges"] != pytest.approx((4_180.0 + 5_000.0) * 0.80)
 
     def test_utility_mixed_model_zero_occupancy(self):
-        """Com 0% de ocupação, paga apenas custo fixo (GAP-03)."""
+        """0% occ: energia = 4200 * 0.80 = 3360 (automação reduz o total, GAP-01)"""
         inputs = FixedCostInputs(
             fixed_energy_cost=4_200.0,
             max_variable_energy_cost=3_000.0,
@@ -224,12 +226,12 @@ class TestFixedCostsCalculator:
             internet_phone=150.0,
         )
         result = calculate_utility_costs(inputs, occupancy_rate=0.0)
-        assert result["electricity"] == pytest.approx(4_200.0)
+        assert result["electricity"] == pytest.approx(3_360.0)
         assert result["water"] == pytest.approx(300.0)
-        assert result["total_utilities"] == pytest.approx(4_650.0)
+        assert result["total_utilities"] == pytest.approx(3_810.0)
 
     def test_utility_mixed_model_full_occupancy(self):
-        """100% occ + 20% automação: energia = 4200 + 3000*0.8 = 6600"""
+        """100% occ: energia = (4200 + 3000) * 0.80 = 5760 (GAP-01 corrigido)"""
         inputs = FixedCostInputs(
             fixed_energy_cost=4_200.0,
             max_variable_energy_cost=3_000.0,
@@ -238,11 +240,11 @@ class TestFixedCostsCalculator:
             max_variable_water_cost=1_300.0,
         )
         result = calculate_utility_costs(inputs, occupancy_rate=1.0)
-        assert result["electricity"] == pytest.approx(6_600.0)
+        assert result["electricity"] == pytest.approx(5_760.0)
         assert result["water"] == pytest.approx(1_600.0)
 
     def test_utility_mixed_model_25pct(self):
-        """25% occ: energia = 4200 + 600 = 4800; água = 300 + 325 = 625"""
+        """25% occ: energia = (4200 + 3000*0.25) * 0.80 = 3960; água = 300 + 325 = 625 (GAP-01)"""
         inputs = FixedCostInputs(
             fixed_energy_cost=4_200.0,
             max_variable_energy_cost=3_000.0,
@@ -251,8 +253,19 @@ class TestFixedCostsCalculator:
             max_variable_water_cost=1_300.0,
         )
         result = calculate_utility_costs(inputs, occupancy_rate=0.25)
-        assert result["electricity"] == pytest.approx(4_800.0)
+        assert result["electricity"] == pytest.approx(3_960.0)
         assert result["water"] == pytest.approx(625.0)
+
+    def test_energy_formula_with_automation(self):
+        """Caso de referência da planilha (GAP-01): occ=12%, automation=20%
+        Energia = (4200 + 3000 * 0.12) * (1 - 0.20) = 4560 * 0.80 = R$ 3.648"""
+        inputs = FixedCostInputs(
+            fixed_energy_cost=4_200.0,
+            max_variable_energy_cost=3_000.0,
+            automation_reduction=0.20,
+        )
+        result = calculate_utility_costs(inputs, occupancy_rate=0.12)
+        assert result["electricity"] == pytest.approx(3_648.0)
 
     def test_utility_legacy_fallback(self):
         """Sem campos novos: usa kWh × tarifa / m³ × tarifa."""
@@ -491,11 +504,11 @@ class TestFinancialEngineIntegration:
         assert outputs.annual_summaries != {}
 
     def test_engine_revenue_at_3pct_occupancy(self):
-        """Mês inicial: receita = 4020 × 0.03 × 60 = R$ 7.236"""
+        """Mês inicial: receita = 4020 × 0.03 × 57.50 = R$ 6.934,50 (GAP-02 corrigido)"""
         engine = FinancialEngine()
         periods = [self._make_inputs("2026-08", 0.03)]
         outputs = engine.calculate(periods, CapexInputs(), "bv-001", "unit-001", "sc-001")
-        assert outputs.periods[0].gross_revenue == pytest.approx(7_236.0, rel=1e-2)
+        assert outputs.periods[0].gross_revenue == pytest.approx(6_934.5, rel=1e-2)
 
     def test_engine_negative_result_early_months(self):
         """Meses iniciais devem ter resultado negativo (custos > receita)."""

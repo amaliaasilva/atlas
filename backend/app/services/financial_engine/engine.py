@@ -29,6 +29,7 @@ from app.services.financial_engine.kpi import (
     calculate_contribution_margin_pct,
     calculate_ebitda,
     calculate_burn_rate,
+    calculate_teachers_needed,
     calculate_payback_months,
 )
 
@@ -122,6 +123,7 @@ class FinancialEngine:
             result.total_variable_costs = vc["total_variable_costs"]
             result.hygiene_kit_cost = vc["hygiene_kit_cost"]
             result.sales_commission_cost = vc["sales_commission_cost"]
+            result.card_fee_cost = vc["card_fee_cost"]
             result.other_variable_costs = vc["other_variable_costs"]
 
             # 4. Impostos
@@ -183,6 +185,15 @@ class FinancialEngine:
             result.ebitda = calculate_ebitda(result)
             result.burn_rate = calculate_burn_rate(result)
 
+            # Professores necessários para cobrir break-even (GAP-06)
+            teachers = calculate_teachers_needed(
+                result.break_even_occupancy_pct,
+                result.capacity_hours_month,
+            )
+            result.teachers_needed_pessimistic = teachers["teachers_needed_pessimistic"]
+            result.teachers_needed_medium = teachers["teachers_needed_medium"]
+            result.teachers_needed_optimistic = teachers["teachers_needed_optimistic"]
+
             # 8. Trilha de cálculo auditavel
             result.calculation_trace = {
                 "period": inp.period,
@@ -218,6 +229,7 @@ class FinancialEngine:
                 "variable_costs": {
                     "hygiene_kit": result.hygiene_kit_cost,
                     "sales_commission": result.sales_commission_cost,
+                    "card_fee": result.card_fee_cost,
                     "other": result.other_variable_costs,
                 },
                 "taxes": {
@@ -237,6 +249,9 @@ class FinancialEngine:
                     "operating_result": result.operating_result,
                     "net_result": result.net_result,
                     "ebitda": result.ebitda,
+                    "teachers_needed_pessimistic": result.teachers_needed_pessimistic,
+                    "teachers_needed_medium": result.teachers_needed_medium,
+                    "teachers_needed_optimistic": result.teachers_needed_optimistic,
                 },
             }
             period_results.append(result)
@@ -268,7 +283,10 @@ class FinancialEngine:
             + capex.working_capital
             + capex.furniture_fixtures
             + capex.technology_setup
-            + capex.other_capex,
+            + capex.other_capex
+            + capex.architect_fees
+            + capex.ac_automation
+            + capex.branding_budget,
             2,
         )
 
@@ -364,6 +382,7 @@ class FinancialEngine:
                 "total_variable_costs": period.total_variable_costs,
                 "hygiene_kit_cost": period.hygiene_kit_cost,
                 "sales_commission_cost": period.sales_commission_cost,
+                "card_fee_cost": period.card_fee_cost,
                 "taxes_on_revenue": period.taxes_on_revenue,
                 "financing_payment": period.financing_payment,
                 "operating_result": period.operating_result,
@@ -379,7 +398,23 @@ class FinancialEngine:
                 "contribution_margin_pct": period.contribution_margin_pct,
                 "net_margin": period.net_margin,
                 "active_students": float(period.active_students),
+                # Professores necessários (GAP-06)
+                "teachers_needed_pessimistic": float(period.teachers_needed_pessimistic),
+                "teachers_needed_medium": float(period.teachers_needed_medium),
+                "teachers_needed_optimistic": float(period.teachers_needed_optimistic),
             }
+            # Sub-itens de DRE extraídos do calculation_trace (GAP-08)
+            trace = period.calculation_trace
+            staff_detail = trace.get("fixed_costs", {}).get("detail", {}).get("staff", {})
+            util_detail = trace.get("fixed_costs", {}).get("detail", {}).get("utilities", {})
+            period_data.update({
+                "fc_pro_labore":     staff_detail.get("pro_labore", 0.0),
+                "fc_clt_base":       staff_detail.get("clt_base", 0.0),
+                "fc_social_charges": staff_detail.get("social_charges", 0.0),
+                "fc_electricity":    util_detail.get("electricity", 0.0),
+                "fc_water":          util_detail.get("water", 0.0),
+                "fc_internet":       util_detail.get("internet_phone", 0.0),
+            })
             # trace com todos os KPIs — persiste apenas na linha do net_result
             trace = period.calculation_trace
             for code, value in period_data.items():

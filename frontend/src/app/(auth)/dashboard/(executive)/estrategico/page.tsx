@@ -15,26 +15,8 @@ import {
   Target, TrendingUp, TrendingDown, Zap, BarChart2,
   CheckCircle2, AlertCircle, XCircle, Activity, DollarSign,
 } from 'lucide-react';
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-function aggregateByYear(ts: Array<{ period: string; revenue: number; profit: number }>) {
-  const byYear: Record<string, { revenue: number; profit: number }> = {};
-  for (const d of ts) {
-    const year = d.period.split('-')[0];
-    if (!byYear[year]) byYear[year] = { revenue: 0, profit: 0 };
-    byYear[year].revenue += d.revenue;
-    byYear[year].profit += d.profit;
-  }
-  return Object.entries(byYear)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([year, v]) => ({
-      year,
-      revenue: Math.round(v.revenue),
-      profit: Math.round(v.profit),
-      margin: v.revenue > 0 ? v.profit / v.revenue : 0,
-    }));
-}
+import { aggregateByYear } from '@/lib/utils/dashboard';
+import { PortfolioTable } from '@/components/tables/PortfolioTable';
 
 const SCENARIO_LABELS: Record<string, string> = {
   conservative: 'Pessimista',
@@ -108,6 +90,12 @@ export default function EstrategicoPage() {
         }),
       ),
     enabled: !!businessId && scenarios.length > 0,
+  });
+
+  const { data: portfolioData } = useQuery({
+    queryKey: ['portfolio', businessId, scenarioId],
+    queryFn: () => dashboardApi.portfolio(businessId!, scenarioId!),
+    enabled: !!businessId && !!scenarioId,
   });
 
   const ts = dashboard?.time_series ?? [];
@@ -776,6 +764,17 @@ export default function EstrategicoPage() {
                 </div>
               ))}
             </div>
+          </section>
+        )}
+
+        {/* Portfólio de Unidades */}
+        {portfolioData && portfolioData.units.length > 0 && (
+          <section>
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-gray-900">Portfólio — ROI & Payback por Unidade</h3>
+              <p className="text-xs text-gray-400 mt-0.5">CAPEX vs resultado líquido acumulado por unidade</p>
+            </div>
+            <PortfolioTable data={portfolioData} />
           </section>
         )}
       </div>

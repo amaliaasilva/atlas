@@ -12,6 +12,10 @@ import {
   GraduationCap,
   LineChart,
   Target,
+  Table2,
+  Wallet,
+  Search,
+  Gift,
 } from 'lucide-react';
 
 const navItems = [
@@ -23,6 +27,11 @@ const navItems = [
   { href: '/dashboard/professores', label: 'Professores', icon: GraduationCap, short: 'Professores' },
   { href: '/dashboard/projecoes', label: 'Projeções', icon: LineChart, short: 'Projeções' },
   { href: '/dashboard/estrategico', label: 'Estratégico', icon: Target, short: 'Estratégico' },
+  { href: '/dashboard/dre', label: 'DRE', icon: Table2, short: 'DRE' },
+  { href: '/dashboard/capex', label: 'CAPEX', icon: Wallet, short: 'CAPEX' },
+  { href: '/dashboard/beneficios-personal', label: 'Benefícios', icon: Gift, short: 'Benefícios' },
+  { href: '/dashboard/planos', label: 'Planos', icon: Target, short: 'Planos' },
+  { href: '/dashboard/auditoria-calculo', label: 'Auditoria', icon: Search, short: 'Auditoria' },
 ];
 
 export function DashboardNav() {

@@ -23,3 +23,5 @@ from app.models.audit_log import AuditLog  # noqa
 from app.models.user import User, Role, UserRole  # noqa
 from app.models.service_plan import ServicePlan  # noqa
 from app.models.financing_contract import FinancingContract  # noqa
+from app.models.franchise_fee_config import FranchiseFeeConfig  # noqa
+from app.models.personal_benefit_tier import PersonalBenefitTier  # noqa

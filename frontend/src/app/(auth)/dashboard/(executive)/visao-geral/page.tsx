@@ -1,7 +1,8 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { dashboardApi, unitsApi, versionsApi } from '@/lib/api';
+import { useState } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { dashboardApi, unitsApi, versionsApi, aiApi } from '@/lib/api';
 import { useDashboardFilters } from '@/store/dashboard';
 import { MetricCard } from '@/components/dashboard/MetricCard';
 import { AreaGrowthChart } from '@/components/charts/AreaGrowthChart';
@@ -9,12 +10,24 @@ import { NoFiltersState, MetricCardSkeleton, ChartSkeleton } from '@/components/
 import { Topbar } from '@/components/layout/Topbar';
 import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
 import { getRevenue } from '@/types/api';
-import { DollarSign, TrendingUp, Target, Building2, BarChart2, TrendingDown, Clock, Activity, Percent } from 'lucide-react';
+import type { AuditReport } from '@/types/api';
+import { DollarSign, TrendingUp, Target, Building2, BarChart2, TrendingDown, Clock, Activity, Percent, Shield, ShieldAlert } from 'lucide-react';
 
 const STATUS_PRIORITY: Record<string, number> = { published: 0, draft: 1, planning: 2 };
 
+type TabId = 'financeira' | 'b2b' | 'dre';
+
+const TABS: Array<{ id: TabId; label: string }> = [
+  { id: 'financeira', label: 'FINANCEIRA' },
+  { id: 'b2b', label: 'B2B' },
+  { id: 'dre', label: 'DRE' },
+];
+
 export default function VisaoGeralPage() {
   const { businessId, scenarioId, selectedUnitIds, periodStart, periodEnd, year } = useDashboardFilters();
+  const [activeTab, setActiveTab] = useState<TabId>('financeira');
+  const [auditReport, setAuditReport] = useState<AuditReport | null>(null);
+  const [showAudit, setShowAudit] = useState(false);
   // single-unit: quando exatamente 1 unidade selecionada
   const unitId = selectedUnitIds.length === 1 ? selectedUnitIds[0] : null;
   // multi-unit: passa filtro ao consolidado; se vazio = rede inteira
@@ -110,6 +123,27 @@ export default function VisaoGeralPage() {
   const totalUnits = units.length;
   const nonClosedUnits = units.filter((u) => u.status !== 'closed').length;
 
+  // Auditoria AI
+  const auditMutation = useMutation({
+    mutationFn: () => aiApi.sanityCheck(activeVersion!.id),
+    onSuccess: (report) => {
+      setAuditReport(report);
+      setShowAudit(true);
+    },
+  });
+
+  // DRE sumária a partir da time series
+  const dreRows = [
+    { label: 'Receita Bruta', value: filteredTs.reduce((a, d) => a + getRevenue(d), 0), type: 'revenue' },
+    { label: 'Custos Variáveis', value: -filteredTs.reduce((a, d) => a + (d.total_variable_costs ?? 0), 0), type: 'cost' },
+    { label: 'Margem de Contribuição', value: filteredTs.reduce((a, d) => a + getRevenue(d) - (d.total_variable_costs ?? 0), 0), type: 'subtotal' },
+    { label: 'Custos Fixos', value: -filteredTs.reduce((a, d) => a + (d.total_fixed_costs ?? 0), 0), type: 'cost' },
+    { label: 'EBITDA', value: filteredTs.reduce((a, d) => a + d.ebitda, 0), type: 'subtotal' },
+    { label: 'Impostos', value: -filteredTs.reduce((a, d) => a + (d.taxes_on_revenue ?? 0), 0), type: 'cost' },
+    { label: 'Financiamento', value: -filteredTs.reduce((a, d) => a + (d.financing_payment ?? 0), 0), type: 'cost' },
+    { label: 'Resultado Líquido', value: filteredTs.reduce((a, d) => a + d.net_result, 0), type: 'result' },
+  ] as const;
+
   if (!businessId || !scenarioId) {
     return (
       <>
@@ -126,7 +160,88 @@ export default function VisaoGeralPage() {
       <Topbar title="Dashboard — Visão Geral" />
       <div className="p-6 space-y-6 max-w-screen-2xl mx-auto">
 
-        {/* Hero KPIs */}
+        {/* Tabs FINANCEIRA | B2B | DRE + botão auditoria */}
+        <div className="flex items-center justify-between">
+          <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold tracking-wider transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-white shadow text-slate-800'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {activeVersion && (
+            <button
+              onClick={() => auditMutation.mutate()}
+              disabled={auditMutation.isPending}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-colors disabled:opacity-50"
+            >
+              <Shield className="h-3.5 w-3.5" />
+              {auditMutation.isPending ? 'Auditando...' : 'Auditar com IA'}
+            </button>
+          )}
+        </div>
+
+        {/* Painel de resultado de auditoria */}
+        {showAudit && auditReport && (
+          <div className={`rounded-xl border p-4 ${
+            auditReport.overall_health === 'healthy' ? 'bg-emerald-50 border-emerald-200' :
+            auditReport.overall_health === 'critical' ? 'bg-rose-50 border-rose-200' :
+            'bg-amber-50 border-amber-200'
+          }`}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className={`h-4 w-4 ${auditReport.overall_health === 'healthy' ? 'text-emerald-600' : auditReport.overall_health === 'critical' ? 'text-rose-600' : 'text-amber-600'}`} />
+                <span className="text-sm font-bold text-gray-800">
+                  Auditoria IA — Score {auditReport.risk_score}/100
+                </span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                  auditReport.overall_health === 'healthy' ? 'bg-emerald-100 text-emerald-700' :
+                  auditReport.overall_health === 'critical' ? 'bg-rose-100 text-rose-700' :
+                  'bg-amber-100 text-amber-700'
+                }`}>
+                  {auditReport.overall_health.toUpperCase()}
+                </span>
+              </div>
+              <button onClick={() => setShowAudit(false)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            {auditReport.alerts.length === 0 ? (
+              <p className="text-sm text-emerald-700">Nenhum problema detectado. Premissas consistentes.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {auditReport.alerts.map((alert, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs">
+                    <span className={`font-bold shrink-0 ${alert.severity === 'critical' ? 'text-rose-600' : alert.severity === 'warning' ? 'text-amber-600' : 'text-blue-600'}`}>
+                      [{alert.severity.toUpperCase()}]
+                    </span>
+                    <span className="text-gray-700">{alert.message}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {auditReport.recommendations.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-current/20">
+                <p className="text-xs font-semibold text-gray-600 mb-1">Recomendações:</p>
+                <ul className="space-y-0.5">
+                  {auditReport.recommendations.map((r, i) => (
+                    <li key={i} className="text-xs text-gray-600">• {r}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Hero KPIs + Gráfico (aba FINANCEIRA) */}
+        {activeTab === 'financeira' && (
+        <>
         <section>
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -209,60 +324,6 @@ export default function VisaoGeralPage() {
           </div>
         </section>
 
-        {/* KPIs B2B Coworking */}
-        {hasB2BData && (
-          <section>
-            <div className="mb-3">
-              <h3 className="text-sm font-bold text-gray-700">Indicadores B2B Coworking</h3>
-              <p className="text-xs text-gray-400 mt-0.5">Capacidade, ocupação e breakeven do período</p>
-            </div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {isLoadingSkeleton ? (
-                Array.from({ length: 4 }).map((_, i) => <MetricCardSkeleton key={i} />)
-              ) : (
-                <>
-                  <MetricCard
-                    label="Capacidade Total (h)"
-                    value={formatNumber(totalCapacityHours, 0)}
-                    trend="neutral"
-                    icon={<Clock className="h-4 w-4" />}
-                    accentColor="sky"
-                    sub={`Média: ${formatNumber(totalCapacityHours / Math.max(filteredTs.length, 1), 0)} h/mês`}
-                    tooltip="Total de horas disponíveis no período (slots × horas/dia × dias)"
-                  />
-                  <MetricCard
-                    label="Horas Vendidas (h)"
-                    value={formatNumber(totalActiveHours, 0)}
-                    trend={totalActiveHours > 0 ? 'up' : 'neutral'}
-                    icon={<Activity className="h-4 w-4" />}
-                    accentColor="violet"
-                    sub={`Média: ${formatNumber(totalActiveHours / Math.max(filteredTs.length, 1), 0)} h/mês`}
-                    tooltip="Total de horas efetivamente ocupadas no período"
-                  />
-                  <MetricCard
-                    label="Taxa de Ocupação Média"
-                    value={formatPercent(avgOccupancy)}
-                    trend={avgOccupancy > 0.4 ? 'up' : avgOccupancy > 0.2 ? 'neutral' : 'down'}
-                    icon={<Percent className="h-4 w-4" />}
-                    accentColor={avgOccupancy > 0.5 ? 'emerald' : avgOccupancy > 0.25 ? 'amber' : 'rose'}
-                    sub={`Breakeven: ${formatPercent(breakEvenOccupancy)}`}
-                    tooltip="Taxa de ocupação média do período (horas vendidas / capacidade)"
-                  />
-                  <MetricCard
-                    label="Margem de Contribuição"
-                    value={contributionMargin > 0 ? formatPercent(contributionMargin) : '—'}
-                    trend={contributionMargin > 0.4 ? 'up' : contributionMargin > 0.2 ? 'neutral' : 'down'}
-                    icon={<BarChart2 className="h-4 w-4" />}
-                    accentColor={contributionMargin > 0.4 ? 'emerald' : contributionMargin > 0.2 ? 'amber' : 'rose'}
-                    sub="Receita − Custos Variáveis"
-                    tooltip="Percentual da receita disponível para cobrir custos fixos"
-                  />
-                </>
-              )}
-            </div>
-          </section>
-        )}
-
         {/* Gráfico de evolução */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {isLoadingSkeleton ? (
@@ -334,6 +395,116 @@ export default function VisaoGeralPage() {
             </div>
           )}
         </section>
+        </>
+        )}
+
+        {/* Tab B2B */}
+        {activeTab === 'b2b' && (
+          <section>
+            <div className="mb-3">
+              <h3 className="text-sm font-bold text-gray-700">Indicadores B2B Coworking</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Capacidade, ocupação e breakeven do período</p>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {isLoadingSkeleton ? (
+                Array.from({ length: 4 }).map((_, i) => <MetricCardSkeleton key={i} />)
+              ) : (
+                <>
+                  <MetricCard
+                    label="Capacidade Total (h)"
+                    value={formatNumber(totalCapacityHours, 0)}
+                    trend="neutral"
+                    icon={<Clock className="h-4 w-4" />}
+                    accentColor="sky"
+                    sub={`Média: ${formatNumber(totalCapacityHours / Math.max(filteredTs.length, 1), 0)} h/mês`}
+                  />
+                  <MetricCard
+                    label="Horas Vendidas (h)"
+                    value={formatNumber(totalActiveHours, 0)}
+                    trend={totalActiveHours > 0 ? 'up' : 'neutral'}
+                    icon={<Activity className="h-4 w-4" />}
+                    accentColor="violet"
+                    sub={`Média: ${formatNumber(totalActiveHours / Math.max(filteredTs.length, 1), 0)} h/mês`}
+                  />
+                  <MetricCard
+                    label="Taxa de Ocupação Média"
+                    value={formatPercent(avgOccupancy)}
+                    trend={avgOccupancy > 0.4 ? 'up' : avgOccupancy > 0.2 ? 'neutral' : 'down'}
+                    icon={<Percent className="h-4 w-4" />}
+                    accentColor={avgOccupancy > 0.5 ? 'emerald' : avgOccupancy > 0.25 ? 'amber' : 'rose'}
+                    sub={`Breakeven: ${formatPercent(breakEvenOccupancy)}`}
+                  />
+                  <MetricCard
+                    label="Margem de Contribuição"
+                    value={contributionMargin > 0 ? formatPercent(contributionMargin) : '—'}
+                    trend={contributionMargin > 0.4 ? 'up' : contributionMargin > 0.2 ? 'neutral' : 'down'}
+                    icon={<BarChart2 className="h-4 w-4" />}
+                    accentColor={contributionMargin > 0.4 ? 'emerald' : contributionMargin > 0.2 ? 'amber' : 'rose'}
+                    sub="Receita − Custos Variáveis"
+                  />
+                </>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* Tab DRE sumária */}
+        {activeTab === 'dre' && (
+          <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h3 className="text-sm font-bold text-gray-900">DRE Resumida</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Acumulado do período selecionado · Para DRE detalhado acesse o menu DRE</p>
+            </div>
+            {isLoadingSkeleton ? (
+              <div className="p-6 animate-pulse space-y-3">
+                {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-8 bg-gray-100 rounded" />)}
+              </div>
+            ) : filteredTs.length > 0 ? (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <th className="px-6 py-3 text-left font-semibold">Item</th>
+                    <th className="px-6 py-3 text-right font-semibold">Valor Acumulado</th>
+                    <th className="px-6 py-3 text-right font-semibold">% Receita</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dreRows.map((row, i) => {
+                    const revTotal = filteredTs.reduce((a, d) => a + getRevenue(d), 0);
+                    const pct = revTotal !== 0 ? row.value / revTotal : 0;
+                    const isResult = row.type === 'result';
+                    const isSubtotal = row.type === 'subtotal';
+                    return (
+                      <tr
+                        key={i}
+                        className={`border-t border-gray-50 ${
+                          isResult ? 'border-t-2 border-gray-300 bg-indigo-50' :
+                          isSubtotal ? 'bg-slate-50' : ''
+                        }`}
+                      >
+                        <td className={`px-6 py-3 ${isResult ? 'font-bold text-indigo-800' : isSubtotal ? 'font-semibold text-slate-700' : 'text-slate-600'}`}>
+                          {row.label}
+                        </td>
+                        <td className={`px-6 py-3 text-right tabular-nums ${
+                          row.value >= 0 ? (isResult ? 'font-bold text-indigo-700' : 'text-emerald-700') : 'text-rose-600'
+                        }`}>
+                          {formatCurrency(row.value)}
+                        </td>
+                        <td className={`px-6 py-3 text-right tabular-nums text-slate-400 ${isResult ? 'font-bold' : ''}`}>
+                          {(pct * 100).toFixed(1)}%
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <div className="p-6">
+                <NoFiltersState compact message="Sem dados calculados para o período." />
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </>
   );

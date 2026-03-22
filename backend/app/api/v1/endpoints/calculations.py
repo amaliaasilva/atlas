@@ -12,7 +12,7 @@ from app.api.v1.deps import get_current_user
 from app.models.user import User
 from app.models.unit import Unit
 from app.models.budget_version import BudgetVersion
-from app.models.assumption import AssumptionValue, AssumptionDefinition
+from app.models.assumption import AssumptionValue, AssumptionDefinition, AssumptionCategory
 from app.models.financing_contract import FinancingContract
 from app.models.service_plan import ServicePlan
 from app.services.financial_engine import FinancialEngine
@@ -129,6 +129,51 @@ def _build_inputs_for_version(
                 if (defn.code, period) not in values:
                     values[(defn.code, period)] = val
 
+    # ── ARCH-04: Mapeamento code → category_code para soma dinâmica ───────
+    # Carrega todas as definições do negócio para identificar categorias
+    code_category_map: dict[str, str] = {}
+    if unit:
+        all_defns_with_cat = (
+            db.query(AssumptionDefinition.code, AssumptionCategory.code)
+            .join(AssumptionCategory, AssumptionDefinition.category_id == AssumptionCategory.id)
+            .filter(AssumptionDefinition.business_id == unit.business_id)
+            .all()
+        )
+        code_category_map = {defn_code: cat_code for defn_code, cat_code in all_defns_with_cat}
+
+    # Codes já mapeados em inputs estruturados — não devem ser somados duas vezes
+    KNOWN_FIXED_CODES = {
+        "aluguel_mensal", "condominio_mensal", "iptu_mensal",
+        "salario_limpeza", "salario_recepcao", "salario_marketing",
+        "salario_comercial", "salario_gerente", "salario_educador_fisico", "pro_labore",
+        "encargos_folha_pct", "beneficios_por_funcionario", "num_funcionarios",
+        "contabilidade_mensal", "marketing_digital_mensal", "material_identidade_visual",
+        "seguro_imovel", "seguro_equipamentos", "sistemas_seguranca",
+        "servicos_administrativos", "juridico_mensal", "sistema_gestao_mensal",
+        "material_escritorio", "higiene_limpeza_mensal", "material_publicitario",
+        "custo_energia_fixo", "custo_energia_variavel_max", "automacao_reducao_pct",
+        "kwh_consumo_mensal", "tarifa_kwh",
+        "custo_agua_fixo", "custo_agua_variavel_max",
+        "consumo_agua_m3_mensal", "tarifa_agua_m3",
+        "internet_telefonia_mensal",
+        "depreciacao_equipamentos", "manutencao_equipamentos",
+        "despesas_financeiras_taxas",
+    }
+    KNOWN_VARIABLE_CODES = {
+        "kit_higiene_por_aluno", "comissao_vendas_pct", "taxa_cartao_pct",
+        "outros_custos_variaveis",
+    }
+
+    # Identifica codes desconhecidos por categoria (conjuntos reutilizados no loop)
+    extra_fixed_codes = {
+        code for (code, _) in values.keys()
+        if code not in KNOWN_FIXED_CODES and code_category_map.get(code) == "CUSTO_FIXO"
+    }
+    extra_var_codes = {
+        code for (code, _) in values.keys()
+        if code not in KNOWN_VARIABLE_CODES and code_category_map.get(code) == "CUSTO_VARIAVEL"
+    }
+
     # ── ARCH-02: Carrega múltiplos contratos de financiamento ──────────────
     db_contracts = (
         db.query(FinancingContract)
@@ -180,6 +225,12 @@ def _build_inputs_for_version(
         furniture_fixtures=_get(values, "moveis_e_fixtures"),
         technology_setup=_get(values, "tecnologia_setup"),
         other_capex=_get(values, "outros_capex"),
+        # GAP-05: novos itens de CAPEX
+        architect_fees=_get(values, "honorarios_arquiteto"),
+        ac_automation=_get(values, "automacao_ac"),
+        branding_budget=_get(values, "branding_identidade_visual"),
+        equipment_useful_life_months=int(_get(values, "vida_util_equipamentos_meses", default=60)),
+        renovation_useful_life_months=int(_get(values, "vida_util_reforma_meses", default=120)),
     )
 
     # Legado: contrato único (usado apenas se não houver FinancingContract cadastrados)
@@ -266,8 +317,18 @@ def _build_inputs_for_version(
         variable = VariableCostInputs(
             hygiene_kit_per_student=_get(values, "kit_higiene_por_aluno", p),
             sales_commission_rate=_get(values, "comissao_vendas_pct", p),
+            card_fee_rate=_get(values, "taxa_cartao_pct", p, default=0.0),
             other_variable_costs=_get(values, "outros_custos_variaveis", p),
         )
+
+        # ── ARCH-04: Acumula premissas desconhecidas por categoria ─────────
+        for code in extra_fixed_codes:
+            extra_val = _get(values, code, p, default=0.0)
+            fixed.other_fixed_costs = round(fixed.other_fixed_costs + extra_val, 2)
+
+        for code in extra_var_codes:
+            extra_val = _get(values, code, p, default=0.0)
+            variable.other_variable_costs = round(variable.other_variable_costs + extra_val, 2)
 
         inputs_list.append(
             FinancialInputs(

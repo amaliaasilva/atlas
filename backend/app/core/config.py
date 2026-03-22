@@ -65,6 +65,22 @@ class Settings(BaseSettings):
     # Financial engine
     DEFAULT_TAX_RATE: float = 0.06  # Simples/Presumido default
 
+    # AI Provider
+    AI_PROVIDER: str = "mock"                        # "openai" | "gemini" | "mock"
+    OPENAI_API_KEY: str | None = None
+    GEMINI_API_KEY: str | None = None
+    AI_MODEL_AUDIT: str = "gpt-4o-2024-08-06"
+    AI_MODEL_COPILOT: str = "gpt-4o-2024-08-06"
+    AI_MODEL_PRICING: str = "gpt-4o-mini"
+
+    # AI Safety
+    AI_RATE_LIMIT_PER_USER_HOUR: int = 10
+    AI_MAX_CONTEXT_TOKENS: int = 8000
+
+    # Geospatial
+    GOOGLE_PLACES_API_KEY: str | None = None
+    GEO_CACHE_TTL_DAYS: int = 30
+
 
 @lru_cache
 def get_settings() -> Settings:

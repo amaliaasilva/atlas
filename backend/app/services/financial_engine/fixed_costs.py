@@ -44,8 +44,9 @@ def calculate_utility_costs(inputs: FixedCostInputs, occupancy_rate: float = 0.0
     """
     Energia e Água: modelo misto (fixo + variável proporcional à ocupação).
 
-    Energia:
-      custo = fixed_energy_cost + max_variable_energy_cost × occ × (1 − automation_reduction)
+    Energia (GAP-01 — fórmula corrigida vs planilha):
+      custo = (fixed_energy_cost + max_variable_energy_cost × occ) × (1 − automation_reduction)
+      A automação reduz o consumo total (fixo + variável), não apenas a parcela variável.
     Água:
       custo = fixed_water_cost  + max_variable_water_cost  × occ
 
@@ -55,14 +56,14 @@ def calculate_utility_costs(inputs: FixedCostInputs, occupancy_rate: float = 0.0
 
     # Energia
     if inputs.fixed_energy_cost > 0 or inputs.max_variable_energy_cost > 0:
-        var_reduction = 1.0 - inputs.automation_reduction
+        automation_factor = 1.0 - inputs.automation_reduction
         electricity = round(
-            inputs.fixed_energy_cost
-            + inputs.max_variable_energy_cost * occ * var_reduction,
+            (inputs.fixed_energy_cost + inputs.max_variable_energy_cost * occ)
+            * automation_factor,
             2,
         )
-        elec_fixed = inputs.fixed_energy_cost
-        elec_variable = round(inputs.max_variable_energy_cost * occ * var_reduction, 2)
+        elec_fixed = round(inputs.fixed_energy_cost * automation_factor, 2)
+        elec_variable = round(inputs.max_variable_energy_cost * occ * automation_factor, 2)
     else:
         electricity = round(inputs.electricity_kwh * inputs.electricity_rate, 2)
         elec_fixed = electricity
@@ -133,7 +134,7 @@ def calculate_rent(inputs: FixedCostInputs) -> float:
 
 
 def calculate_other_fixed(inputs: FixedCostInputs) -> float:
-    return round(inputs.security_systems + inputs.financial_fees, 2)
+    return round(inputs.security_systems + inputs.financial_fees + inputs.other_fixed_costs, 2)
 
 
 def calculate_total_fixed_costs(inputs: FixedCostInputs, occupancy_rate: float = 0.0) -> dict:

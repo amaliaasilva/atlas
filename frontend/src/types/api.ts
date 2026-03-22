@@ -115,6 +115,10 @@ export interface KPISummary {
   contribution_margin_pct?: number;
   capacity_hours_month?: number;
   active_hours_month?: number;
+  // Professores necessários (GAP-06)
+  teachers_needed_pessimistic?: number;
+  teachers_needed_medium?: number;
+  teachers_needed_optimistic?: number;
 }
 
 export interface DashboardUnit {
@@ -151,6 +155,10 @@ export interface TimeSeries {
   break_even_occupancy_pct?: number;
   contribution_margin_pct?: number;
   net_margin?: number;
+  // Professores necessários (GAP-06)
+  teachers_needed_pessimistic?: number;
+  teachers_needed_medium?: number;
+  teachers_needed_optimistic?: number;
 }
 
 // Helper para resolver alias revenue_total vs gross_revenue
@@ -186,6 +194,7 @@ export interface DashboardConsolidated {
   scenario_id: string;
   kpis: KPISummary;
   time_series: TimeSeries[];
+  annual_summaries?: AnnualSummaryBackend[];
 }
 
 export interface UnitComparison {
@@ -275,3 +284,233 @@ export interface ServicePlan {
 }
 
 export type ServicePlanInput = Omit<ServicePlan, 'id' | 'created_at' | 'updated_at'>;
+
+// ── DRE Detalhado (GAP-09) ────────────────────────────────────────────────────────────────────────
+
+export type DRECategory = 'revenue' | 'fixed_cost' | 'variable_cost' | 'tax' | 'financing' | 'result' | 'operational';
+
+export interface DREItem {
+  code: string;
+  name: string;
+  category: DRECategory;
+  display_order: number;
+  value: number;
+  pct_of_revenue: number;
+}
+
+export interface DREPeriod {
+  period: string; // "YYYY-MM"
+  items: DREItem[];
+}
+
+export interface DREResponse {
+  version_id: string;
+  dre: DREPeriod[];
+}
+
+// ── Resumo Anual do Backend (GAP-09 / P0.9) ───────────────────────────────────────────────
+
+export interface AnnualSummaryBackend {
+  year: string;
+  months: number;
+  revenue_total: number;
+  total_fixed_costs: number;
+  total_variable_costs: number;
+  taxes_on_revenue: number;
+  financing_payment: number;
+  operating_result: number;
+  net_result: number;
+  ebitda: number;
+  net_margin: number;
+  occupancy_rate?: number;
+  capacity_hours_month?: number;
+  active_hours_month?: number;
+}
+
+export interface AnnualSummaryResponse {
+  business_id: string;
+  scenario_id: string;
+  annual: AnnualSummaryBackend[];
+}
+
+// ── Portfolio / ROI (GAP-09) ────────────────────────────────────────────────────────────────────
+
+export interface PortfolioUnit {
+  unit_id: string;
+  unit_name: string;
+  version_id: string;
+  capex: number;
+  net_result: number;
+  payback_months: number | null;
+  roi_pct: number | null;
+}
+
+export interface PortfolioResponse {
+  business_id: string;
+  scenario_id: string;
+  total_capex: number;
+  total_net_result: number;
+  roi_pct: number | null;
+  units: PortfolioUnit[];
+}
+
+// ── Trilha de Cálculo (GAP-09) ───────────────────────────────────────────────────────────────────
+
+export interface CalcTraceRevenue {
+  formula: string;
+  capacity_hours_month: number;
+  occupancy_rate: number;
+  active_hours_month: number;
+  avg_price_per_hour: number;
+  cowork_revenue: number;
+  other_revenue: number;
+  service_plans: Array<{ name: string; price: number; mix: number }>;
+}
+
+export interface CalcTraceFixedCosts {
+  rent: number;
+  staff: number;
+  utilities: number;
+  admin: number;
+  marketing: number;
+  equipment: number;
+  insurance: number;
+  other: number;
+  detail: Record<string, unknown>;
+}
+
+export interface CalcTraceKpis {
+  break_even_revenue: number;
+  break_even_occupancy_pct: number;
+  contribution_margin_pct: number;
+  operating_result: number;
+  net_result: number;
+  ebitda: number;
+  teachers_needed_pessimistic?: number;
+  teachers_needed_medium?: number;
+  teachers_needed_optimistic?: number;
+}
+
+export interface CalcTrace {
+  period: string;
+  trace: {
+    revenue: CalcTraceRevenue;
+    fixed_costs: CalcTraceFixedCosts;
+    variable_costs: {
+      hygiene_kit: number;
+      sales_commission: number;
+      card_fee?: number;
+      other: number;
+    };
+    taxes: { tax_rate: number; taxes_on_revenue: number };
+    financing: {
+      total_payment: number;
+      principal: number;
+      interest: number;
+      contracts: unknown[];
+    };
+    kpis: CalcTraceKpis;
+  };
+}
+
+export interface AuditTraceResponse {
+  version_id: string;
+  traces: CalcTrace[];
+}
+
+// ─── Sprint 4: Split de Receita + Benefícios Personal ────────────────────────
+
+export interface RevenueSplitPeriod {
+  period: string;
+  gross_revenue: number;
+  franchisee_revenue: number;
+  platform_revenue: number;
+  referral_commission: number;
+}
+
+export interface RevenueSplitResponse {
+  version_id: string;
+  business_id: string;
+  platform_fee_pct: number;
+  referral_commission_pct: number;
+  periods: RevenueSplitPeriod[];
+  totals: RevenueSplitPeriod;
+}
+
+export interface FranchiseFeeConfig {
+  id: string;
+  business_id: string;
+  platform_fee_pct: number;
+  referral_commission_pct: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PersonalBenefitTier {
+  id: string;
+  service_plan_id: string;
+  monthly_kit_value: number;
+  insurance_value: number;
+  bonus_pct_on_extra: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Sprint 6: AI Layer ────────────────────────────────────────────────────────
+
+export interface AuditAlert {
+  severity: 'critical' | 'warning' | 'info';
+  category: string;
+  year?: string | null;
+  message: string;
+  metric_affected: string;
+  current_value?: number | null;
+  threshold?: number | null;
+}
+
+export interface AuditReport {
+  overall_health: 'healthy' | 'warning' | 'critical' | 'unavailable';
+  risk_score: number;
+  alerts: AuditAlert[];
+  recommendations: string[];
+  generated_at: string;
+  model_used: string;
+  version_id: string;
+  tokens_used: number;
+}
+
+export interface FunctionCall {
+  function: string;
+  arguments: Record<string, unknown>;
+  description: string;
+}
+
+export interface CopilotScenarioResponse {
+  status: string;
+  planned_actions: FunctionCall[];
+  confirmation_required: boolean;
+  actions_executed: Record<string, unknown>[];
+  summary: string;
+  model_used: string;
+}
+
+export interface SuggestedPrice {
+  plan: string;
+  current: number;
+  suggested: number;
+  rationale: string;
+}
+
+export interface GeoPricingReport {
+  unit_id: string;
+  city: string;
+  state: string;
+  location_profile: Record<string, unknown>;
+  suggested_prices: SuggestedPrice[];
+  revenue_impact: Record<string, unknown>;
+  confidence: 'high' | 'medium' | 'low';
+  data_sources: string[];
+  caveats: string[];
+  generated_at: string;
+  model_used: string;
+}

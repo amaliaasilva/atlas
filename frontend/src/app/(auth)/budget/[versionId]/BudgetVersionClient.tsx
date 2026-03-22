@@ -3,8 +3,9 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { assumptionsApi, versionsApi, calculationsApi, financingContractsApi } from '@/lib/api';
-import type { AssumptionValue, FinancingContract, AssumptionDefinition } from '@/types/api';
+import { assumptionsApi, versionsApi, calculationsApi, financingContractsApi, aiApi } from '@/lib/api';
+import { useNavStore } from '@/store/auth';
+import type { AssumptionValue, FinancingContract, AssumptionDefinition, CopilotScenarioResponse } from '@/types/api';
 import { Topbar } from '@/components/layout/Topbar';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
@@ -88,6 +89,10 @@ export default function BudgetVersionClient() {
     grace_period_months: 0,
     down_payment_pct: 0,
   });
+  const [showAddAssumption, setShowAddAssumption] = useState(false);
+  const [newAssumption, setNewAssumption] = useState({ name: '', value: 0, category_code: 'CUSTO_FIXO' });
+
+  const { businessId } = useNavStore();
 
   // Dados
   const { data: version, isLoading: loadingVersion } = useQuery({
@@ -123,6 +128,26 @@ export default function BudgetVersionClient() {
       setShowAddContract(false);
       setNewContract({ name: '', financed_amount: 0, monthly_rate: 0, term_months: 0, grace_period_months: 0, down_payment_pct: 0 });
       setToast('Contrato adicionado!');
+      setTimeout(() => setToast(''), 3000);
+    },
+    onError: (err) => setToast(`Erro: ${getErrorMessage(err)}`),
+  });
+
+  const addAssumptionMutation = useMutation({
+    mutationFn: () =>
+      assumptionsApi.quickAdd({
+        budget_version_id: versionId,
+        business_id: businessId!,
+        name: newAssumption.name,
+        value: newAssumption.value,
+        category_code: newAssumption.category_code,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assumption-values', versionId] });
+      queryClient.invalidateQueries({ queryKey: ['assumption-definitions'] });
+      setShowAddAssumption(false);
+      setNewAssumption({ name: '', value: 0, category_code: 'CUSTO_FIXO' });
+      setToast('Premissa adicionada!');
       setTimeout(() => setToast(''), 3000);
     },
     onError: (err) => setToast(`Erro: ${getErrorMessage(err)}`),
@@ -278,6 +303,20 @@ export default function BudgetVersionClient() {
     onError: (err) => setToast(`Erro: ${getErrorMessage(err)}`),
   });
 
+  // Copiloto NLP (Sprint 6)
+  const [nlpCommand, setNlpCommand] = useState('');
+  const [copilotResult, setCopilotResult] = useState<CopilotScenarioResponse | null>(null);
+  const [showCopilot, setShowCopilot] = useState(false);
+  const copilotMutation = useMutation({
+    mutationFn: () =>
+      aiApi.scenarioCopilot({ budget_version_id: versionId, command: nlpCommand, dry_run: true }),
+    onSuccess: (data) => {
+      setCopilotResult(data);
+      setShowCopilot(true);
+    },
+    onError: (err) => setToast(`Erro Copiloto: ${getErrorMessage(err)}`),
+  });
+
   if (loadingVersion || loadingValues) return <LoadingScreen />;
   if (!version) return <div className="p-8 text-red-500">Versão não encontrada</div>;
 
@@ -318,6 +357,47 @@ export default function BudgetVersionClient() {
           </div>
         )}
 
+        {/* Copiloto NLP (Sprint 6) */}
+        <div className="mb-3 flex items-center gap-2">
+          <input
+            type="text"
+            className="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+            placeholder='Copiloto IA — ex: "Atrasar obra em 3 meses e subir aluguel 15%"'
+            value={nlpCommand}
+            onChange={(e) => setNlpCommand(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && nlpCommand.trim()) copilotMutation.mutate(); }}
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => copilotMutation.mutate()}
+            loading={copilotMutation.isPending}
+            disabled={!nlpCommand.trim()}
+          >
+            Executar
+          </Button>
+        </div>
+        {showCopilot && copilotResult && (
+          <div className="mb-3 rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-indigo-800">
+                Copiloto IA — {copilotResult.planned_actions.length} ação(ões) planejada(s)
+              </span>
+              <button onClick={() => setShowCopilot(false)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <p className="text-xs text-indigo-600 mb-2">{copilotResult.summary}</p>
+            <ul className="space-y-1">
+              {copilotResult.planned_actions.map((action, i) => (
+                <li key={i} className="text-xs text-gray-700">
+                  <span className="font-mono font-semibold text-indigo-700">{action.function}</span>
+                  {action.description && ` — ${action.description}`}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-indigo-500 italic">Dry run ativo — nenhuma alteração foi feita. Confirmação manual pendente.</p>
+          </div>
+        )}
+
         {/* Legenda */}
         <div className="flex items-center gap-4 mb-2 text-xs text-gray-500">
           <span className="flex items-center gap-1">
@@ -351,6 +431,62 @@ export default function BudgetVersionClient() {
             </button>
           ))}
         </div>
+
+        {/* Toolbar de premissas */}
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-semibold text-gray-700">Premissas</span>
+          {businessId && (
+            <Button variant="secondary" size="sm" onClick={() => setShowAddAssumption(!showAddAssumption)}>
+              <Plus className="h-3.5 w-3.5" /> Nova Premissa
+            </Button>
+          )}
+        </div>
+
+        {showAddAssumption && (
+          <div className="mb-3 p-4 rounded-lg border border-gray-200 bg-gray-50 grid grid-cols-3 gap-3">
+            <input
+              className="col-span-3 rounded border border-gray-300 px-3 py-1.5 text-sm"
+              placeholder="Nome da premissa (ex: Taxa de Limpeza)"
+              value={newAssumption.name}
+              onChange={(e) => setNewAssumption((p) => ({ ...p, name: e.target.value }))}
+            />
+            <label className="text-xs text-gray-500">
+              Valor base (R$)
+              <input
+                type="number"
+                step="any"
+                className="mt-1 block w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                value={newAssumption.value}
+                onChange={(e) => setNewAssumption((p) => ({ ...p, value: parseFloat(e.target.value) || 0 }))}
+              />
+            </label>
+            <label className="text-xs text-gray-500">
+              Categoria
+              <select
+                className="mt-1 block w-full rounded border border-gray-300 px-2 py-1.5 text-sm bg-white"
+                value={newAssumption.category_code}
+                onChange={(e) => setNewAssumption((p) => ({ ...p, category_code: e.target.value }))}
+              >
+                {categories?.map((c) => (
+                  <option key={c.id} value={c.code}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-end gap-2">
+              <Button
+                size="sm"
+                onClick={() => addAssumptionMutation.mutate()}
+                loading={addAssumptionMutation.isPending}
+                disabled={!newAssumption.name.trim()}
+              >
+                Adicionar
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setShowAddAssumption(false)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Tabela de premissas para o ano selecionado */}
         <div className="flex-1 overflow-auto rounded-xl border border-gray-200 bg-white">

@@ -43,11 +43,14 @@ export default function CapacidadePage() {
   const totalFixedCosts = filteredTs.reduce((acc, d) => acc + (d.total_fixed_costs ?? 0), 0);
   const totalVarCosts = filteredTs.reduce((acc, d) => acc + (d.total_variable_costs ?? 0), 0);
 
-  // Receita máxima teórica: estimamos como 140% da melhor receita observada
-  // (em produção viria de assumptions: alunos_capacidade_maxima × ticket_medio)
-  const maxObservedRevenue = Math.max(...filteredTs.map((d) => getRevenue(d)), 0);
-  const estimatedMaxRevenue = maxObservedRevenue * 1.4; 
-
+  // Capacidade real derivada do engine (P0.10 — substitui o fator 1.4 arbitrário)
+  const capacityHoursMonth = latestPeriod?.capacity_hours_month ?? 0;
+  const avgPricePerHour = latestPeriod?.avg_price_per_hour ?? 0;
+  // max receita = soma mensal de (capacidade_horas × preço_médio) nos períodos filtrados
+  const estimatedMaxRevenue = filteredTs.reduce(
+    (acc, d) => acc + (d.capacity_hours_month ?? capacityHoursMonth) * (d.avg_price_per_hour ?? avgPricePerHour),
+    0,
+  );
   const utilizationRate = estimatedMaxRevenue > 0 ? currentRevenue / estimatedMaxRevenue : 0;
   const capacityGap = Math.max(estimatedMaxRevenue - currentRevenue, 0);
 

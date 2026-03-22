@@ -148,6 +148,7 @@ class FixedCostInputs:
     # Other
     security_systems: float = 0.0
     financial_fees: float = 0.0
+    other_fixed_costs: float = 0.0   # ARCH-04: acumula premissas desconhecidas da categoria CUSTO_FIXO
 
 
 @dataclass
@@ -156,6 +157,7 @@ class VariableCostInputs:
 
     hygiene_kit_per_student: float = 0.0
     sales_commission_rate: float = 0.0  # % sobre receita
+    card_fee_rate: float = 0.0          # % sobre receita (taxa adquirente cartão, ex: 0.035 = 3,5%)
     other_variable_costs: float = 0.0
 
 
@@ -170,6 +172,13 @@ class CapexInputs:
     furniture_fixtures: float = 0.0
     technology_setup: float = 0.0
     other_capex: float = 0.0
+    # GAP-05: itens adicionais da planilha
+    architect_fees: float = 0.0          # honorários de arquiteto
+    ac_automation: float = 0.0           # automação de A/C
+    branding_budget: float = 0.0         # identidade visual / branding
+    # Vidas úteis para depreciação automática
+    equipment_useful_life_months: int = 60    # depreciação mensal = equipment_value / 60
+    renovation_useful_life_months: int = 120  # depreciação mensal = renovation_works / 120
 
 
 @dataclass
@@ -238,6 +247,7 @@ class PeriodResult:
     total_variable_costs: float = 0.0
     hygiene_kit_cost: float = 0.0
     sales_commission_cost: float = 0.0
+    card_fee_cost: float = 0.0
     other_variable_costs: float = 0.0
 
     # Impostos
@@ -271,6 +281,11 @@ class PeriodResult:
 
     burn_rate: float = 0.0               # Queima mensal (resultado negativo)
     ebitda: float = 0.0
+
+    # Professores necessários por cenário de break-even (GAP-06)
+    teachers_needed_pessimistic: int = 0  # 1.0 aluno/prof
+    teachers_needed_medium: int = 0       # 1.5 alunos/prof
+    teachers_needed_optimistic: int = 0   # 2.0 alunos/prof
 
     # Trilha de cálculo auditavel por período
     calculation_trace: dict = field(default_factory=dict)

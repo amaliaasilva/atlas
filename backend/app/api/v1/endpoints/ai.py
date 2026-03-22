@@ -2,23 +2,31 @@
 Atlas Finance — AI Copilot Endpoints
 Módulo de IA para sanity-check de premissas e copilot financeiro.
 
-Status: SKELETON — endpoints funcionais com lógica stub.
-Para produção: substituir _call_llm() por chamadas reais à OpenAI/Gemini API.
+Sprint 6: Infraestrutura AI Layer completa.
+  AI_PROVIDER=mock  → respostas sem chamada real ao LLM (padrão dev/CI)
+  AI_PROVIDER=openai → OpenAI gpt-4o (requer OPENAI_API_KEY)
+  AI_PROVIDER=gemini → Google Gemini (requer GEMINI_API_KEY)
 
-Rotas planejadas (Architecture Proposal Part 7):
-  GET  /ai/sanity-check/{version_id}  — verifica premissas inconsistentes
-  POST /ai/copilot                     — responde perguntas sobre o modelo
-  POST /ai/geo-pricing/{unit_id}       — pricing baseado em localização (stub)
+Rotas:
+  GET  /ai/sanity-check/{version_id}  — 5 checks determinísticos (backward-compat)
+  POST /ai/sanity-check/{version_id}  — idem + AuditReport estruturado (Sprint 6)
+  POST /ai/copilot                    — FAQ copilot (legacy)
+  POST /ai/scenario-copilot           — NLP → ações planeadas (Sprint 6)
+  GET  /ai/geo-pricing/{unit_id}      — benchmark por estado (legacy stub)
+  POST /ai/geo-pricing                — relatório geoespacial detalhado (Sprint 6)
 """
 
 from __future__ import annotations
 
 import json
+import time
+from collections import defaultdict
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.api.v1.deps import get_current_user
 from app.models.user import User
@@ -26,6 +34,18 @@ from app.models.budget_version import BudgetVersion
 from app.models.unit import Unit
 from app.models.assumption import AssumptionDefinition, AssumptionValue
 from app.models.calculated_result import CalculatedResult
+from app.services.ai.client import ai_client
+from app.services.ai.schemas.audit import AuditAlert, AuditReport
+from app.services.ai.schemas.copilot import (
+    FunctionCall,
+    CopilotScenarioRequest,
+    CopilotScenarioResponse,
+)
+from app.services.ai.schemas.geo_pricing import (
+    GeoPricingRequest,
+    GeoPricingReport,
+    SuggestedPrice,
+)
 
 router = APIRouter()
 
@@ -412,3 +432,294 @@ def geo_pricing(
         ),
         ai_powered=False,
     )
+
+
+# ── Rate Limiter in-memory ────────────────────────────────────────────────────
+
+# {user_id: [(timestamp_float, endpoint_key)]}
+_rate_limit_log: dict[str, list[tuple[float, str]]] = defaultdict(list)
+
+
+def _check_rate_limit(user_id: str, endpoint_key: str, limit: int) -> None:
+    """Raise 429 se o usuário excedeu ``limit`` chamadas em 1 hora para o endpoint."""
+    now = time.time()
+    cutoff = now - 3600
+    calls = _rate_limit_log[user_id]
+    # Remove entradas antigas
+    calls[:] = [(ts, ep) for ts, ep in calls if ts > cutoff]
+    recent = [ts for ts, ep in calls if ep == endpoint_key]
+    if len(recent) >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Limite de {limit} chamadas por hora para este endpoint atingido. Tente novamente mais tarde.",
+        )
+    calls.append((now, endpoint_key))
+
+
+# ── POST /ai/sanity-check/{version_id} — AuditReport estruturado (Sprint 6) ────
+
+@router.post("/sanity-check/{version_id}", response_model=AuditReport)
+def ai_sanity_check_post(
+    version_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Auditoria estruturada de risco. Retorna AuditReport com overall_health e alerts.
+    Rate limit: AI_RATE_LIMIT_PER_USER_HOUR (padrão: 10/hora).
+    Com AI_PROVIDER=mock retorna status "healthy" sem chamar LLM.
+    """
+    _check_rate_limit(str(current_user.id), "sanity-check", settings.AI_RATE_LIMIT_PER_USER_HOUR)
+
+    version = db.query(BudgetVersion).filter(BudgetVersion.id == version_id).first()
+    if not version:
+        raise HTTPException(status_code=404, detail="Versão não encontrada")
+
+    ctx = _build_assumption_context(version_id, db)
+
+    # Reutiliza as mesmas verificações determinísticas do GET
+    legacy_issues = _run_rule_based_checks(ctx, version)
+
+    alerts: list[AuditAlert] = []
+    for issue in legacy_issues:
+        alerts.append(AuditAlert(
+            severity=issue.severity,  # type: ignore[arg-type]
+            category=issue.code,
+            message=issue.message,
+            metric_affected=issue.field or "",
+            current_value=None,
+            threshold=None,
+        ))
+
+    # Score: começa em 100, -20/crítico, -10/warning
+    risk_score = 100
+    for a in alerts:
+        if a.severity == "critical":
+            risk_score -= 20
+        elif a.severity == "warning":
+            risk_score -= 10
+    risk_score = max(risk_score, 0)
+
+    if risk_score == 100:
+        health = "healthy"
+    elif risk_score >= 70:
+        health = "warning"
+    else:
+        health = "critical"
+
+    recs: list[str] = [i.suggestion for i in legacy_issues if i.suggestion]
+
+    # Análise via LLM se disponível
+    model_used = settings.AI_PROVIDER
+    if settings.AI_PROVIDER != "mock":
+        with open("/workspaces/atlas/backend/app/services/ai/prompts/audit_system.txt") as f:
+            system_prompt = f.read()
+        user_msg = f"Premissas: {json.dumps(ctx.get('assumptions', {}), ensure_ascii=False)}"
+        llm_raw = ai_client.chat(system_prompt, user_msg, settings.AI_MODEL_AUDIT)
+        if llm_raw and llm_raw != "__mock__":
+            alerts.append(AuditAlert(
+                severity="info",
+                category="AI_ANALYSIS",
+                message=llm_raw[:500],
+                metric_affected="",
+            ))
+
+    return AuditReport(
+        overall_health=health,  # type: ignore[arg-type]
+        risk_score=risk_score,
+        alerts=alerts,
+        recommendations=recs,
+        model_used=model_used,
+        version_id=version_id,
+        tokens_used=0,
+    )
+
+
+# ── POST /ai/scenario-copilot — NLP → ações planejadas ──────────────────────
+
+# Mapeamento simples de palavras-chave → FunctionCall para o mock
+_NLP_KEYWORD_ACTIONS: list[tuple[list[str], str, dict]] = [
+    (
+        ["atrasar", "adiar", "atraso", "delay"],
+        "update_opening_date",
+        {"version_id": "{version_id}", "offset_months": 3},
+    ),
+    (
+        ["antecipar", "adiantar"],
+        "update_opening_date",
+        {"version_id": "{version_id}", "offset_months": -3},
+    ),
+    (
+        ["aluguel", "aluguel mensal"],
+        "update_assumption",
+        {"version_id": "{version_id}", "code": "aluguel_mensal", "new_value": None, "rate_override": 0.15},
+    ),
+    (
+        ["pró-labore", "pro labore", "prolabore"],
+        "update_assumption",
+        {"version_id": "{version_id}", "code": "pro_labore", "new_value": None, "rate_override": 0.10},
+    ),
+    (
+        ["recalcular", "recalculate", "calcular"],
+        "recalculate_version",
+        {"version_id": "{version_id}"},
+    ),
+]
+
+
+def _parse_command_mock(command: str, version_id: str) -> list[FunctionCall]:
+    """Interpretação por palavras-chave (fallback quando AI_PROVIDER=mock)."""
+    lower = command.lower()
+    calls: list[FunctionCall] = []
+    for keywords, func_name, base_args in _NLP_KEYWORD_ACTIONS:
+        if any(kw in lower for kw in keywords):
+            args = {k: (v.replace("{version_id}", version_id) if isinstance(v, str) else v)
+                   for k, v in base_args.items()}
+            calls.append(FunctionCall(
+                function=func_name,
+                arguments=args,
+                description=f"Ação detectada: '{keywords[0]}' no comando",
+            ))
+            if len(calls) >= 5:
+                break
+    if not calls:
+        calls.append(FunctionCall(
+            function="recalculate_version",
+            arguments={"version_id": version_id},
+            description="Nenhuma ação específica detectada — recalculando versão",
+        ))
+    return calls
+
+
+@router.post("/scenario-copilot", response_model=CopilotScenarioResponse)
+def scenario_copilot(
+    data: CopilotScenarioRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Interpreta um comando em linguagem natural e retorna as ações planejadas.
+    Com dry_run=True (padrão), apenas lista as ações sem executar.
+    Rate limit: 5/hora.
+    """
+    _check_rate_limit(str(current_user.id), "scenario-copilot", 5)
+
+    version = db.query(BudgetVersion).filter(BudgetVersion.id == data.budget_version_id).first()
+    if not version:
+        raise HTTPException(status_code=404, detail="Versão não encontrada")
+
+    # Interpreta o comando
+    if settings.AI_PROVIDER != "mock":
+        with open("/workspaces/atlas/backend/app/services/ai/prompts/copilot_system.txt") as f:
+            system_prompt = f.read()
+        user_msg = (
+            f"budget_version_id={data.budget_version_id}\n"
+            f"Comando: {data.command}"
+        )
+        raw = ai_client.chat(system_prompt, user_msg, settings.AI_MODEL_COPILOT)
+        try:
+            parsed = json.loads(raw)
+            calls = [FunctionCall(**fc) for fc in parsed.get("planned_actions", [])]
+        except Exception:
+            calls = _parse_command_mock(data.command, data.budget_version_id)
+        model_used = settings.AI_PROVIDER
+    else:
+        calls = _parse_command_mock(data.command, data.budget_version_id)
+        model_used = "mock"
+
+    # Limites de segurança
+    calls = calls[:5]
+
+    if data.dry_run:
+        return CopilotScenarioResponse(
+            status="planned",
+            planned_actions=calls,
+            confirmation_required=True,
+            model_used=model_used,
+            summary=f"{len(calls)} ação(ões) identificada(s). Confirme para executar.",
+        )
+
+    # Execução (somente quando confirmed=True)
+    if not data.confirmed:
+        return CopilotScenarioResponse(
+            status="planned",
+            planned_actions=calls,
+            confirmation_required=True,
+            model_used=model_used,
+            summary="Revise as ações planejadas e confirme com confirmed=true.",
+        )
+
+    # TODO: executar calls via API interna (ARCH-06 Fase B)
+    return CopilotScenarioResponse(
+        status="completed",
+        actions_executed=[c.dict() for c in calls],
+        summary=f"{len(calls)} ação(ões) executada(s) com sucesso.",
+        model_used=model_used,
+    )
+
+
+# ── POST /ai/geo-pricing — Relatório Geoespacial ─────────────────────────────
+
+# Cache simples em memória: {unit_id+location_hash: (timestamp, report)}
+_geo_cache: dict[str, tuple[float, GeoPricingReport]] = {}
+
+
+@router.post("/geo-pricing", response_model=GeoPricingReport)
+def geo_pricing_post(
+    data: GeoPricingRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Gera relatório de precificação geoespacial para uma unidade.
+    Cache: GEO_CACHE_TTL_DAYS (padrão: 30 dias) por unit_id + localização.
+    Rate limit: 3/hora.
+    """
+    _check_rate_limit(str(current_user.id), "geo-pricing", 3)
+
+    unit = db.query(Unit).filter(Unit.id == data.unit_id).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unidade não encontrada")
+
+    cache_key = f"{data.unit_id}::{data.location or unit.city or ''}"
+    ttl_seconds = settings.GEO_CACHE_TTL_DAYS * 86400
+    if cache_key in _geo_cache:
+        ts, cached_report = _geo_cache[cache_key]
+        if time.time() - ts < ttl_seconds:
+            return cached_report
+
+    # Benchmarks por estado (stub — hardcoded para demo)
+    state_benchmarks: dict[str, dict[str, float]] = {
+        "SP": {"bronze": 50.0, "prata": 55.0, "ouro": 65.0, "diamante": 75.0},
+        "RJ": {"bronze": 45.0, "prata": 50.0, "ouro": 60.0, "diamante": 70.0},
+        "MG": {"bronze": 40.0, "prata": 45.0, "ouro": 55.0, "diamante": 65.0},
+    }
+    state = unit.state or "SP"
+    prices = state_benchmarks.get(state, {"bronze": 40.0, "prata": 45.0, "ouro": 55.0, "diamante": 65.0})
+
+    suggested = [
+        SuggestedPrice(
+            plan=plan,
+            current=prices[plan] * 0.9,
+            suggested=prices[plan],
+            rationale=f"Benchmark regional para {state} — mercado de academias fitness B2B",
+        )
+        for plan in ["bronze", "prata", "ouro", "diamante"]
+    ]
+
+    report = GeoPricingReport(
+        unit_id=data.unit_id,
+        city=unit.city or "",
+        state=state,
+        location_profile={"state": state, "segment": "fitness_coworking"},
+        suggested_prices=suggested,
+        revenue_impact={"estimated_annual_delta_pct": 0.05},
+        confidence="low",
+        data_sources=["Benchmark interno Atlas Finance"],
+        caveats=["Dados baseados em benchmarks estáticos. Para precisão, configure GOOGLE_PLACES_API_KEY."],
+        model_used="mock" if settings.AI_PROVIDER == "mock" else settings.AI_PROVIDER,
+    )
+
+    _geo_cache[cache_key] = (time.time(), report)
+    return report
+

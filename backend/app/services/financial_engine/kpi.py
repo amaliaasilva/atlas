@@ -120,6 +120,41 @@ def calculate_burn_rate(result: PeriodResult) -> float:
     return round(abs(min(0.0, result.net_result)), 2)
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Professores necessários (GAP-06)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def calculate_teachers_needed(
+    break_even_occupancy_pct: float,
+    capacity_hours_month: float,
+    classes_per_teacher_per_week: float = 2.0,
+    weeks_per_month: float = 4.33,
+) -> dict:
+    """
+    Número de educadores físicos necessários para cobrir o break-even.
+
+    Fórmula da planilha "Ocupação e unit economics 2.0":
+        BE_classes = break_even_occupancy_pct × capacity_hours_month
+        professores = ceil(BE_classes / (classes_per_teacher_per_week × weeks_per_month × alunos_por_prof))
+
+    Cenários:
+        pessimistic: 1.0 alunos/prof
+        medium:      1.5 alunos/prof
+        optimistic:  2.0 alunos/prof
+    """
+    be_classes = break_even_occupancy_pct * capacity_hours_month
+    base_capacity_per_teacher = classes_per_teacher_per_week * weeks_per_month
+    results = {}
+    for scenario, ratio in [("pessimistic", 1.0), ("medium", 1.5), ("optimistic", 2.0)]:
+        divisor = base_capacity_per_teacher * ratio
+        if divisor > 0 and be_classes > 0:
+            results[f"teachers_needed_{scenario}"] = math.ceil(be_classes / divisor)
+        else:
+            results[f"teachers_needed_{scenario}"] = 0
+    return results
+
+
 def calculate_payback_months(
     total_capex: float, period_results: list[PeriodResult]
 ) -> int | None:

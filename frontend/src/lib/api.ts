@@ -7,6 +7,7 @@ import type {
   ImportJob, AuditLog, User,
   FinancingContract, FinancingContractInput,
   ServicePlan, ServicePlanInput,
+  DREResponse, AuditTraceResponse, AnnualSummaryResponse, PortfolioResponse,
 } from '@/types/api';
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -83,6 +84,8 @@ export const versionsApi = {
     api.post<BudgetVersion>(`/budget-versions/${id}/publish`).then((r) => r.data),
   archive: (id: string): Promise<BudgetVersion> =>
     api.post<BudgetVersion>(`/budget-versions/${id}/archive`).then((r) => r.data),
+  clone: (id: string, newName?: string): Promise<BudgetVersion> =>
+    api.post<BudgetVersion>(`/budget-versions/${id}/clone`, { new_name: newName }).then((r) => r.data),
 };
 
 // ── Assumptions ──────────────────────────────────────────────────────────────
@@ -96,6 +99,16 @@ export const assumptionsApi = {
     api.get<AssumptionValue[]>(`/assumptions/values/${version_id}`).then((r) => r.data),
   bulkUpsert: (version_id: string, values: Partial<AssumptionValue>[]): Promise<{ updated: number }> =>
     api.post<{ updated: number }>(`/assumptions/values/${version_id}/bulk`, values).then((r) => r.data),
+  quickAdd: (data: {
+    budget_version_id: string;
+    business_id: string;
+    name: string;
+    value: number;
+    category_code: string;
+    data_type?: string;
+    growth_rule?: object | null;
+  }): Promise<{ definition_id: string; code: string; value_id: string }> =>
+    api.post('/assumptions/quick-add', data).then((r) => r.data),
 };
 
 // ── Calculations ──────────────────────────────────────────────────────────────
@@ -126,6 +139,26 @@ export const dashboardApi = {
         params: { scenario_id, metric },
       })
       .then((r) => r.data),
+  // GAP-09: Novos endpoints de dashboard
+  dre: (version_id: string): Promise<DREResponse> =>
+    api.get<DREResponse>(`/dashboard/unit/${version_id}/dre`).then((r) => r.data),
+  auditTrace: (version_id: string): Promise<AuditTraceResponse> =>
+    api.get<AuditTraceResponse>(`/dashboard/unit/${version_id}/audit`).then((r) => r.data),
+  annual: (business_id: string, scenario_id: string, unit_ids: string[] = []): Promise<AnnualSummaryResponse> =>
+    api
+      .get<AnnualSummaryResponse>(`/dashboard/business/${business_id}/annual`, {
+        params: { scenario_id, ...(unit_ids.length > 0 ? { unit_ids } : {}) },
+      })
+      .then((r) => r.data),
+  portfolio: (business_id: string, scenario_id: string): Promise<PortfolioResponse> =>
+    api
+      .get<PortfolioResponse>(`/dashboard/business/${business_id}/portfolio`, {
+        params: { scenario_id },
+      })
+      .then((r) => r.data),
+  // Sprint 4: Split de receita franqueador/franqueado
+  revenueSplit: (version_id: string): Promise<import('@/types/api').RevenueSplitResponse> =>
+    api.get(`/dashboard/unit/${version_id}/split`).then((r) => r.data),
 };
 
 // ── Reports ───────────────────────────────────────────────────────────────────
@@ -191,4 +224,36 @@ export const servicePlansApi = {
     api.patch<ServicePlan>(`/service-plans/${id}`, data).then((r) => r.data),
   delete: (id: string): Promise<void> =>
     api.delete(`/service-plans/${id}`).then(() => {}),
+};
+
+// ── Sprint 4: Split de Receita + Benefícios Personal ─────────────────────────
+
+export const franchiseFeeApi = {
+  getConfig: (business_id: string): Promise<import('@/types/api').FranchiseFeeConfig> =>
+    api.get(`/franchise-fee-configs/${business_id}`).then((r) => r.data),
+  upsert: (data: { business_id: string; platform_fee_pct: number; referral_commission_pct: number }) =>
+    api.put('/franchise-fee-configs', data).then((r) => r.data),
+};
+
+export const benefitTiersApi = {
+  list: (business_id: string): Promise<import('@/types/api').PersonalBenefitTier[]> =>
+    api.get('/personal-benefit-tiers', { params: { business_id } }).then((r) => r.data),
+  upsert: (data: { service_plan_id: string; monthly_kit_value: number; insurance_value: number; bonus_pct_on_extra: number }) =>
+    api.put('/personal-benefit-tiers', data).then((r) => r.data),
+};
+
+// ── Sprint 6: AI Layer ────────────────────────────────────────────────────────
+
+export const aiApi = {
+  sanityCheck: (version_id: string): Promise<import('@/types/api').AuditReport> =>
+    api.post(`/ai/sanity-check/${version_id}`).then((r) => r.data),
+  scenarioCopilot: (data: {
+    budget_version_id: string;
+    command: string;
+    dry_run?: boolean;
+    confirmed?: boolean;
+  }): Promise<import('@/types/api').CopilotScenarioResponse> =>
+    api.post('/ai/scenario-copilot', data).then((r) => r.data),
+  geoPricing: (unit_id: string, location?: string): Promise<import('@/types/api').GeoPricingReport> =>
+    api.post('/ai/geo-pricing', { unit_id, location }).then((r) => r.data),
 };

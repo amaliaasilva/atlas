@@ -6,6 +6,8 @@ import { useDashboardFilters } from '@/store/dashboard';
 import { MetricCard, ProgressCard } from '@/components/dashboard/MetricCard';
 import { OccupancyLineChart } from '@/components/charts/LineCharts';
 import { BulletChartItem } from '@/components/charts/UnitsBarChart';
+import { OccupancyGauge } from '@/components/charts/OccupancyGauge';
+import { BreakevenBullet } from '@/components/charts/BreakevenBullet';
 import { NoFiltersState, MetricCardSkeleton, ChartSkeleton } from '@/components/dashboard/EmptyState';
 import { Topbar } from '@/components/layout/Topbar';
 import { formatPercent, formatNumber } from '@/lib/utils';
@@ -40,23 +42,11 @@ export default function OcupacaoPage() {
     ? filteredTs.reduce((acc, d) => acc + (d.occupancy_rate ?? 0), 0) / filteredTs.length
     : 0;
 
-  // Tendência: segunda metade vs primeira
-  const half = Math.floor(filteredTs.length / 2);
-  const firstHalfOcc = half > 0
-    ? filteredTs.slice(0, half).reduce((acc, d) => acc + (d.occupancy_rate ?? 0), 0) / half
-    : 0;
-  const secondHalfOcc = half > 0
-    ? filteredTs.slice(half).reduce((acc, d) => acc + (d.occupancy_rate ?? 0), 0) / Math.max(filteredTs.length - half, 1)
-    : 0;
-  const occTrend = firstHalfOcc > 0 ? (secondHalfOcc - firstHalfOcc) / firstHalfOcc : 0;
-
-  // Projeção (simples: extrapola a tendência para os próximos 3 meses)
-  const projectedOccupancy = currentOccupancy * (1 + occTrend);
-
-  // Breakeven occupancy (relativo)
-  const breakevenOccupancyRate = currentStudents > 0 && currentOccupancy > 0
-    ? (breakevenStudents * currentOccupancy) / currentStudents
-    : 0;
+  // Break-even occupancy — usa diretamente o valor calculado pelo engine (P0.7)
+  const breakevenOccupancyRate =
+    latestPeriod?.break_even_occupancy_pct ??
+    dashboard?.kpis?.break_even_occupancy_pct ??
+    0;
 
   const gapToBreakeven = breakevenStudents - currentStudents;
   const occupancyGap = Math.max(breakevenOccupancyRate - currentOccupancy, 0);
@@ -148,23 +138,31 @@ export default function OcupacaoPage() {
                 </div>
               )}
 
-              {/* Bullet chart e comparação */}
+              {/* Gauge + Bullet breakeven */}
               <Card title="Ocupação vs Breakeven — Visão Visual">
                 {filteredTs.length > 0 ? (
                   <div className="space-y-4">
+                    {/* Gauge semicircular de ocupação */}
+                    <div className="flex justify-center py-2">
+                      <OccupancyGauge
+                        occupancyRate={currentOccupancy}
+                        breakEvenRate={breakevenOccupancyRate}
+                        size={200}
+                      />
+                    </div>
+
+                    {/* Bullet bar de ocupação vs BE */}
+                    <BreakevenBullet
+                      current={currentOccupancy}
+                      breakEven={breakevenOccupancyRate}
+                    />
+
                     <BulletChartItem
                       label="Horas Vendidas"
                       current={currentStudents}
                       breakeven={Math.round(breakevenStudents)}
                       max={Math.max(currentStudents * 1.5, breakevenStudents * 1.2, 1)}
                       formatter={(v) => `${Math.round(v)} horas/slots`}
-                    />
-                    <BulletChartItem
-                      label="Taxa de Ocupação"
-                      current={currentOccupancy * 100}
-                      breakeven={breakevenOccupancyRate * 100}
-                      max={100}
-                      formatter={(v) => `${v.toFixed(1)}%`}
                     />
                     <BulletChartItem
                       label="Ocupação Projetada (próx. mês)"

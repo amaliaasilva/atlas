@@ -11,6 +11,7 @@ import { NoFiltersState, MetricCardSkeleton, ChartSkeleton } from '@/components/
 import { Topbar } from '@/components/layout/Topbar';
 import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
 import { Building2, Trophy, TrendingDown, Minus } from 'lucide-react';
+import { LineChart, Line, ResponsiveContainer } from 'recharts';
 
 const METRICS = [
   { key: 'net_result', label: 'Lucro Líquido', formatter: formatCurrency },
@@ -201,6 +202,7 @@ export default function UnidadesPage() {
                     <th className="text-right text-xs font-semibold text-gray-500 px-6 py-3 uppercase tracking-wider">
                       {METRICS.find((m) => m.key === selectedMetric)?.label}
                     </th>
+                    <th className="text-center text-xs font-semibold text-gray-500 px-4 py-3 uppercase tracking-wider">Tendência</th>
                     <th className="text-right text-xs font-semibold text-gray-500 px-6 py-3 uppercase tracking-wider">% da Rede</th>
                   </tr>
                 </thead>
@@ -232,6 +234,25 @@ export default function UnidadesPage() {
                         </td>
                         <td className={`px-6 py-3.5 text-sm text-right font-bold tabular-nums ${u.total >= 0 ? 'text-gray-900' : 'text-rose-500'}`}>
                           {metricFormatter(u.total)}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          {Object.keys(u.series).length > 1 ? (
+                            <div className="w-20 h-8 mx-auto">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={Object.entries(u.series).map(([p, v]) => ({ p, v }))}>
+                                  <Line
+                                    type="monotone"
+                                    dataKey="v"
+                                    stroke={u.total >= 0 ? '#10b981' : '#f43f5e'}
+                                    strokeWidth={1.5}
+                                    dot={false}
+                                  />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          ) : (
+                            <span className="text-gray-300 text-xs mx-auto block text-center">—</span>
+                          )}
                         </td>
                         <td className="px-6 py-3.5 text-sm text-right text-gray-500 tabular-nums">
                           {formatPercent(share)}

@@ -6,30 +6,13 @@ import { useDashboardFilters } from '@/store/dashboard';
 import { MetricCard } from '@/components/dashboard/MetricCard';
 import { AnnualAreaChart } from '@/components/charts/AreaGrowthChart';
 import { AreaGrowthChart } from '@/components/charts/AreaGrowthChart';
+import { AnnualSummaryChart } from '@/components/charts/AnnualSummaryChart';
 import { NoFiltersState, MetricCardSkeleton, ChartSkeleton } from '@/components/dashboard/EmptyState';
 import { Topbar } from '@/components/layout/Topbar';
 import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
 import { getRevenue } from '@/types/api';
+import { aggregateByYear } from '@/lib/utils/dashboard';
 import { TrendingUp, Building2, BarChart2 } from 'lucide-react';
-
-// Agrega time_series mensal em sumário anual
-function aggregateByYear(ts: Array<{ period: string; revenue: number; profit: number }>) {
-  const byYear: Record<string, { revenue: number; profit: number }> = {};
-  for (const d of ts) {
-    const year = d.period.split('-')[0];
-    if (!byYear[year]) byYear[year] = { revenue: 0, profit: 0 };
-    byYear[year].revenue += d.revenue;
-    byYear[year].profit += d.profit;
-  }
-  return Object.entries(byYear)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([year, v]) => ({
-      year,
-      revenue: Math.round(v.revenue),
-      profit: Math.round(v.profit),
-      margin: v.revenue > 0 ? v.profit / v.revenue : 0,
-    }));
-}
 
 export default function CrescimentoPage() {
   const { businessId, scenarioId, year, periodStart, periodEnd } = useDashboardFilters();
@@ -165,9 +148,9 @@ export default function CrescimentoPage() {
           ) : (
             <>
               {annualData.length > 0 ? (
-                <AnnualAreaChart
+                <AnnualSummaryChart
                   data={annualData}
-                  title="Evolução Anual — Receita e Lucro"
+                  title="Resumo Anual — Receita, Lucro e Margem"
                 />
               ) : (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">

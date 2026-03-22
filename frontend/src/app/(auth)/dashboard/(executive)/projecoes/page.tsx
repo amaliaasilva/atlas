@@ -15,23 +15,7 @@ import { TrendingUp, BarChart2, Target, LineChart as LineChartIcon } from 'lucid
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-function aggregateByYear(ts: Array<{ period: string; revenue: number; profit: number }>) {
-  const byYear: Record<string, { revenue: number; profit: number }> = {};
-  for (const d of ts) {
-    const year = d.period.split('-')[0];
-    if (!byYear[year]) byYear[year] = { revenue: 0, profit: 0 };
-    byYear[year].revenue += d.revenue;
-    byYear[year].profit += d.profit;
-  }
-  return Object.entries(byYear)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([year, v]) => ({
-      year,
-      revenue: Math.round(v.revenue),
-      profit: Math.round(v.profit),
-      margin: v.revenue > 0 ? v.profit / v.revenue : 0,
-    }));
-}
+import { aggregateByYear } from '@/lib/utils/dashboard';
 
 const SCENARIO_LABELS: Record<string, string> = {
   conservative: 'Pessimista',
