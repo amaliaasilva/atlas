@@ -5,13 +5,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { assumptionsApi, versionsApi, calculationsApi, financingContractsApi, aiApi, auditApi } from '@/lib/api';
 import { useNavStore } from '@/store/auth';
-import type { AssumptionValue, FinancingContract, AssumptionDefinition, CopilotScenarioResponse, AuditLog } from '@/types/api';
+import type {
+  AssumptionValue,
+  FinancingContract,
+  AssumptionDefinition,
+  CopilotScenarioResponse,
+  AuditLog,
+  AssumptionDefinitionUpdateInput,
+} from '@/types/api';
 import { Topbar } from '@/components/layout/Topbar';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
 import { LoadingScreen } from '@/components/ui/Spinner';
-import { formatPeriod, getErrorMessage } from '@/lib/utils';
-import { Save, PlayCircle, ChevronDown, ChevronRight, Plus, Trash2, TrendingUp, Zap, History } from 'lucide-react';
+import { cn, formatPeriod, getErrorMessage } from '@/lib/utils';
+import { Save, PlayCircle, ChevronDown, ChevronRight, Plus, Trash2, TrendingUp, Zap, History, SlidersHorizontal, X } from 'lucide-react';
 
 // ── Gera lista de períodos entre dois meses ────────────────────────────────────
 function generatePeriods(start: string, end: string): string[] {
@@ -71,6 +78,18 @@ function growthRuleLabel(rule: AssumptionDefinition['growth_rule']): string | nu
   return null;
 }
 
+function categoryTone(categoryCode?: string): { header: string; dot: string } {
+  if (categoryCode?.includes('RECEITA')) {
+    return { header: 'bg-emerald-50 hover:bg-emerald-100', dot: 'bg-emerald-500' };
+  }
+  if (categoryCode?.includes('CAPEX')) {
+    return { header: 'bg-amber-50 hover:bg-amber-100', dot: 'bg-amber-500' };
+  }
+  return { header: 'bg-rose-50 hover:bg-rose-100', dot: 'bg-rose-500' };
+}
+
+type RuleTypeOption = 'flat' | 'compound_growth' | 'curve';
+
 export default function BudgetVersionClient() {
   const { versionId } = useParams<{ versionId: string }>();
   const router = useRouter();
@@ -90,8 +109,21 @@ export default function BudgetVersionClient() {
     down_payment_pct: 0,
   });
   const [showAddAssumption, setShowAddAssumption] = useState(false);
-  const [newAssumption, setNewAssumption] = useState({ name: '', value: 0, category_code: 'CUSTO_FIXO' });
+  const [newAssumption, setNewAssumption] = useState({
+    name: '',
+    value: 0,
+    category_code: 'CUSTO_FIXO',
+    growth_type: 'flat' as RuleTypeOption,
+    growth_rate_pct: 0,
+    curve_values: '',
+  });
   const [showHistory, setShowHistory] = useState(false);
+  const [editingRuleDef, setEditingRuleDef] = useState<AssumptionDefinition | null>(null);
+  const [ruleForm, setRuleForm] = useState({
+    type: 'flat' as RuleTypeOption,
+    ratePct: 0,
+    curveValues: '',
+  });
 
   const { businessId } = useNavStore();
 
@@ -148,16 +180,47 @@ export default function BudgetVersionClient() {
         name: newAssumption.name,
         value: newAssumption.value,
         category_code: newAssumption.category_code,
+        growth_rule:
+          newAssumption.growth_type === 'compound_growth'
+            ? { type: 'compound_growth', rate: newAssumption.growth_rate_pct / 100 }
+            : newAssumption.growth_type === 'curve'
+              ? {
+                  type: 'curve',
+                  values: newAssumption.curve_values
+                    .split(',')
+                    .map((v) => parseFloat(v.trim()))
+                    .filter((v) => !Number.isNaN(v)),
+                }
+              : { type: 'flat' },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assumption-values', versionId] });
       queryClient.invalidateQueries({ queryKey: ['assumption-definitions'] });
       setShowAddAssumption(false);
-      setNewAssumption({ name: '', value: 0, category_code: 'CUSTO_FIXO' });
+      setNewAssumption({
+        name: '',
+        value: 0,
+        category_code: 'CUSTO_FIXO',
+        growth_type: 'flat',
+        growth_rate_pct: 0,
+        curve_values: '',
+      });
       setToast('Premissa adicionada!');
       setTimeout(() => setToast(''), 3000);
     },
     onError: (err) => setToast(`Erro: ${getErrorMessage(err)}`),
+  });
+
+  const updateRuleMutation = useMutation({
+    mutationFn: ({ definitionId, growthRule }: { definitionId: string; growthRule: AssumptionDefinitionUpdateInput['growth_rule'] }) =>
+      assumptionsApi.updateDefinition(definitionId, { growth_rule: growthRule }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assumption-definitions'] });
+      setEditingRuleDef(null);
+      setToast('Regra de crescimento atualizada.');
+      setTimeout(() => setToast(''), 3000);
+    },
+    onError: (err) => setToast(`Erro ao atualizar regra: ${getErrorMessage(err)}`),
   });
 
   const deleteContractMutation = useMutation({
@@ -269,6 +332,38 @@ export default function BudgetVersionClient() {
       next.has(catId) ? next.delete(catId) : next.add(catId);
       return next;
     });
+  };
+
+  const openRuleEditor = (def: AssumptionDefinition) => {
+    const currentRule = def.growth_rule;
+    const type: RuleTypeOption = (currentRule?.type as RuleTypeOption) || 'flat';
+    setEditingRuleDef(def);
+    setRuleForm({
+      type,
+      ratePct: typeof currentRule?.rate === 'number' ? Number((currentRule.rate * 100).toFixed(2)) : 0,
+      curveValues: Array.isArray(currentRule?.values) ? currentRule.values.join(', ') : '',
+    });
+  };
+
+  const saveRuleEdit = () => {
+    if (!editingRuleDef) return;
+    let growthRule: AssumptionDefinitionUpdateInput['growth_rule'] = null;
+
+    if (ruleForm.type === 'compound_growth') {
+      growthRule = { type: 'compound_growth', rate: ruleForm.ratePct / 100 };
+    } else if (ruleForm.type === 'curve') {
+      growthRule = {
+        type: 'curve',
+        values: ruleForm.curveValues
+          .split(',')
+          .map((v) => parseFloat(v.trim()))
+          .filter((v) => !Number.isNaN(v)),
+      };
+    } else {
+      growthRule = { type: 'flat' };
+    }
+
+    updateRuleMutation.mutate({ definitionId: editingRuleDef.id, growthRule });
   };
 
   // Bulk upsert — salva apenas mudanças pendentes
@@ -420,6 +515,14 @@ export default function BudgetVersionClient() {
             Auto-expandido (growth_rule)
           </span>
           <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3 rounded bg-rose-100 border border-rose-300" />
+            Custos e despesas
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3 rounded bg-emerald-100 border border-emerald-300" />
+            Receita
+          </span>
+          <span className="flex items-center gap-1">
             <TrendingUp className="h-3 w-3 text-emerald-500" />
             Regra de crescimento ativa
           </span>
@@ -453,9 +556,9 @@ export default function BudgetVersionClient() {
         </div>
 
         {showAddAssumption && (
-          <div className="mb-3 p-4 rounded-lg border border-gray-200 bg-gray-50 grid grid-cols-3 gap-3">
+          <div className="mb-3 p-4 rounded-lg border border-gray-200 bg-gray-50 grid grid-cols-4 gap-3">
             <input
-              className="col-span-3 rounded border border-gray-300 px-3 py-1.5 text-sm"
+              className="col-span-4 rounded border border-gray-300 px-3 py-1.5 text-sm"
               placeholder="Nome da premissa (ex: Taxa de Limpeza)"
               value={newAssumption.name}
               onChange={(e) => setNewAssumption((p) => ({ ...p, name: e.target.value }))}
@@ -482,6 +585,42 @@ export default function BudgetVersionClient() {
                 ))}
               </select>
             </label>
+            <label className="text-xs text-gray-500">
+              Regra
+              <select
+                className="mt-1 block w-full rounded border border-gray-300 px-2 py-1.5 text-sm bg-white"
+                value={newAssumption.growth_type}
+                onChange={(e) => setNewAssumption((p) => ({ ...p, growth_type: e.target.value as RuleTypeOption }))}
+              >
+                <option value="flat">Sem crescimento</option>
+                <option value="compound_growth">Crescimento composto anual</option>
+                <option value="curve">Curva anual (lista)</option>
+              </select>
+            </label>
+            {newAssumption.growth_type === 'compound_growth' ? (
+              <label className="text-xs text-gray-500">
+                Taxa anual (%)
+                <input
+                  type="number"
+                  step="0.1"
+                  className="mt-1 block w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  value={newAssumption.growth_rate_pct}
+                  onChange={(e) => setNewAssumption((p) => ({ ...p, growth_rate_pct: parseFloat(e.target.value) || 0 }))}
+                />
+              </label>
+            ) : (
+              <label className="text-xs text-gray-500">
+                Curva (valores por ano)
+                <input
+                  type="text"
+                  className="mt-1 block w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  value={newAssumption.curve_values}
+                  onChange={(e) => setNewAssumption((p) => ({ ...p, curve_values: e.target.value }))}
+                  placeholder="Ex: 12000, 14000, 16000"
+                  disabled={newAssumption.growth_type !== 'curve'}
+                />
+              </label>
+            )}
             <div className="flex items-end gap-2">
               <Button
                 size="sm"
@@ -494,6 +633,68 @@ export default function BudgetVersionClient() {
               <Button variant="secondary" size="sm" onClick={() => setShowAddAssumption(false)}>
                 Cancelar
               </Button>
+            </div>
+          </div>
+        )}
+
+        {editingRuleDef && (
+          <div className="fixed inset-0 z-40 bg-black/30 flex items-center justify-center p-4">
+            <div className="w-full max-w-md rounded-xl bg-white border border-gray-200 shadow-xl">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Regra de crescimento</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{editingRuleDef.name}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingRuleDef(null)}
+                  className="text-gray-400 hover:text-gray-700"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="px-4 py-4 space-y-3">
+                <label className="text-xs text-gray-600 block">
+                  Tipo de regra
+                  <select
+                    value={ruleForm.type}
+                    onChange={(e) => setRuleForm((prev) => ({ ...prev, type: e.target.value as RuleTypeOption }))}
+                    className="mt-1 w-full rounded border border-gray-300 px-2 py-2 text-sm bg-white"
+                  >
+                    <option value="flat">Sem crescimento</option>
+                    <option value="compound_growth">Crescimento composto anual</option>
+                    <option value="curve">Curva anual</option>
+                  </select>
+                </label>
+                {ruleForm.type === 'compound_growth' && (
+                  <label className="text-xs text-gray-600 block">
+                    Taxa anual (%)
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={ruleForm.ratePct}
+                      onChange={(e) => setRuleForm((prev) => ({ ...prev, ratePct: parseFloat(e.target.value) || 0 }))}
+                      className="mt-1 w-full rounded border border-gray-300 px-2 py-2 text-sm"
+                    />
+                  </label>
+                )}
+                {ruleForm.type === 'curve' && (
+                  <label className="text-xs text-gray-600 block">
+                    Valores por ano (separados por vírgula)
+                    <input
+                      type="text"
+                      value={ruleForm.curveValues}
+                      onChange={(e) => setRuleForm((prev) => ({ ...prev, curveValues: e.target.value }))}
+                      placeholder="Ex: 12000, 14000, 16500"
+                      className="mt-1 w-full rounded border border-gray-300 px-2 py-2 text-sm"
+                    />
+                  </label>
+                )}
+              </div>
+              <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setEditingRuleDef(null)}>Cancelar</Button>
+                <Button size="sm" onClick={saveRuleEdit} loading={updateRuleMutation.isPending}>Salvar regra</Button>
+              </div>
             </div>
           </div>
         )}
@@ -520,6 +721,7 @@ export default function BudgetVersionClient() {
               {categories
                 ?.sort((a, b) => (a.sort_order ?? a.display_order ?? 0) - (b.sort_order ?? b.display_order ?? 0))
                 .map((cat) => {
+                  const tone = categoryTone(cat.code);
                   const catDefs = definitions
                     ?.filter((d) => d.category_id === cat.id)
                     .sort((a, b) => (a.sort_order ?? a.display_order ?? 0) - (b.sort_order ?? b.display_order ?? 0)) ?? [];
@@ -528,14 +730,14 @@ export default function BudgetVersionClient() {
                   const collapsed = collapsedCategories.has(cat.id);
 
                   return [
-                    // Linha de categoria
                     <tr
                       key={`cat-${cat.id}`}
-                      className="bg-gray-100 cursor-pointer hover:bg-gray-200 transition-colors"
+                      className={`${tone.header} cursor-pointer transition-colors`}
                       onClick={() => toggleCategory(cat.id)}
                     >
                       <td className="px-4 py-2 sticky left-0 bg-inherit" colSpan={visiblePeriods.length + 2}>
                         <div className="flex items-center gap-2">
+                          <span className={`h-2 w-2 rounded-full ${tone.dot}`} />
                           {collapsed
                             ? <ChevronRight className="h-3.5 w-3.5 text-gray-500" />
                             : <ChevronDown className="h-3.5 w-3.5 text-gray-500" />}
@@ -543,30 +745,36 @@ export default function BudgetVersionClient() {
                         </div>
                       </td>
                     </tr>,
-                    // Linhas das definições
                     ...(collapsed ? [] : catDefs.map((def) => (
-                      <tr key={def.id} className="border-b border-gray-50 hover:bg-blue-50/30 group">
-                        <td className="px-4 py-2 sticky left-0 bg-white group-hover:bg-blue-50/30 transition-colors border-r border-gray-100">
+                      <tr key={def.id} className="border-b border-gray-100 hover:bg-slate-50 group">
+                        <td className="px-4 py-2 sticky left-0 bg-white group-hover:bg-slate-50 transition-colors border-r border-gray-100">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-gray-700">{def.name}</span>
+                            <span className="text-xs font-semibold text-gray-800">{def.name}</span>
                             {def.unit_of_measure && (
                               <span className="text-xs text-gray-400">({def.unit_of_measure})</span>
                             )}
                             {def.periodicity === 'static' && (
-                              <span className="text-xs bg-gray-100 text-gray-400 px-1 rounded">fixo</span>
+                              <span className="text-xs bg-gray-100 text-gray-500 px-1 rounded">fixo</span>
                             )}
                           </div>
                         </td>
-                        {/* Coluna da regra de crescimento */}
                         <td className="px-1 py-1 text-center">
-                          {def.growth_rule ? (
-                            <span className="inline-flex items-center gap-0.5 text-xs text-emerald-600 font-medium whitespace-nowrap">
-                              <TrendingUp className="h-2.5 w-2.5" />
-                              {growthRuleLabel(def.growth_rule)}
-                            </span>
-                          ) : (
-                            <span className="text-gray-300 text-xs">—</span>
-                          )}
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 text-xs text-gray-600 hover:text-brand-700 rounded px-1 py-0.5 hover:bg-brand-50"
+                            onClick={() => openRuleEditor(def)}
+                            title="Criar ou adaptar regra de crescimento"
+                          >
+                            <SlidersHorizontal className="h-3 w-3" />
+                            {def.growth_rule ? (
+                              <span className="inline-flex items-center gap-0.5 text-xs text-emerald-700 font-medium whitespace-nowrap">
+                                <TrendingUp className="h-2.5 w-2.5" />
+                                {growthRuleLabel(def.growth_rule) ?? 'Regra'}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-400">Definir</span>
+                            )}
+                          </button>
                         </td>
                         {visiblePeriods.map((period) => {
                           const { value: val, isAuto } = getCellValue(def.code, period, def.periodicity);
@@ -574,6 +782,7 @@ export default function BudgetVersionClient() {
                             ? `${def.code}::static`
                             : `${def.code}::${period}`;
                           const changed = pendKey in pendingChanges;
+
                           return (
                             <td key={period} className="px-1 py-1 text-center">
                               <input
@@ -583,16 +792,15 @@ export default function BudgetVersionClient() {
                                 key={`${def.code}::${period}::${val}`}
                                 onChange={(e) => handleCellChange(def.code, period, e.target.value, def.periodicity)}
                                 title={isAuto && def.growth_rule ? `Auto: ${growthRuleLabel(def.growth_rule)}` : undefined}
-                                className={`
-                                  w-full text-right text-xs px-2 py-1 rounded border
-                                  focus:outline-none focus:ring-1 focus:ring-brand-400
-                                  ${changed
+                                className={cn(
+                                  'w-full text-right text-xs font-medium px-2 py-1 rounded border',
+                                  'focus:outline-none focus:ring-1 focus:ring-brand-400',
+                                  changed
                                     ? 'bg-amber-50 border-amber-300 text-amber-800'
                                     : isAuto
-                                      ? 'bg-blue-50/40 border-transparent text-blue-500 italic cursor-text'
-                                      : 'bg-transparent border-transparent hover:border-gray-300 text-gray-600'
-                                  }
-                                `}
+                                      ? 'bg-blue-50 border-blue-200 text-blue-700'
+                                      : 'bg-white border-transparent hover:border-gray-300 text-gray-700',
+                                )}
                               />
                             </td>
                           );

@@ -93,6 +93,23 @@ export interface AssumptionDefinition {
   } | null;
 }
 
+export interface AssumptionDefinitionUpdateInput {
+  name?: string;
+  description?: string;
+  data_type?: AssumptionDefinition['data_type'];
+  unit_of_measure?: string;
+  default_value?: number;
+  editable?: boolean;
+  periodicity?: string;
+  sort_order?: number;
+  growth_rule?: {
+    type: 'compound_growth' | 'curve' | 'flat';
+    rate?: number;
+    base_year?: number;
+    values?: number[];
+  } | null;
+}
+
 export interface AssumptionValue {
   id?: string;
   assumption_definition_id: string;

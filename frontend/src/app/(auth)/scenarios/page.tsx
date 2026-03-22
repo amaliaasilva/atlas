@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { scenariosApi, versionsApi } from '@/lib/api';
+import { scenariosApi, unitsApi, versionsApi } from '@/lib/api';
 import { useNavStore } from '@/store/auth';
 import { Topbar } from '@/components/layout/Topbar';
 import { LoadingScreen } from '@/components/ui/Spinner';
@@ -94,8 +94,9 @@ export default function ScenariosPage() {
   const qUnitId = params.get('unit_id') ?? '';
   const { businessId, unitId: storeUnitId, setScenario, setVersion } = useNavStore();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [unitFilterId, setUnitFilterId] = useState<string>(qUnitId || storeUnitId || 'all');
 
-  const effectiveUnitId = qUnitId || storeUnitId || '';
+  const effectiveUnitId = unitFilterId === 'all' ? '' : unitFilterId;
 
   const { data: scenarios, isLoading } = useQuery({
     queryKey: ['scenarios', businessId],
@@ -103,10 +104,16 @@ export default function ScenariosPage() {
     enabled: !!businessId,
   });
 
+  const { data: units = [] } = useQuery({
+    queryKey: ['units-scenarios', businessId],
+    queryFn: () => unitsApi.list(businessId ?? ''),
+    enabled: !!businessId,
+  });
+
   const { data: versions } = useQuery({
-    queryKey: ['versions', effectiveUnitId],
-    queryFn: () => versionsApi.list(effectiveUnitId),
-    enabled: !!effectiveUnitId,
+    queryKey: ['versions-by-business-scenarios', businessId],
+    queryFn: () => versionsApi.listByBusiness(businessId ?? ''),
+    enabled: !!businessId,
   });
 
   if (isLoading) return <LoadingScreen />;
@@ -125,9 +132,27 @@ export default function ScenariosPage() {
           </Button>
         </div>
 
+        <div className="mb-4 max-w-xs">
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Filtro de unidade</label>
+          <select
+            value={unitFilterId}
+            onChange={(e) => setUnitFilterId(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+          >
+            <option value="all">Todas as unidades</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </select>
+        </div>
+
         <div className="space-y-4">
           {scenarios?.map((scenario) => {
-            const scenarioVersions = versions?.filter((v) => v.scenario_id === scenario.id) ?? [];
+            const scenarioVersions = versions?.filter((v) => {
+              if (v.scenario_id !== scenario.id) return false;
+              if (effectiveUnitId && v.unit_id !== effectiveUnitId) return false;
+              return true;
+            }) ?? [];
             return (
               <div key={scenario.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <div className="flex items-center gap-4 px-5 py-4 border-b border-gray-100">
@@ -148,7 +173,7 @@ export default function ScenariosPage() {
                     size="sm"
                     onClick={() => {
                       setScenario(scenario.id);
-                      router.push(`/budget?scenario_id=${scenario.id}&unit_id=${effectiveUnitId}`);
+                      router.push(`/budget?scenario_id=${scenario.id}${effectiveUnitId ? `&unit_id=${effectiveUnitId}` : ''}`);
                     }}
                   >
                     <Plus className="h-3 w-3" /> Nova Versão

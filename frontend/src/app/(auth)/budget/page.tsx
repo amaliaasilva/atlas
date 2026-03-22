@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { unitsApi, versionsApi, scenariosApi } from '@/lib/api';
 import { useNavStore } from '@/store/auth';
 import { Topbar } from '@/components/layout/Topbar';
@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { EmptyState } from '@/components/dashboard/EmptyState';
 import type { BudgetVersion, Unit, Scenario } from '@/types/api';
-import { FileSpreadsheet, Plus, ChevronRight, MapPin, Calendar, Lock, Edit3, Archive, X } from 'lucide-react';
+import { FileSpreadsheet, Plus, ChevronRight, MapPin, Calendar, Lock, Edit3, Archive, X, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const STATUS_META: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
@@ -23,9 +23,17 @@ const STATUS_META: Record<string, { label: string; icon: React.ReactNode; cls: s
 
 function formatDateBr(dateStr?: string | null): string {
   if (!dateStr) return '—';
+  const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return dateStr;
   return d.toLocaleDateString('pt-BR');
+}
+
+function toDateInputValue(dateStr?: string | null): string {
+  if (!dateStr) return '';
+  const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : '';
 }
 
 function getCurrentYearMonth(): string {
@@ -140,8 +148,12 @@ function CreateVersionModal({ units, scenarios, onClose, onCreated }: CreateVers
 
 export default function BudgetPage() {
   const router = useRouter();
-  const { businessId, scenarioId, setScenario, setVersion } = useNavStore();
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
+  const { businessId, setScenario, setVersion } = useNavStore();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string>('all');
+  const [openingDrafts, setOpeningDrafts] = useState<Record<string, string>>({});
 
   const { data: units = [], isLoading: loadingUnits } = useQuery({
     queryKey: ['units', businessId],
@@ -155,13 +167,31 @@ export default function BudgetPage() {
     enabled: !!businessId,
   });
 
+  useEffect(() => {
+    // O filtro padrão de Orçamentos deve mostrar todos os cenários para evitar confusão.
+    setSelectedScenarioId('all');
+  }, [businessId]);
+
+  useEffect(() => {
+    const urlScenarioId = searchParams.get('scenario_id');
+    if (urlScenarioId) setSelectedScenarioId(urlScenarioId);
+  }, [searchParams]);
+
+  const updateOpeningDateMutation = useMutation({
+    mutationFn: ({ unitId, openingDate }: { unitId: string; openingDate: string }) =>
+      unitsApi.update(unitId, { opening_date: openingDate }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['units', businessId] });
+    },
+  });
+
   // Buscar versões de TODAS as unidades ativas em paralelo
   const activeUnits = units.filter((u) => u.status !== 'closed');
 
   const versionsQueries = useQueries({
     queries: activeUnits.map((u) => ({
-      queryKey: ['versions', u.id, scenarioId],
-      queryFn: () => versionsApi.list(u.id, scenarioId || undefined),
+      queryKey: ['versions', u.id, selectedScenarioId],
+      queryFn: () => versionsApi.list(u.id, selectedScenarioId === 'all' ? undefined : selectedScenarioId),
       enabled: !!u.id,
     })),
   });
@@ -245,6 +275,27 @@ export default function BudgetPage() {
           </div>
         )}
 
+        {businessId && (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-[260px] flex-1">
+                <Select
+                  label="Cenário da listagem"
+                  value={selectedScenarioId}
+                  onChange={(e) => setSelectedScenarioId(e.target.value)}
+                  options={[
+                    { value: 'all', label: 'Todos os cenários' },
+                    ...scenarios.map((s) => ({ value: s.id, label: s.name })),
+                  ]}
+                />
+              </div>
+              <p className="text-xs text-gray-500 pb-1">
+                O filtro acima afeta somente esta tela. O contexto global de cenário continua preservado.
+              </p>
+            </div>
+          </div>
+        )}
+
         {businessId && nextOpening && (
           <div className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 via-cyan-50 to-white px-5 py-4">
             <p className="text-xs uppercase tracking-wide font-semibold text-blue-700">Próxima janela de abertura</p>
@@ -308,10 +359,35 @@ export default function BudgetPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <StatusBadge status={unit.status} />
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
+                      <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-500 bg-white border border-gray-200 px-2 py-1 rounded-full">
                         <Calendar className="h-3 w-3" />
-                        Abertura: {formatDateBr(unit.opening_date)}
-                      </span>
+                        <span>Abertura:</span>
+                        <input
+                          type="date"
+                          value={openingDrafts[unit.id] ?? toDateInputValue(unit.opening_date)}
+                          onChange={(e) =>
+                            setOpeningDrafts((prev) => ({
+                              ...prev,
+                              [unit.id]: e.target.value,
+                            }))
+                          }
+                          className="h-6 rounded border border-gray-200 px-1.5 text-[11px] text-gray-600"
+                        />
+                        <button
+                          type="button"
+                          className="text-brand-600 hover:text-brand-700 disabled:opacity-40"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const nextDate = openingDrafts[unit.id] ?? toDateInputValue(unit.opening_date);
+                            if (!nextDate || nextDate === toDateInputValue(unit.opening_date)) return;
+                            updateOpeningDateMutation.mutate({ unitId: unit.id, openingDate: nextDate });
+                          }}
+                          disabled={updateOpeningDateMutation.isPending}
+                          title="Salvar nova data de abertura"
+                        >
+                          <Save className="h-3 w-3" />
+                        </button>
+                      </div>
                       <span className="text-xs text-gray-400">{versions.length} versão{versions.length !== 1 ? 'ões' : ''}</span>
                     </div>
                   </div>

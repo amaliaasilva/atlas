@@ -16,6 +16,7 @@ from app.schemas.assumption import (
     AssumptionCategoryOut,
     AssumptionDefinitionCreate,
     AssumptionDefinitionOut,
+    AssumptionDefinitionUpdate,
     AssumptionValueCreate,
     AssumptionValueUpdate,
     AssumptionValueOut,
@@ -85,6 +86,29 @@ def create_definition(
 ):
     defn = AssumptionDefinition(**data.model_dump())
     db.add(defn)
+    db.commit()
+    db.refresh(defn)
+    return defn
+
+
+@router.patch("/definitions/{definition_id}", response_model=AssumptionDefinitionOut)
+def update_definition(
+    definition_id: str,
+    data: AssumptionDefinitionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    defn = (
+        db.query(AssumptionDefinition)
+        .filter(AssumptionDefinition.id == definition_id)
+        .first()
+    )
+    if not defn:
+        raise HTTPException(status_code=404, detail="Definição não encontrada")
+
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(defn, key, value)
+
     db.commit()
     db.refresh(defn)
     return defn

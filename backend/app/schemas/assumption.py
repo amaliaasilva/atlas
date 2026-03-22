@@ -39,6 +39,18 @@ class AssumptionDefinitionCreate(AssumptionDefinitionBase):
     category_id: str
 
 
+class AssumptionDefinitionUpdate(BaseModel):
+    name: str | None = Field(None, min_length=2, max_length=200)
+    description: str | None = None
+    data_type: str | None = None
+    unit_of_measure: str | None = None
+    default_value: float | None = None
+    editable: bool | None = None
+    periodicity: str | None = None
+    sort_order: int | None = None
+    growth_rule: dict | None = None
+
+
 class AssumptionDefinitionOut(AssumptionDefinitionBase):
     id: str
     business_id: str

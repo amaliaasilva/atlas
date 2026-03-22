@@ -2,6 +2,7 @@ import api from './api-client';
 import type {
   AuthTokens, Organization, Business, Unit, Scenario,
   BudgetVersion, AssumptionCategory, AssumptionDefinition,
+  AssumptionDefinitionUpdateInput,
   AssumptionValue, CalculatedResult, DashboardUnit,
   DashboardConsolidated, UnitComparison, UnitsComparisonResponse,
   ImportJob, AuditLog, User,
@@ -99,6 +100,8 @@ export const assumptionsApi = {
     api.get<AssumptionCategory[]>('/assumptions/categories').then((r) => r.data),
   definitions: (category_id?: string): Promise<AssumptionDefinition[]> =>
     api.get<AssumptionDefinition[]>('/assumptions/definitions', { params: { category_id } }).then((r) => r.data),
+  updateDefinition: (definition_id: string, data: AssumptionDefinitionUpdateInput): Promise<AssumptionDefinition> =>
+    api.patch<AssumptionDefinition>(`/assumptions/definitions/${definition_id}`, data).then((r) => r.data),
   values: (version_id: string): Promise<AssumptionValue[]> =>
     api.get<AssumptionValue[]>(`/assumptions/values/${version_id}`).then((r) => r.data),
   bulkUpsert: (version_id: string, values: Partial<AssumptionValue>[]): Promise<{ updated: number }> =>

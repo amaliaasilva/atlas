@@ -3,11 +3,13 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Building2, MapPin, TrendingUp,
   FileSpreadsheet, Upload, ClipboardList, Settings, LogOut, ChevronDown,
-  Briefcase, BarChart2,
+  Briefcase,
 } from 'lucide-react';
+import { businessesApi, scenariosApi, unitsApi } from '@/lib/api';
 import { useAuthStore, useNavStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
 
@@ -22,7 +24,36 @@ interface NavItem {
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
-  const { businessId } = useNavStore();
+  const {
+    organizationId,
+    businessId,
+    unitId,
+    scenarioId,
+    setBusiness,
+    setUnit,
+    setScenario,
+  } = useNavStore();
+
+  const { data: businesses = [] } = useQuery({
+    queryKey: ['sidebar-businesses', organizationId],
+    queryFn: () => businessesApi.list(organizationId ?? ''),
+    enabled: !!organizationId,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const { data: units = [] } = useQuery({
+    queryKey: ['sidebar-units', businessId],
+    queryFn: () => unitsApi.list(businessId ?? ''),
+    enabled: !!businessId,
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const { data: scenarios = [] } = useQuery({
+    queryKey: ['sidebar-scenarios', businessId],
+    queryFn: () => scenariosApi.list(businessId ?? ''),
+    enabled: !!businessId,
+    staleTime: 2 * 60 * 1000,
+  });
 
   const items: NavItem[] = [
     {
@@ -50,12 +81,6 @@ export function Sidebar() {
       label: 'Orçamento',
       href: '/budget',
       icon: <FileSpreadsheet className="h-4 w-4" />,
-    },
-    {
-      label: 'Consolidado',
-      href: businessId ? `/dashboard/consolidated/${businessId}` : '/dashboard/visao-geral',
-      matchPrefix: '/dashboard/consolidated',
-      icon: <BarChart2 className="h-4 w-4" />,
     },
     {
       label: 'Comparações',
@@ -103,6 +128,57 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <div className="mb-3 rounded-lg border border-gray-700/60 bg-gray-900/40 px-3 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-2">Contexto</p>
+          {!organizationId ? (
+            <p className="text-[11px] text-gray-500">Selecione uma organização para habilitar os filtros.</p>
+          ) : (
+            <div className="space-y-2">
+              <div>
+                <label className="block text-[10px] text-gray-400 mb-1">Negócio</label>
+                <select
+                  value={businessId ?? ''}
+                  onChange={(e) => setBusiness(e.target.value || null)}
+                  className="w-full rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-[11px] text-gray-100"
+                >
+                  <option value="">Selecionar...</option>
+                  {businesses.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] text-gray-400 mb-1">Unidade</label>
+                <select
+                  value={unitId ?? ''}
+                  onChange={(e) => setUnit(e.target.value || null)}
+                  className="w-full rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-[11px] text-gray-100"
+                  disabled={!businessId}
+                >
+                  <option value="">Não definida</option>
+                  {units.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] text-gray-400 mb-1">Cenário</label>
+                <select
+                  value={scenarioId ?? ''}
+                  onChange={(e) => setScenario(e.target.value || null)}
+                  className="w-full rounded-md border border-gray-700 bg-gray-900 px-2 py-1.5 text-[11px] text-gray-100"
+                  disabled={!businessId}
+                >
+                  <option value="">Não definido</option>
+                  {scenarios.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+
         {items.map((item) => {
           const prefix = item.matchPrefix ?? item.href.split('?')[0];
           const active = pathname === item.href || pathname.startsWith(prefix + '/') || pathname.startsWith(prefix);

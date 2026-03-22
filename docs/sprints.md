@@ -3337,3 +3337,29 @@ Validação executada com leitura direta dos arquivos em `/planilha` + comparaç
 - A conexão direta ao PostgreSQL local (`localhost:5432`) não estava disponível no momento da validação.
 - Portanto, a auditoria SQL foi feita por consistência de seeds/migrations + verificação dos contratos de persistência no código.
 - Em ambiente com banco ativo, rodar `run_seeds` e conferir `units`, `service_plans`, `assumption_definitions` para fechamento operacional.
+
+### 12.4 · Continuidade UX e consistencia de contexto (22/03/2026)
+
+- Coerencia Cenarios x Orcamentos:
+  - `scenarios/page.tsx` deixou de depender de uma unica unidade efetiva para listar versoes.
+  - Listagem agora usa `versionsApi.listByBusiness(business_id)` e aplica filtro opcional por unidade na propria tela.
+  - Resultado: os cenarios exibem suas versoes de forma consistente com o universo do negocio, evitando o efeito "3 cenarios, 1 orcamento".
+- Sidebar com contexto acionavel:
+  - Seletores de Negocio, Unidade e Cenario no proprio menu lateral.
+  - Selecao vazia agora limpa contexto (suporte a `null` no store de navegacao).
+  - Resultado: usuario controla contexto global sem navegar por paginas intermediarias.
+- Orcamentos com filtro local explicito:
+  - Filtro de cenario da listagem independente do contexto global, com opcao "Todos os cenarios".
+  - Se URL vier de Cenarios com `scenario_id`, filtro local inicia nesse cenario.
+- Regra de crescimento adaptavel para premissas existentes:
+  - Backend ganhou `PATCH /assumptions/definitions/{definition_id}` para update parcial (incluindo `growth_rule`).
+  - Frontend ganhou acao de editar regra por linha na grade de premissas.
+  - Resultado: criacao e adaptacao de regra ficaram disponiveis no fluxo real de orcamento.
+- Legibilidade da grade de premissas:
+  - Melhor contraste, remocao de italico em valores auto-expandidos e sinalizacao visual por categoria (receita/custos/capex).
+
+### 12.5 · Validacao executada nesta continuidade
+
+- Backend: `pytest -q` -> 45 passed.
+- Frontend: `npm run type-check` -> sem erros.
+- Observacao: `npm run lint` com `next lint` no container atual retorna caminho invalido (`/frontend/lint`), mantendo `type-check` como validacao confiavel nesta sessao.

@@ -48,11 +48,11 @@ interface NavState {
   unitId: string | null;
   scenarioId: string | null;
   versionId: string | null;
-  setOrganization: (id: string) => void;
-  setBusiness: (id: string) => void;
-  setUnit: (id: string) => void;
-  setScenario: (id: string) => void;
-  setVersion: (id: string) => void;
+  setOrganization: (id: string | null) => void;
+  setBusiness: (id: string | null) => void;
+  setUnit: (id: string | null) => void;
+  setScenario: (id: string | null) => void;
+  setVersion: (id: string | null) => void;
 }
 
 export const useNavStore = create<NavState>()(
