@@ -14,11 +14,13 @@ import { Gauge, Zap, TrendingUp, Activity } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 
 export default function CapacidadePage() {
-  const { businessId, scenarioId, year, periodStart, periodEnd } = useDashboardFilters();
+  const { businessId, scenarioId, selectedUnitIds, year, periodStart, periodEnd } = useDashboardFilters();
+  const unitScope = selectedUnitIds.length > 0 ? selectedUnitIds : [];
+  const unitScopeKey = unitScope.join(',');
 
   const { data: dashboard, isLoading } = useQuery({
-    queryKey: ['dashboard-consolidated', businessId, scenarioId],
-    queryFn: () => dashboardApi.consolidated(businessId!, scenarioId!),
+    queryKey: ['dashboard-consolidated', businessId, scenarioId, unitScopeKey],
+    queryFn: () => dashboardApi.consolidated(businessId!, scenarioId!, unitScope),
     enabled: !!businessId && !!scenarioId,
   });
 
@@ -42,13 +44,19 @@ export default function CapacidadePage() {
   const currentProfit = filteredTs.reduce((acc, d) => acc + d.net_result, 0);
   const totalFixedCosts = filteredTs.reduce((acc, d) => acc + (d.total_fixed_costs ?? 0), 0);
   const totalVarCosts = filteredTs.reduce((acc, d) => acc + (d.total_variable_costs ?? 0), 0);
+  const totalActiveHours = filteredTs.reduce((acc, d) => acc + (d.active_hours_month ?? 0), 0);
 
   // Capacidade real derivada do engine (P0.10 — substitui o fator 1.4 arbitrário)
-  const capacityHoursMonth = latestPeriod?.capacity_hours_month ?? 0;
-  const avgPricePerHour = latestPeriod?.avg_price_per_hour ?? 0;
+  const fallbackAvgPrice = totalActiveHours > 0 ? currentRevenue / totalActiveHours : 0;
   // max receita = soma mensal de (capacidade_horas × preço_médio) nos períodos filtrados
   const estimatedMaxRevenue = filteredTs.reduce(
-    (acc, d) => acc + (d.capacity_hours_month ?? capacityHoursMonth) * (d.avg_price_per_hour ?? avgPricePerHour),
+    (acc, d) => {
+      const cap = d.capacity_hours_month ?? 0;
+      const rev = getRevenue(d);
+      const active = d.active_hours_month ?? 0;
+      const avgPrice = active > 0 ? rev / active : fallbackAvgPrice;
+      return acc + cap * avgPrice;
+    },
     0,
   );
   const utilizationRate = estimatedMaxRevenue > 0 ? currentRevenue / estimatedMaxRevenue : 0;

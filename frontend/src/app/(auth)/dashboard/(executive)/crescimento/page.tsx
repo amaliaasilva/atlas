@@ -15,11 +15,13 @@ import { aggregateByYear } from '@/lib/utils/dashboard';
 import { TrendingUp, Building2, BarChart2 } from 'lucide-react';
 
 export default function CrescimentoPage() {
-  const { businessId, scenarioId, year, periodStart, periodEnd } = useDashboardFilters();
+  const { businessId, scenarioId, selectedUnitIds, year, periodStart, periodEnd } = useDashboardFilters();
+  const unitScope = selectedUnitIds.length > 0 ? selectedUnitIds : [];
+  const unitScopeKey = unitScope.join(',');
 
   const { data: dashboard, isLoading } = useQuery({
-    queryKey: ['dashboard-consolidated', businessId, scenarioId],
-    queryFn: () => dashboardApi.consolidated(businessId!, scenarioId!),
+    queryKey: ['dashboard-consolidated', businessId, scenarioId, unitScopeKey],
+    queryFn: () => dashboardApi.consolidated(businessId!, scenarioId!, unitScope),
     enabled: !!businessId && !!scenarioId,
   });
 

@@ -22,7 +22,7 @@ const METRICS = [
 ];
 
 export default function UnidadesPage() {
-  const { businessId, scenarioId, year, periodStart, periodEnd } = useDashboardFilters();
+  const { businessId, scenarioId, selectedUnitIds, year, periodStart, periodEnd } = useDashboardFilters();
   const [selectedMetric, setSelectedMetric] = useState<string>('net_result');
 
   const { data: comparisonData, isLoading } = useQuery({
@@ -52,7 +52,12 @@ export default function UnidadesPage() {
       .reduce((acc, [, v]) => acc + v, 0),
   }));
 
-  const sortedUnits = [...filteredUnitData].sort((a, b) => b.total - a.total);
+  const scopedUnitData =
+    selectedUnitIds.length > 0
+      ? filteredUnitData.filter((u) => selectedUnitIds.includes(u.unit_id))
+      : filteredUnitData;
+
+  const sortedUnits = [...scopedUnitData].sort((a, b) => b.total - a.total);
   const bestUnit = sortedUnits[0];
   const worstUnit = sortedUnits[sortedUnits.length - 1];
 

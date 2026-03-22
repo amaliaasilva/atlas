@@ -12,7 +12,9 @@ import { getRevenue } from '@/types/api';
 import { DollarSign, TrendingUp, Clock } from 'lucide-react';
 
 export default function CapexPage() {
-  const { businessId, scenarioId } = useDashboardFilters();
+  const { businessId, scenarioId, selectedUnitIds } = useDashboardFilters();
+  const unitScope = selectedUnitIds.length > 0 ? selectedUnitIds : [];
+  const unitScopeKey = unitScope.join(',');
 
   const { data: portfolio, isLoading } = useQuery({
     queryKey: ['portfolio', businessId, scenarioId],
@@ -21,8 +23,8 @@ export default function CapexPage() {
   });
 
   const { data: dashboard } = useQuery({
-    queryKey: ['dashboard-consolidated', businessId, scenarioId],
-    queryFn: () => dashboardApi.consolidated(businessId!, scenarioId!),
+    queryKey: ['dashboard-consolidated', businessId, scenarioId, unitScopeKey],
+    queryFn: () => dashboardApi.consolidated(businessId!, scenarioId!, unitScope),
     enabled: !!businessId && !!scenarioId,
   });
 

@@ -3295,8 +3295,12 @@ activeYearPreset: string | null;  // "2027", "2028", etc. ou null = tudo
   - Estado legado de `versionId` removido do filtro global (evita confusão de contexto)
   - Janela de período agora é 100% dinâmica por `time_series` real do backend (sem anos fixos hardcoded)
   - Presets rápidos inteligentes: `12M` e `Tudo` com base no horizonte calculado
+  - Escopo de unidades aplicado de ponta a ponta nos dashboards executivos (`capacidade`, `ocupacao`, `crescimento`, `capex`, `professores`, `estrategico`, `projecoes`)
   - `DashboardNav` + `GlobalFilters` fixos (sticky) no topo da experiência executiva
   - Tratamento visual refinado com backdrop + contraste para leitura contínua
+- `estrategico/page.tsx`:
+  - Removido cálculo placeholder `maxRevenue × 1.4`
+  - Capacidade máxima estimada agora deriva de `capacity_hours_month × avg_price_per_hour` por período (com fallback consistente via `revenue/active_hours`)
 - Página `Orçamentos`:
   - KPIs operacionais adicionais (inclui unidades ativas)
   - Destaque de próxima abertura de unidade

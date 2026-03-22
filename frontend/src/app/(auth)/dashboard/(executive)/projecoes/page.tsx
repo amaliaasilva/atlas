@@ -36,7 +36,9 @@ const SCENARIO_STYLES: Record<string, {
 // ── page ─────────────────────────────────────────────────────────────────────
 
 export default function ProjecoesPage() {
-  const { businessId, scenarioId, year, periodStart, periodEnd } = useDashboardFilters();
+  const { businessId, scenarioId, selectedUnitIds, year, periodStart, periodEnd } = useDashboardFilters();
+  const unitScope = selectedUnitIds.length > 0 ? selectedUnitIds : [];
+  const unitScopeKey = unitScope.join(',');
   const [activeTab, setActiveTab] = useState<'receita' | 'lucro'>('receita');
 
   // Cenários disponíveis para o negócio
@@ -48,18 +50,18 @@ export default function ProjecoesPage() {
 
   // Dados do cenário primário (selecionado nos filtros globais)
   const { data: primaryDashboard, isLoading: isLoadingPrimary } = useQuery({
-    queryKey: ['dashboard-consolidated', businessId, scenarioId],
-    queryFn: () => dashboardApi.consolidated(businessId!, scenarioId!),
+    queryKey: ['dashboard-consolidated', businessId, scenarioId, unitScopeKey],
+    queryFn: () => dashboardApi.consolidated(businessId!, scenarioId!, unitScope),
     enabled: !!businessId && !!scenarioId,
   });
 
   // Dados de todos os cenários para comparação multi-cenário
   const { data: allScenarioData = [] } = useQuery({
-    queryKey: ['multi-scenario-data', businessId, scenarios.map((s) => s.id).join(',')],
+    queryKey: ['multi-scenario-data', businessId, scenarios.map((s) => s.id).join(','), unitScopeKey],
     queryFn: () =>
       Promise.all(
         scenarios.map(async (s) => {
-          const data = await dashboardApi.consolidated(businessId!, s.id);
+          const data = await dashboardApi.consolidated(businessId!, s.id, unitScope);
           return { scenario: s, data };
         }),
       ),

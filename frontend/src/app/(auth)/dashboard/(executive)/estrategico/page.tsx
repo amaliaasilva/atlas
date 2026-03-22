@@ -59,11 +59,13 @@ function StatusPill({
 // ── page ─────────────────────────────────────────────────────────────────────
 
 export default function EstrategicoPage() {
-  const { businessId, scenarioId, year, periodStart, periodEnd } = useDashboardFilters();
+  const { businessId, scenarioId, selectedUnitIds, year, periodStart, periodEnd } = useDashboardFilters();
+  const unitScope = selectedUnitIds.length > 0 ? selectedUnitIds : [];
+  const unitScopeKey = unitScope.join(',');
 
   const { data: dashboard, isLoading } = useQuery({
-    queryKey: ['dashboard-consolidated', businessId, scenarioId],
-    queryFn: () => dashboardApi.consolidated(businessId!, scenarioId!),
+    queryKey: ['dashboard-consolidated', businessId, scenarioId, unitScopeKey],
+    queryFn: () => dashboardApi.consolidated(businessId!, scenarioId!, unitScope),
     enabled: !!businessId && !!scenarioId,
   });
 
@@ -81,11 +83,11 @@ export default function EstrategicoPage() {
 
   // Multi-cenário para comparação
   const { data: allScenarioData = [] } = useQuery({
-    queryKey: ['multi-scenario-estrategico', businessId, scenarios.map((s) => s.id).join(',')],
+    queryKey: ['multi-scenario-estrategico', businessId, scenarios.map((s) => s.id).join(','), unitScopeKey],
     queryFn: () =>
       Promise.all(
         scenarios.map(async (s) => {
-          const data = await dashboardApi.consolidated(businessId!, s.id);
+          const data = await dashboardApi.consolidated(businessId!, s.id, unitScope);
           return { scenario: s, data };
         }),
       ),
@@ -118,9 +120,16 @@ export default function EstrategicoPage() {
   const ebitdaMargin = totalRevenue > 0 ? totalEbitda / totalRevenue : 0;
   const operationalEfficiency = totalCosts > 0 ? totalRevenue / totalCosts : 0;
 
-  // Capacidade máxima estimada (1.4× melhor mês)
-  const maxMonthlyRevenue = Math.max(...filteredTs.map((d) => getRevenue(d)), 0);
-  const estimatedMaxRevenue = maxMonthlyRevenue * 1.4 * (filteredTs.length || 1);
+  // Capacidade máxima estimada (base real): capacidade_horas × preço_médio_hora por período.
+  const totalActiveHours = filteredTs.reduce((acc, d) => acc + (d.active_hours_month ?? 0), 0);
+  const fallbackAvgPrice = totalActiveHours > 0 ? totalRevenue / totalActiveHours : 0;
+  const estimatedMaxRevenue = filteredTs.reduce((acc, d) => {
+    const cap = d.capacity_hours_month ?? 0;
+    const rev = getRevenue(d);
+    const active = d.active_hours_month ?? 0;
+    const avgPrice = active > 0 ? rev / active : fallbackAvgPrice;
+    return acc + cap * avgPrice;
+  }, 0);
   const utilizationRate = estimatedMaxRevenue > 0 ? totalRevenue / estimatedMaxRevenue : 0;
   const capacityGap = Math.max(estimatedMaxRevenue - totalRevenue, 0);
 
