@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { businessesApi, scenariosApi, unitsApi } from '@/lib/api';
+import { businessesApi, dashboardApi, scenariosApi, unitsApi } from '@/lib/api';
 import { useDashboardFilters } from '@/store/dashboard';
 import { useNavStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
@@ -145,28 +145,14 @@ function MultiSelectUnit({ label, selectedIds, onChange, options, disabled = fal
 
 const MONTH_NAMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-// Gera opções mês+ano de Jan/2026 até Dez/2036
-function generateMonthYearOptions() {
-  const options: { value: string; label: string }[] = [];
-  for (let y = 2026; y <= 2036; y++) {
-    for (let m = 1; m <= 12; m++) {
-      const value = `${y}-${String(m).padStart(2, '0')}`;
-      const label = `${MONTH_NAMES[m - 1]}/${y}`;
-      options.push({ value, label });
-    }
+function formatPeriodLabel(period: string): string {
+  const [year, month] = period.split('-');
+  const monthNumber = Number(month);
+  if (!year || !monthNumber || monthNumber < 1 || monthNumber > 12) {
+    return period;
   }
-  return options;
+  return `${MONTH_NAMES[monthNumber - 1]}/${year}`;
 }
-
-// Mantém presets anuais
-function generateProjectionYears() {
-  return Array.from({ length: 11 }, (_, i) => ({
-    value: String(2026 + i),
-    label: String(2026 + i),
-  }));
-}
-
-const MONTH_YEAR_OPTIONS = generateMonthYearOptions();
 
 interface GlobalFiltersProps {
   className?: string;
@@ -213,6 +199,32 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
     enabled: !!filters.businessId && showUnit,
   });
 
+  const selectedUnitsKey = useMemo(
+    () => [...filters.selectedUnitIds].sort().join(','),
+    [filters.selectedUnitIds],
+  );
+
+  // Períodos dinâmicos: sempre a janela real calculada no backend para o contexto atual.
+  const { data: consolidatedPeriods } = useQuery({
+    queryKey: ['dashboard-period-options', filters.businessId, filters.scenarioId, selectedUnitsKey],
+    queryFn: () => dashboardApi.consolidated(filters.businessId!, filters.scenarioId!, filters.selectedUnitIds),
+    enabled: !!filters.businessId && !!filters.scenarioId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const monthYearOptions = useMemo(() => {
+    const periods = (consolidatedPeriods?.time_series ?? [])
+      .map((d) => d.period)
+      .filter(Boolean);
+    const unique = Array.from(new Set(periods)).sort();
+    return unique.map((value) => ({ value, label: formatPeriodLabel(value) }));
+  }, [consolidatedPeriods?.time_series]);
+
+  const projectionYears = useMemo(
+    () => Array.from(new Set(monthYearOptions.map((p) => p.value.slice(0, 4)))).sort(),
+    [monthYearOptions],
+  );
+
   const scenarioTypeLabel: Record<string, string> = {
     base: 'Base',
     conservative: 'Conservador',
@@ -222,6 +234,35 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
 
   const fromPeriod = filters.periodStart ?? '';
   const toPeriod = filters.periodEnd ?? '';
+  const setPeriodRange = filters.setPeriodRange;
+  const setYear = filters.setYear;
+
+  // Corrige estado persistido antigo quando não existe no novo contexto.
+  useEffect(() => {
+    if (monthYearOptions.length === 0) return;
+    const available = new Set(monthYearOptions.map((o) => o.value));
+    let nextStart = filters.periodStart;
+    let nextEnd = filters.periodEnd;
+    let changed = false;
+
+    if (nextStart && !available.has(nextStart)) {
+      nextStart = null;
+      changed = true;
+    }
+    if (nextEnd && !available.has(nextEnd)) {
+      nextEnd = null;
+      changed = true;
+    }
+    if (nextStart && nextEnd && nextStart > nextEnd) {
+      nextEnd = nextStart;
+      changed = true;
+    }
+
+    if (changed) {
+      setPeriodRange(nextStart, nextEnd);
+      setYear(nextStart ? nextStart.slice(0, 4) : null);
+    }
+  }, [filters.periodEnd, filters.periodStart, monthYearOptions, setPeriodRange, setYear]);
 
   return (
     <div
@@ -291,8 +332,9 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
             filters.setYear(v.slice(0, 4));
             filters.setPeriodRange(v, newEnd);
           }}
-          options={MONTH_YEAR_OPTIONS}
+          options={monthYearOptions}
           placeholder="Início"
+          disabled={!filters.scenarioId || monthYearOptions.length === 0}
         />
 
         {/* Período Até — granularidade mês */}
@@ -307,8 +349,9 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
             const newStart = fromPeriod && fromPeriod <= v ? fromPeriod : v;
             filters.setPeriodRange(newStart, v);
           }}
-          options={MONTH_YEAR_OPTIONS}
+          options={monthYearOptions}
           placeholder="Final"
+          disabled={!filters.scenarioId || monthYearOptions.length === 0}
         />
       </div>
 
@@ -316,9 +359,9 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
       {(filters.scenarioId || filters.selectedUnitIds.length > 0 || filters.year || filters.periodStart) && (
         <>
           <div className="h-5 w-px bg-gray-200 shrink-0" />
-          {/* Presets rápidos de ano */}
+          {/* Presets rápidos por ano (dinâmicos) */}
           <div className="flex items-center gap-1">
-            {['2026', '2027', '2028'].map((y) => (
+            {projectionYears.slice(0, 6).map((y) => (
               <button
                 key={y}
                 onClick={() => {
@@ -335,6 +378,33 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
                 {y}
               </button>
             ))}
+            {monthYearOptions.length > 0 && (
+              <>
+                <button
+                  onClick={() => {
+                    const end = monthYearOptions[monthYearOptions.length - 1].value;
+                    const startIndex = Math.max(monthYearOptions.length - 12, 0);
+                    const start = monthYearOptions[startIndex].value;
+                    filters.setYear(end.slice(0, 4));
+                    filters.setPeriodRange(start, end);
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors bg-gray-100 text-gray-600 hover:bg-gray-200"
+                >
+                  12M
+                </button>
+                <button
+                  onClick={() => {
+                    const start = monthYearOptions[0].value;
+                    const end = monthYearOptions[monthYearOptions.length - 1].value;
+                    filters.setYear(null);
+                    filters.setPeriodRange(start, end);
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors bg-gray-100 text-gray-600 hover:bg-gray-200"
+                >
+                  Tudo
+                </button>
+              </>
+            )}
           </div>
           <div className="h-5 w-px bg-gray-200 shrink-0" />
           <button

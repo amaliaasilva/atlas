@@ -12,7 +12,6 @@ interface DashboardFiltersState {
   selectedUnitIds: string[];
   /** @deprecated use selectedUnitIds; mantido para compat. com páginas existentes */
   unitId: string | null;
-  versionId: string | null;
 
   // Filtros temporais
   year: string | null; // ex: "2026"
@@ -27,7 +26,6 @@ interface DashboardFiltersState {
   setScenarioId: (id: string | null) => void;
   setSelectedUnitIds: (ids: string[]) => void;
   setUnitId: (id: string | null) => void;
-  setVersionId: (id: string | null) => void;
   setYear: (year: string | null) => void;
   setPeriodRange: (start: string | null, end: string | null) => void;
   setCompareScenarios: (ids: string[]) => void;
@@ -39,7 +37,6 @@ const defaults = {
   scenarioId: null,
   selectedUnitIds: [] as string[],
   unitId: null,
-  versionId: null,
   year: null,
   periodStart: null,
   periodEnd: null,
@@ -54,7 +51,6 @@ export const useDashboardFilters = create<DashboardFiltersState>()(
       setScenarioId: (id) => set({ scenarioId: id }),
       setSelectedUnitIds: (ids) => set({ selectedUnitIds: ids, unitId: ids.length === 1 ? ids[0] : null }),
       setUnitId: (id) => set({ unitId: id, selectedUnitIds: id ? [id] : [] }),
-      setVersionId: (id) => set({ versionId: id }),
       setYear: (year) => set({ year }),
       setPeriodRange: (start, end) => set({ periodStart: start, periodEnd: end }),
       setCompareScenarios: (ids) => set({ compareScenarioIds: ids }),

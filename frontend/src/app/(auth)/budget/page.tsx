@@ -28,6 +28,11 @@ function formatDateBr(dateStr?: string | null): string {
   return d.toLocaleDateString('pt-BR');
 }
 
+function getCurrentYearMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
 // ── Modal: Criar Nova Versão ──────────────────────────────────────────────────
 
 interface CreateVersionModalProps {
@@ -66,7 +71,7 @@ function CreateVersionModal({ units, scenarios, onClose, onCreated }: CreateVers
         unit_id: unitId,
         scenario_id: scenId,
         name: versionName || `Orçamento — ${new Date().toLocaleDateString('pt-BR')}`,
-        horizon_start: horizonStart || '2026-01',
+        horizon_start: horizonStart || getCurrentYearMonth(),
         status: 'draft',
         projection_horizon_years: 10,
       } as Partial<BudgetVersion>),
