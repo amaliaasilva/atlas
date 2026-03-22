@@ -32,14 +32,17 @@ export default function AuditPage() {
   const [page, setPage] = useState(0);
   const LIMIT = 50;
 
-  const { data: logs, isLoading } = useQuery({
+  const { data: response, isLoading } = useQuery({
     queryKey: ['audit', entityType, page],
     queryFn: () => auditApi.list({ entity_type: entityType || undefined, skip: page * LIMIT, limit: LIMIT }),
   });
 
-  const filtered = logs?.filter((l) =>
-    !search || l.user_email.includes(search) || l.entity_type.includes(search) || l.action.includes(search),
-  ) ?? [];
+  const logs = response?.items ?? [];
+  const total = response?.total ?? 0;
+
+  const filtered = logs.filter((l) =>
+    !search || (l.performed_by ?? '').includes(search) || l.entity_type.includes(search) || l.action.includes(search),
+  );
 
   if (isLoading) return <LoadingScreen />;
 
@@ -86,7 +89,7 @@ export default function AuditPage() {
                   <td className="text-xs text-gray-400 whitespace-nowrap">
                     {new Date(log.created_at).toLocaleString('pt-BR')}
                   </td>
-                  <td className="text-xs text-gray-700">{log.user_email}</td>
+                  <td className="text-xs text-gray-700">{log.performed_by?.slice(0, 8) ?? '—'}</td>
                   <td>
                     <span className={`text-xs font-semibold uppercase ${ACTION_COLORS[log.action] ?? 'text-gray-500'}`}>
                       {log.action}
@@ -95,7 +98,7 @@ export default function AuditPage() {
                   <td className="text-xs text-gray-500">{log.entity_type}</td>
                   <td className="text-xs text-gray-400 font-mono">{log.entity_id.slice(0, 8)}</td>
                   <td className="text-xs text-gray-400 max-w-[200px] truncate">
-                    {log.changes ? JSON.stringify(log.changes) : '—'}
+                    {log.new_value ? JSON.stringify(log.new_value) : '—'}
                   </td>
                 </tr>
               ))}
@@ -111,7 +114,7 @@ export default function AuditPage() {
 
           {/* Paginação */}
           <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100">
-            <span className="text-xs text-gray-400">{filtered.length} registros</span>
+            <span className="text-xs text-gray-400">{total} registros no total</span>
             <div className="flex gap-2">
               <button
                 disabled={page === 0}
@@ -121,7 +124,7 @@ export default function AuditPage() {
                 ← Anterior
               </button>
               <button
-                disabled={(logs?.length ?? 0) < LIMIT}
+                disabled={total <= (page + 1) * LIMIT}
                 onClick={() => setPage((p) => p + 1)}
                 className="text-xs text-brand-600 hover:underline disabled:text-gray-300"
               >

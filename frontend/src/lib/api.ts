@@ -55,7 +55,7 @@ export const unitsApi = {
   create: (data: Partial<Unit>): Promise<Unit> =>
     api.post<Unit>('/units', data).then((r) => r.data),
   update: (id: string, data: Partial<Unit>): Promise<Unit> =>
-    api.put<Unit>(`/units/${id}`, data).then((r) => r.data),
+    api.patch<Unit>(`/units/${id}`, data).then((r) => r.data),
 };
 
 // ── Scenarios ────────────────────────────────────────────────────────────────
@@ -187,8 +187,10 @@ export const importsApi = {
 // ── Audit ─────────────────────────────────────────────────────────────────────
 
 export const auditApi = {
-  list: (params?: { entity_type?: string; entity_id?: string; skip?: number; limit?: number }): Promise<AuditLog[]> =>
-    api.get<AuditLog[]>('/audit', { params }).then((r) => r.data),
+  list: (params?: { entity_type?: string; entity_id?: string; skip?: number; limit?: number }): Promise<{ total: number; items: AuditLog[] }> =>
+    api.get<{ total: number; items: AuditLog[] }>('/audit', { params }).then((r) => r.data),
+  byEntity: (entity_type: string, entity_id: string, limit = 20): Promise<AuditLog[]> =>
+    api.get<{ total: number; items: AuditLog[] }>('/audit', { params: { entity_type, entity_id, limit } }).then((r) => r.data.items),
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────────

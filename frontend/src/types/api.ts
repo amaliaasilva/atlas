@@ -30,6 +30,8 @@ export interface Unit {
   city?: string;
   state?: string;
   area_m2?: number;
+  notes?: string;
+  sort_order?: number;
 }
 
 export interface Scenario {
@@ -218,13 +220,15 @@ export interface ImportJob {
 
 export interface AuditLog {
   id: string;
-  user_id: string;
-  user_email: string;
-  action: string;
   entity_type: string;
   entity_id: string;
-  changes?: Record<string, unknown>;
+  action: string;
+  old_value?: Record<string, unknown> | null;
+  new_value?: Record<string, unknown> | null;
+  performed_by?: string | null;
   created_at: string;
+  notes?: string | null;
+  budget_version_id?: string | null;
 }
 
 export interface User {

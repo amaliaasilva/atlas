@@ -143,13 +143,30 @@ function MultiSelectUnit({ label, selectedIds, onChange, options, disabled = fal
   );
 }
 
-// Anos de projeção do negócio (2026–2036)
+const MONTH_NAMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+// Gera opções mês+ano de Jan/2026 até Dez/2036
+function generateMonthYearOptions() {
+  const options: { value: string; label: string }[] = [];
+  for (let y = 2026; y <= 2036; y++) {
+    for (let m = 1; m <= 12; m++) {
+      const value = `${y}-${String(m).padStart(2, '0')}`;
+      const label = `${MONTH_NAMES[m - 1]}/${y}`;
+      options.push({ value, label });
+    }
+  }
+  return options;
+}
+
+// Mantém presets anuais
 function generateProjectionYears() {
   return Array.from({ length: 11 }, (_, i) => ({
     value: String(2026 + i),
     label: String(2026 + i),
   }));
 }
+
+const MONTH_YEAR_OPTIONS = generateMonthYearOptions();
 
 interface GlobalFiltersProps {
   className?: string;
@@ -203,9 +220,8 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
     custom: 'Personalizado',
   };
 
-  const yearOptions = generateProjectionYears();
-  const fromYear = filters.periodStart ? filters.periodStart.slice(0, 4) : '';
-  const toYear = filters.periodEnd ? filters.periodEnd.slice(0, 4) : '';
+  const fromPeriod = filters.periodStart ?? '';
+  const toPeriod = filters.periodEnd ?? '';
 
   return (
     <div
@@ -260,39 +276,37 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
           />
         )}
 
-        {/* Período De */}
+        {/* Período De — granularidade mês */}
         <FilterSelect
           label="De"
-          value={fromYear}
+          value={fromPeriod}
           onChange={(v) => {
             if (!v) {
               filters.setPeriodRange(null, null);
               filters.setYear(null);
               return;
             }
-            // Se "Até" ainda não está definido ou é anterior ao novo "De", alinha
-            const newEnd = toYear && toYear >= v ? toYear : v;
-            filters.setYear(v);
-            filters.setPeriodRange(`${v}-01`, `${newEnd}-12`);
+            const newEnd = toPeriod && toPeriod >= v ? toPeriod : v;
+            filters.setYear(v.slice(0, 4));
+            filters.setPeriodRange(v, newEnd);
           }}
-          options={yearOptions}
+          options={MONTH_YEAR_OPTIONS}
           placeholder="Início"
         />
 
-        {/* Período Até */}
+        {/* Período Até — granularidade mês */}
         <FilterSelect
           label="Até"
-          value={toYear}
+          value={toPeriod}
           onChange={(v) => {
             if (!v) {
               filters.setPeriodRange(filters.periodStart, null);
               return;
             }
-            // Se "De" ainda não está definido ou é posterior ao novo "Até", alinha
-            const newStart = fromYear && fromYear <= v ? fromYear : v;
-            filters.setPeriodRange(`${newStart}-01`, `${v}-12`);
+            const newStart = fromPeriod && fromPeriod <= v ? fromPeriod : v;
+            filters.setPeriodRange(newStart, v);
           }}
-          options={yearOptions}
+          options={MONTH_YEAR_OPTIONS}
           placeholder="Final"
         />
       </div>

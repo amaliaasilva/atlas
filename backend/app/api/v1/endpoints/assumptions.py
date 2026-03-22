@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
 from app.api.v1.deps import get_current_user
+from app.models.audit_log import AuditAction, AuditLog
 from app.models.user import User
 from app.models.assumption import (
     AssumptionCategory,
@@ -193,6 +194,18 @@ def bulk_upsert_version_values(
         for item in items
     ]
     db.add_all(rows)
+
+    # Audit log para rastreabilidade de mudanças de premissas
+    audit = AuditLog(
+        entity_type="assumption_value",
+        entity_id=version_id,
+        action=AuditAction.update,
+        new_value={"count": len(rows), "version_id": version_id},
+        performed_by=current_user.id,
+        budget_version_id=version_id,
+        notes=f"{len(rows)} premissas salvas na versão {version_id}",
+    )
+    db.add(audit)
     db.commit()
     return {"updated": len(rows)}
 

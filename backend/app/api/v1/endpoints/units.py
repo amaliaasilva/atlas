@@ -3,9 +3,10 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.api.v1.deps import get_current_user
-from app.models.user import User
+from app.models.audit_log import AuditAction, AuditLog
 from app.models.unit import Unit
-from app.schemas.unit import UnitCreate, UnitUpdate, UnitOut
+from app.models.user import User
+from app.schemas.unit import UnitCreate, UnitOut, UnitUpdate
 
 router = APIRouter()
 
@@ -57,8 +58,23 @@ def update_unit(
     unit = db.query(Unit).filter(Unit.id == unit_id).first()
     if not unit:
         raise HTTPException(status_code=404, detail="Unidade não encontrada")
-    for k, v in data.model_dump(exclude_none=True).items():
+
+    changes = data.model_dump(exclude_none=True)
+    old_snapshot = {k: str(getattr(unit, k, None)) for k in changes}
+
+    for k, v in changes.items():
         setattr(unit, k, v)
+
+    log = AuditLog(
+        entity_type="unit",
+        entity_id=unit_id,
+        action=AuditAction.update,
+        old_value=old_snapshot,
+        new_value={k: str(v) for k, v in changes.items()},
+        performed_by=current_user.id,
+        notes=f"Unidade {unit.code} atualizada",
+    )
+    db.add(log)
     db.commit()
     db.refresh(unit)
     return unit

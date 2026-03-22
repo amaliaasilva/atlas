@@ -3,15 +3,15 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { assumptionsApi, versionsApi, calculationsApi, financingContractsApi, aiApi } from '@/lib/api';
+import { assumptionsApi, versionsApi, calculationsApi, financingContractsApi, aiApi, auditApi } from '@/lib/api';
 import { useNavStore } from '@/store/auth';
-import type { AssumptionValue, FinancingContract, AssumptionDefinition, CopilotScenarioResponse } from '@/types/api';
+import type { AssumptionValue, FinancingContract, AssumptionDefinition, CopilotScenarioResponse, AuditLog } from '@/types/api';
 import { Topbar } from '@/components/layout/Topbar';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
 import { LoadingScreen } from '@/components/ui/Spinner';
 import { formatPeriod, getErrorMessage } from '@/lib/utils';
-import { Save, PlayCircle, ChevronDown, ChevronRight, Plus, Trash2, TrendingUp, Zap } from 'lucide-react';
+import { Save, PlayCircle, ChevronDown, ChevronRight, Plus, Trash2, TrendingUp, Zap, History } from 'lucide-react';
 
 // ── Gera lista de períodos entre dois meses ────────────────────────────────────
 function generatePeriods(start: string, end: string): string[] {
@@ -91,6 +91,7 @@ export default function BudgetVersionClient() {
   });
   const [showAddAssumption, setShowAddAssumption] = useState(false);
   const [newAssumption, setNewAssumption] = useState({ name: '', value: 0, category_code: 'CUSTO_FIXO' });
+  const [showHistory, setShowHistory] = useState(false);
 
   const { businessId } = useNavStore();
 
@@ -118,6 +119,12 @@ export default function BudgetVersionClient() {
   const { data: contracts } = useQuery({
     queryKey: ['financing-contracts', versionId],
     queryFn: () => financingContractsApi.list(versionId),
+  });
+
+  const { data: auditLogs = [] } = useQuery<AuditLog[]>({
+    queryKey: ['audit-version', versionId],
+    queryFn: () => auditApi.byEntity('assumption_value', versionId),
+    enabled: showHistory,
   });
 
   const addContractMutation = useMutation({
@@ -341,6 +348,9 @@ export default function BudgetVersionClient() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setShowHistory((v) => !v)}>
+              <History className="h-4 w-4" /> Histórico
+            </Button>
             <Button variant="secondary" size="sm" onClick={handleSave} loading={saving} disabled={!hasChanges}>
               <Save className="h-4 w-4" /> Salvar
             </Button>
@@ -707,6 +717,53 @@ export default function BudgetVersionClient() {
             </p>
           )}
         </div>
+
+        {/* Painel de histórico de auditoria */}
+        {showHistory && (
+          <div className="mt-6 rounded-xl border border-gray-200 bg-white">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <div className="flex items-center gap-2 text-gray-700">
+                <History className="h-4 w-4 text-indigo-500" />
+                <span className="text-sm font-semibold">Histórico de Alterações de Premissas</span>
+              </div>
+              <button onClick={() => setShowHistory(false)} className="text-xs text-gray-400 hover:text-gray-600">
+                Fechar
+              </button>
+            </div>
+            {auditLogs.length === 0 ? (
+              <div className="px-5 py-6 text-center text-xs text-gray-400">
+                Nenhuma alteração registrada ainda. Salve premissas para gerar histórico.
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {auditLogs.map((log) => (
+                  <div key={log.id} className="px-5 py-3 flex items-start gap-4">
+                    <div className="shrink-0 mt-0.5">
+                      <div className="h-2 w-2 rounded-full bg-indigo-400 mt-1" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-700">
+                        <span className="font-semibold text-indigo-700 capitalize">{log.action}</span>
+                        {' '}—{' '}
+                        {log.notes ?? `${log.entity_type} ${log.entity_id.slice(0, 8)}`}
+                      </p>
+                      {log.new_value && Object.keys(log.new_value).length > 0 && (
+                        <p className="text-xs text-gray-400 mt-0.5 font-mono truncate">
+                          {JSON.stringify(log.new_value)}
+                        </p>
+                      )}
+                    </div>
+                    <time className="shrink-0 text-xs text-gray-400 whitespace-nowrap">
+                      {new Date(log.created_at).toLocaleString('pt-BR', {
+                        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+                      })}
+                    </time>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </>
   );
