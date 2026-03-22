@@ -41,11 +41,15 @@ class FinancingContract(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Termos do contrato
-    financed_amount: Mapped[float] = mapped_column(Float, nullable=False)  # VP (Valor Presente)
+    financed_amount: Mapped[float] = mapped_column(
+        Float, nullable=False
+    )  # VP (Valor Presente)
     monthly_rate: Mapped[float] = mapped_column(
         Float, default=0.0, nullable=False
     )  # ex: 0.012 = 1,2% a.m. (0% para FINAME sem juros)
-    term_months: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # 0 = pagamento único
+    term_months: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )  # 0 = pagamento único
     grace_period_months: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     down_payment_pct: Mapped[float] = mapped_column(
         Float, default=0.0, nullable=False

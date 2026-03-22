@@ -90,6 +90,7 @@ class AssumptionValueBulkUpdate(BaseModel):
 
 # ── Schemas compatíveis com o frontend ────────────────────────────────────────
 
+
 class AssumptionValueFrontend(BaseModel):
     """Response schema com os nomes de campo que o frontend espera."""
 

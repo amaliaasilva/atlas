@@ -88,7 +88,11 @@ def expand_annual_step(
             result[p] = steps[year_str]
         elif default_mode == "last_known":
             known = [y for y in sorted_years if y <= year_str]
-            result[p] = steps[known[-1]] if known else (list(steps.values())[0] if steps else 0.0)
+            result[p] = (
+                steps[known[-1]]
+                if known
+                else (list(steps.values())[0] if steps else 0.0)
+            )
         else:
             result[p] = 0.0
     return result
@@ -116,18 +120,18 @@ def expand_assumption(
 
     if rule_type == "compound_growth":
         rate = float(growth_rule.get("rate", 0.0))
-        by = (
-            growth_rule.get("base_year")
-            or base_year
-            or int(periods[0][:4])
-        )
+        by = growth_rule.get("base_year") or base_year or int(periods[0][:4])
         return expand_compound_growth(base_value, rate, int(by), periods)
 
     elif rule_type == "curve":
         annual_values = growth_rule.get("values", [])
         if not annual_values:
             return {p: base_value for p in periods}
-        opening_year = base_year if base_year is not None else (int(periods[0][:4]) if periods else None)
+        opening_year = (
+            base_year
+            if base_year is not None
+            else (int(periods[0][:4]) if periods else None)
+        )
         return expand_curve(annual_values, periods, opening_year=opening_year)
 
     elif rule_type == "annual_step":

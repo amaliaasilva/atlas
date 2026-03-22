@@ -61,9 +61,9 @@ ATLAS_PLANS = [
     # GAP-02: Bronze = flexível = maior preço/hora; Diamante = comprometimento máximo = menor preço
     # Mix equalizado em 25% cada. Preço médio = (50+55+60+65)/4 = R$57,50/h
     ServicePlanMix(name="Diamante", price_per_hour=50.0, mix_pct=0.25),
-    ServicePlanMix(name="Ouro",     price_per_hour=55.0, mix_pct=0.25),
-    ServicePlanMix(name="Prata",    price_per_hour=60.0, mix_pct=0.25),
-    ServicePlanMix(name="Bronze",   price_per_hour=65.0, mix_pct=0.25),
+    ServicePlanMix(name="Ouro", price_per_hour=55.0, mix_pct=0.25),
+    ServicePlanMix(name="Prata", price_per_hour=60.0, mix_pct=0.25),
+    ServicePlanMix(name="Bronze", price_per_hour=65.0, mix_pct=0.25),
 ]
 
 
@@ -289,12 +289,16 @@ class TestFixedCostsCalculator:
 class TestVariableCostsCalculator:
     def test_hygiene_kit_per_active_slot(self):
         inputs = VariableCostInputs(hygiene_kit_per_student=3.50)
-        result = calculate_total_variable_costs(inputs, active_students=121, gross_revenue=7_236.0)
+        result = calculate_total_variable_costs(
+            inputs, active_students=121, gross_revenue=7_236.0
+        )
         assert result["hygiene_kit_cost"] == pytest.approx(121 * 3.50)
 
     def test_sales_commission_on_revenue(self):
         inputs = VariableCostInputs(sales_commission_rate=0.035)
-        result = calculate_total_variable_costs(inputs, active_students=121, gross_revenue=7_236.0)
+        result = calculate_total_variable_costs(
+            inputs, active_students=121, gross_revenue=7_236.0
+        )
         assert result["sales_commission_cost"] == pytest.approx(7_236.0 * 0.035)
 
 
@@ -315,12 +319,16 @@ class TestFinancingCalculator:
         assert 38_000 < pmt < 42_000
 
     def test_schedule_length(self):
-        inputs = FinancingInputs(financed_amount=60_000.0, monthly_interest_rate=0.015, term_months=60)
+        inputs = FinancingInputs(
+            financed_amount=60_000.0, monthly_interest_rate=0.015, term_months=60
+        )
         schedule = get_financing_schedule(inputs)
         assert len(schedule) == 60
 
     def test_schedule_balance_zero_at_end(self):
-        inputs = FinancingInputs(financed_amount=60_000.0, monthly_interest_rate=0.015, term_months=60)
+        inputs = FinancingInputs(
+            financed_amount=60_000.0, monthly_interest_rate=0.015, term_months=60
+        )
         schedule = get_financing_schedule(inputs)
         assert schedule[-1]["balance"] == pytest.approx(0.0, abs=1.0)
 
@@ -339,12 +347,18 @@ class TestFinancingCalculator:
         """Dois contratos: soma dos pagamentos no mês 1."""
         contracts = [
             FinancingContractInputs(
-                name="Máquinas", financed_amount=287_951.0, monthly_rate=0.0,
-                term_months=12, start_offset_months=0,
+                name="Máquinas",
+                financed_amount=287_951.0,
+                monthly_rate=0.0,
+                term_months=12,
+                start_offset_months=0,
             ),
             FinancingContractInputs(
-                name="Imóvel", financed_amount=1_750_000.0, monthly_rate=0.012,
-                term_months=60, start_offset_months=0,
+                name="Imóvel",
+                financed_amount=1_750_000.0,
+                monthly_rate=0.012,
+                term_months=60,
+                start_offset_months=0,
             ),
         ]
         pay = get_multi_contract_payment(contracts, period_month=1)
@@ -355,8 +369,11 @@ class TestFinancingCalculator:
         """Contrato com start_offset_months=3: meses 1-3 = 0, mês 4+ > 0."""
         contracts = [
             FinancingContractInputs(
-                name="Arquiteto", financed_amount=14_000.0, monthly_rate=0.0,
-                term_months=3, start_offset_months=3,
+                name="Arquiteto",
+                financed_amount=14_000.0,
+                monthly_rate=0.0,
+                term_months=3,
+                start_offset_months=3,
             ),
         ]
         for m in range(1, 4):
@@ -369,8 +386,11 @@ class TestFinancingCalculator:
         """Com 20% de entrada, financia apenas 80% do valor."""
         contracts = [
             FinancingContractInputs(
-                name="Obra", financed_amount=250_000.0, monthly_rate=0.0,
-                term_months=12, down_payment_pct=0.20,
+                name="Obra",
+                financed_amount=250_000.0,
+                monthly_rate=0.0,
+                term_months=12,
+                down_payment_pct=0.20,
             ),
         ]
         pay = get_multi_contract_payment(contracts, period_month=1)
@@ -386,7 +406,9 @@ class TestFinancingCalculator:
 class TestKPICalculator:
     def test_break_even_revenue(self):
         """BE = 35.000 / (1 - 0.035 - 0.06) = 35.000 / 0.905"""
-        be = calculate_break_even_revenue(35_000.0, variable_cost_pct=0.035, tax_rate=0.06)
+        be = calculate_break_even_revenue(
+            35_000.0, variable_cost_pct=0.035, tax_rate=0.06
+        )
         assert be == pytest.approx(35_000.0 / 0.905, rel=1e-3)
 
     def test_break_even_occupancy_pct(self):
@@ -429,15 +451,24 @@ class TestKPICalculator:
 
     def test_payback_months(self):
         """CAPEX=10k; +3k/mês → payback no mês 4"""
-        periods = [PeriodResult(period=f"2026-{m:02d}", net_result=3_000.0) for m in range(1, 8)]
+        periods = [
+            PeriodResult(period=f"2026-{m:02d}", net_result=3_000.0)
+            for m in range(1, 8)
+        ]
         assert calculate_payback_months(10_000.0, periods) == 4
 
     def test_no_payback_in_horizon(self):
-        periods = [PeriodResult(period=f"2026-{m:02d}", net_result=-1_000.0) for m in range(1, 13)]
+        periods = [
+            PeriodResult(period=f"2026-{m:02d}", net_result=-1_000.0)
+            for m in range(1, 13)
+        ]
         assert calculate_payback_months(100_000.0, periods) is None
 
     def test_payback_no_capex(self):
-        periods = [PeriodResult(period=f"2026-{m:02d}", net_result=1_000.0) for m in range(1, 6)]
+        periods = [
+            PeriodResult(period=f"2026-{m:02d}", net_result=1_000.0)
+            for m in range(1, 6)
+        ]
         assert calculate_payback_months(0.0, periods) is None
 
 
@@ -483,8 +514,11 @@ class TestFinancialEngineIntegration:
             capex=CapexInputs(),
             financing_contracts=[
                 FinancingContractInputs(
-                    name="Imóvel", financed_amount=1_750_000.0, monthly_rate=0.012,
-                    term_months=60, start_offset_months=0,
+                    name="Imóvel",
+                    financed_amount=1_750_000.0,
+                    monthly_rate=0.012,
+                    term_months=60,
+                    start_offset_months=0,
                 ),
             ],
             taxes=TaxInputs(tax_rate_on_revenue=0.06),
@@ -507,21 +541,27 @@ class TestFinancialEngineIntegration:
         """Mês inicial: receita = 4020 × 0.03 × 57.50 = R$ 6.934,50 (GAP-02 corrigido)"""
         engine = FinancialEngine()
         periods = [self._make_inputs("2026-08", 0.03)]
-        outputs = engine.calculate(periods, CapexInputs(), "bv-001", "unit-001", "sc-001")
+        outputs = engine.calculate(
+            periods, CapexInputs(), "bv-001", "unit-001", "sc-001"
+        )
         assert outputs.periods[0].gross_revenue == pytest.approx(6_934.5, rel=1e-2)
 
     def test_engine_negative_result_early_months(self):
         """Meses iniciais devem ter resultado negativo (custos > receita)."""
         engine = FinancialEngine()
         periods = [self._make_inputs("2026-08", 0.03)]
-        outputs = engine.calculate(periods, CapexInputs(), "bv-001", "unit-001", "sc-001")
+        outputs = engine.calculate(
+            periods, CapexInputs(), "bv-001", "unit-001", "sc-001"
+        )
         assert outputs.periods[0].net_result < 0
 
     def test_engine_calculation_trace_populated(self):
         """Cada período deve ter calculation_trace com fórmulas usadas."""
         engine = FinancialEngine()
         periods = [self._make_inputs("2026-08", 0.25)]
-        outputs = engine.calculate(periods, CapexInputs(), "bv-001", "unit-001", "sc-001")
+        outputs = engine.calculate(
+            periods, CapexInputs(), "bv-001", "unit-001", "sc-001"
+        )
         trace = outputs.periods[0].calculation_trace
         assert trace["revenue"]["formula"].startswith("capacity_hours")
         assert trace["revenue"]["capacity_hours_month"] == 4020.0
@@ -534,7 +574,9 @@ class TestFinancialEngineIntegration:
         """break_even_revenue, break_even_occupancy_pct, contribution_margin_pct calculados."""
         engine = FinancialEngine()
         periods = [self._make_inputs("2026-08", 0.25)]
-        outputs = engine.calculate(periods, CapexInputs(), "bv-001", "unit-001", "sc-001")
+        outputs = engine.calculate(
+            periods, CapexInputs(), "bv-001", "unit-001", "sc-001"
+        )
         p = outputs.periods[0]
         assert p.break_even_revenue > 0
         assert 0 < p.break_even_occupancy_pct <= 1.0
@@ -557,8 +599,11 @@ class TestFinancialEngineIntegration:
         inps = [self._make_inputs("2026-08", 0.25)]
         inps[0].financing_contracts.append(
             FinancingContractInputs(
-                name="Máquinas", financed_amount=287_951.0, monthly_rate=0.0,
-                term_months=12, start_offset_months=0,
+                name="Máquinas",
+                financed_amount=287_951.0,
+                monthly_rate=0.0,
+                term_months=12,
+                start_offset_months=0,
             )
         )
         outputs = engine.calculate(inps, CapexInputs(), "bv-001", "unit-001", "sc-001")

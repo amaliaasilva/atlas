@@ -28,6 +28,7 @@ router = APIRouter()
 
 # ── Categories ────────────────────────────────────────────────────────────────
 
+
 @router.get("/categories", response_model=list[AssumptionCategoryOut])
 def list_categories(
     business_id: str | None = Query(None),
@@ -54,6 +55,7 @@ def create_category(
 
 
 # ── Definitions ───────────────────────────────────────────────────────────────
+
 
 @router.get("/definitions", response_model=list[AssumptionDefinitionOut])
 def list_definitions(
@@ -88,6 +90,7 @@ def create_definition(
 
 
 # ── Values (rotas antigas — compatibilidade) ──────────────────────────────────
+
 
 @router.get("/values", response_model=list[AssumptionValueOut])
 def list_values(
@@ -137,6 +140,7 @@ def bulk_upsert_values(
 
 
 # ── Values (rotas do frontend) ────────────────────────────────────────────────
+
 
 @router.get("/values/{version_id}", response_model=list[AssumptionValueFrontend])
 def get_version_values(
@@ -213,12 +217,13 @@ def update_value(
 
 # ── Quick Add (ARCH-05) ───────────────────────────────────────────────────────
 
+
 class QuickAddAssumptionRequest(BaseModel):
     budget_version_id: str
     business_id: str
     name: str
     value: float
-    category_code: str               # "CUSTO_FIXO" | "CUSTO_VARIAVEL" | "RECEITA" | "CAPEX"
+    category_code: str  # "CUSTO_FIXO" | "CUSTO_VARIAVEL" | "RECEITA" | "CAPEX"
     data_type: str | None = "currency"
     growth_rule: dict | None = None  # se None → {"type": "static", "value": value}
 

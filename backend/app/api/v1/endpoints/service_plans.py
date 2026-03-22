@@ -43,6 +43,7 @@ def create_plan(
 ):
     """Cria um novo plano de serviço."""
     import uuid
+
     plan = ServicePlan(id=str(uuid.uuid4()), **data.model_dump())
     db.add(plan)
     db.commit()
@@ -78,7 +79,11 @@ def update_plan(
     if data.target_mix_pct is not None:
         other_plans = (
             db.query(ServicePlan)
-            .filter(ServicePlan.business_id == p.business_id, ServicePlan.id != plan_id, ServicePlan.is_active == True)
+            .filter(
+                ServicePlan.business_id == p.business_id,
+                ServicePlan.id != plan_id,
+                ServicePlan.is_active == True,
+            )
             .all()
         )
         total_mix = sum(op.target_mix_pct for op in other_plans) + p.target_mix_pct

@@ -40,7 +40,9 @@ def calculate_staff_costs(inputs: FixedCostInputs) -> dict:
     }
 
 
-def calculate_utility_costs(inputs: FixedCostInputs, occupancy_rate: float = 0.0) -> dict:
+def calculate_utility_costs(
+    inputs: FixedCostInputs, occupancy_rate: float = 0.0
+) -> dict:
     """
     Energia e Água: modelo misto (fixo + variável proporcional à ocupação).
 
@@ -63,7 +65,9 @@ def calculate_utility_costs(inputs: FixedCostInputs, occupancy_rate: float = 0.0
             2,
         )
         elec_fixed = round(inputs.fixed_energy_cost * automation_factor, 2)
-        elec_variable = round(inputs.max_variable_energy_cost * occ * automation_factor, 2)
+        elec_variable = round(
+            inputs.max_variable_energy_cost * occ * automation_factor, 2
+        )
     else:
         electricity = round(inputs.electricity_kwh * inputs.electricity_rate, 2)
         elec_fixed = electricity
@@ -134,10 +138,14 @@ def calculate_rent(inputs: FixedCostInputs) -> float:
 
 
 def calculate_other_fixed(inputs: FixedCostInputs) -> float:
-    return round(inputs.security_systems + inputs.financial_fees + inputs.other_fixed_costs, 2)
+    return round(
+        inputs.security_systems + inputs.financial_fees + inputs.other_fixed_costs, 2
+    )
 
 
-def calculate_total_fixed_costs(inputs: FixedCostInputs, occupancy_rate: float = 0.0) -> dict:
+def calculate_total_fixed_costs(
+    inputs: FixedCostInputs, occupancy_rate: float = 0.0
+) -> dict:
     """
     Soma todos os custos fixos e retorna breakdown.
     occupancy_rate é necessário para o modelo misto de utilities.

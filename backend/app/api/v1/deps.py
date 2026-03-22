@@ -55,7 +55,9 @@ def verify_business_access(business_id: str, current_user: User, db: Session) ->
     # Check for direct business-level role
     direct_role = (
         db.query(UserRole)
-        .filter(UserRole.user_id == current_user.id, UserRole.business_id == business_id)
+        .filter(
+            UserRole.user_id == current_user.id, UserRole.business_id == business_id
+        )
         .first()
     )
     if direct_role:
@@ -63,6 +65,7 @@ def verify_business_access(business_id: str, current_user: User, db: Session) ->
 
     # Check for org-level role: fetch business org_id then verify user has a role in that org
     from app.models.business import Business  # local import to avoid circular deps
+
     business = db.query(Business).filter(Business.id == business_id).first()
     if business:
         org_role = (

@@ -30,7 +30,12 @@ CONSOLIDATED_METRICS = [
 
 # Métricas que NÃO devem ser somadas no consolidado;
 # são derivadas pelo dashboard a partir dos somáveis acima.
-DERIVED_METRICS = {"occupancy_rate", "break_even_occupancy_pct", "contribution_margin_pct", "net_margin"}
+DERIVED_METRICS = {
+    "occupancy_rate",
+    "break_even_occupancy_pct",
+    "contribution_margin_pct",
+    "net_margin",
+}
 
 
 def consolidate_business(

@@ -1,6 +1,7 @@
 """
 Atlas Finance — AI Schemas: Copilot / Scenario
 """
+
 from __future__ import annotations
 from pydantic import BaseModel
 
@@ -19,7 +20,7 @@ class CopilotScenarioRequest(BaseModel):
 
 
 class CopilotScenarioResponse(BaseModel):
-    status: str                           # "planned" | "completed" | "error"
+    status: str  # "planned" | "completed" | "error"
     planned_actions: list[FunctionCall] = []
     confirmation_required: bool = False
     actions_executed: list[dict] = []

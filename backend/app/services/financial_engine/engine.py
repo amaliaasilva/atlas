@@ -134,7 +134,9 @@ class FinancialEngine:
             # 5. Financiamento — múltiplos contratos ou contrato único
             financing_month_offset += 1
             if inp.financing_contracts:
-                fin = get_multi_contract_payment(inp.financing_contracts, financing_month_offset)
+                fin = get_multi_contract_payment(
+                    inp.financing_contracts, financing_month_offset
+                )
             else:
                 fin = get_payment_for_period(inp.financing, financing_month_offset)
                 fin.setdefault("contracts", [])
@@ -149,8 +151,12 @@ class FinancialEngine:
                 + result.taxes_on_revenue,
                 2,
             )
-            result.operating_result = round(result.gross_revenue - result.total_costs, 2)
-            result.net_result = round(result.operating_result - result.financing_payment, 2)
+            result.operating_result = round(
+                result.gross_revenue - result.total_costs, 2
+            )
+            result.net_result = round(
+                result.operating_result - result.financing_payment, 2
+            )
             if result.gross_revenue > 0:
                 result.net_margin = round(result.net_result / result.gross_revenue, 4)
 
@@ -169,7 +175,9 @@ class FinancialEngine:
                 result.avg_price_per_hour,
             )
             result.contribution_margin_pct = calculate_contribution_margin_pct(
-                result.gross_revenue, result.total_variable_costs, result.taxes_on_revenue
+                result.gross_revenue,
+                result.total_variable_costs,
+                result.taxes_on_revenue,
             )
             # break_even_students = classes/horas necessárias (compat. legado)
             result.break_even_students = int(
@@ -332,7 +340,9 @@ class FinancialEngine:
                 "burn_rate": round(data["burn_rate"], 2),
                 "net_margin": round(net / rev, 4) if rev > 0 else 0.0,
                 "break_even_revenue": round(data["_last_break_even_revenue"], 2),
-                "break_even_occupancy_pct": round(data["_last_break_even_occupancy"], 4),
+                "break_even_occupancy_pct": round(
+                    data["_last_break_even_occupancy"], 4
+                ),
                 "occupancy_rate": round(data["_last_occupancy_rate"], 4),
                 "capacity_hours_month": round(data["_last_capacity_hours"], 2),
             }
@@ -399,22 +409,30 @@ class FinancialEngine:
                 "net_margin": period.net_margin,
                 "active_students": float(period.active_students),
                 # Professores necessários (GAP-06)
-                "teachers_needed_pessimistic": float(period.teachers_needed_pessimistic),
+                "teachers_needed_pessimistic": float(
+                    period.teachers_needed_pessimistic
+                ),
                 "teachers_needed_medium": float(period.teachers_needed_medium),
                 "teachers_needed_optimistic": float(period.teachers_needed_optimistic),
             }
             # Sub-itens de DRE extraídos do calculation_trace (GAP-08)
             trace = period.calculation_trace
-            staff_detail = trace.get("fixed_costs", {}).get("detail", {}).get("staff", {})
-            util_detail = trace.get("fixed_costs", {}).get("detail", {}).get("utilities", {})
-            period_data.update({
-                "fc_pro_labore":     staff_detail.get("pro_labore", 0.0),
-                "fc_clt_base":       staff_detail.get("clt_base", 0.0),
-                "fc_social_charges": staff_detail.get("social_charges", 0.0),
-                "fc_electricity":    util_detail.get("electricity", 0.0),
-                "fc_water":          util_detail.get("water", 0.0),
-                "fc_internet":       util_detail.get("internet_phone", 0.0),
-            })
+            staff_detail = (
+                trace.get("fixed_costs", {}).get("detail", {}).get("staff", {})
+            )
+            util_detail = (
+                trace.get("fixed_costs", {}).get("detail", {}).get("utilities", {})
+            )
+            period_data.update(
+                {
+                    "fc_pro_labore": staff_detail.get("pro_labore", 0.0),
+                    "fc_clt_base": staff_detail.get("clt_base", 0.0),
+                    "fc_social_charges": staff_detail.get("social_charges", 0.0),
+                    "fc_electricity": util_detail.get("electricity", 0.0),
+                    "fc_water": util_detail.get("water", 0.0),
+                    "fc_internet": util_detail.get("internet_phone", 0.0),
+                }
+            )
             # trace com todos os KPIs — persiste apenas na linha do net_result
             trace = period.calculation_trace
             for code, value in period_data.items():

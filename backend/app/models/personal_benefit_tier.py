@@ -44,7 +44,9 @@ class PersonalBenefitTier(Base, TimestampMixin):
     insurance_value: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
 
     # Bônus percentual sobre horas vendidas acima do plano contratado
-    bonus_pct_on_extra: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    bonus_pct_on_extra: Mapped[float] = mapped_column(
+        Float, default=0.0, nullable=False
+    )
 
     # Relationships
     service_plan: Mapped["ServicePlan"] = relationship(

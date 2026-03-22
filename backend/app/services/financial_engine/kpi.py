@@ -22,7 +22,7 @@ from app.services.financial_engine.models import PeriodResult
 def calculate_break_even_revenue(
     total_fixed_costs: float,
     variable_cost_pct: float,  # % de custos variáveis sobre receita (0.0–1.0)
-    tax_rate: float,            # % de impostos sobre receita (0.0–1.0)
+    tax_rate: float,  # % de impostos sobre receita (0.0–1.0)
 ) -> float:
     """
     Ponto de equilíbrio em R$ de receita mensal.
@@ -37,7 +37,7 @@ def calculate_break_even_revenue(
 def calculate_break_even_occupancy_pct(
     break_even_revenue: float,
     capacity_hours_month: float,  # horas totais disponíveis no mês
-    avg_price_per_hour: float,    # preço médio ponderado R$/hora
+    avg_price_per_hour: float,  # preço médio ponderado R$/hora
 ) -> float:
     """
     % de ocupação mínima para atingir o break-even operacional.
@@ -96,7 +96,9 @@ def calculate_contribution_margin_pct(
     """
     if gross_revenue <= 0:
         return 0.0
-    return round((gross_revenue - total_variable_costs - taxes_on_revenue) / gross_revenue, 4)
+    return round(
+        (gross_revenue - total_variable_costs - taxes_on_revenue) / gross_revenue, 4
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -12,7 +12,7 @@ class BudgetVersionCreate(BaseModel):
     # Campos do frontend
     name: str | None = Field(None, min_length=2, max_length=100)
     horizon_start: str | None = None  # "YYYY-MM"
-    horizon_end: str | None = None    # "YYYY-MM"
+    horizon_end: str | None = None  # "YYYY-MM"
     # Campos legados (API direta)
     version_name: str | None = Field(None, min_length=2, max_length=100)
     effective_start_date: date | None = None
@@ -56,7 +56,7 @@ class BudgetVersionCreate(BaseModel):
 
 class BudgetVersionUpdate(BaseModel):
     version_name: str | None = None
-    name: str | None = None          # alias frontend
+    name: str | None = None  # alias frontend
     status: str | None = None
     notes: str | None = None
     effective_start_date: date | None = None

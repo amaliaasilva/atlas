@@ -7,6 +7,7 @@ Configuração via settings.AI_PROVIDER:
   "openai" → usa openai>=1.0 (pip install openai)
   "gemini" → usa google-generativeai (pip install google-generativeai)
 """
+
 from __future__ import annotations
 
 import json
@@ -44,7 +45,9 @@ class AIClient:
             return self._gemini_chat(system, user)
         return "__mock__"
 
-    def structured_output(self, system: str, user: str, schema: dict[str, Any]) -> dict[str, Any]:
+    def structured_output(
+        self, system: str, user: str, schema: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Gera saída JSON estruturada conforme ``schema`` (JSON Schema dict).
         Provider=mock retorna o primeiro campo de cada propriedade com valor padrão.
@@ -80,7 +83,9 @@ class AIClient:
         )
         return resp.choices[0].message.content or ""
 
-    def _openai_structured(self, system: str, user: str, schema: dict[str, Any]) -> dict[str, Any]:
+    def _openai_structured(
+        self, system: str, user: str, schema: dict[str, Any]
+    ) -> dict[str, Any]:
         try:
             from openai import OpenAI  # type: ignore
         except ImportError:
@@ -112,7 +117,9 @@ class AIClient:
         try:
             import google.generativeai as genai  # type: ignore
         except ImportError:
-            log.warning("google-generativeai package not installed — falling back to mock")
+            log.warning(
+                "google-generativeai package not installed — falling back to mock"
+            )
             return "__mock__"
         if not settings.GEMINI_API_KEY:
             log.warning("GEMINI_API_KEY not set — falling back to mock")

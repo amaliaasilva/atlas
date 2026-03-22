@@ -46,13 +46,20 @@ def create_contract(
     current_user: User = Depends(get_current_user),
 ):
     """Cria um novo contrato de financiamento."""
-    v = db.query(BudgetVersion).filter(BudgetVersion.id == data.budget_version_id).first()
+    v = (
+        db.query(BudgetVersion)
+        .filter(BudgetVersion.id == data.budget_version_id)
+        .first()
+    )
     if not v:
         raise HTTPException(status_code=404, detail="Versão não encontrada")
     if v.status == "archived":
-        raise HTTPException(status_code=409, detail="Versão arquivada não pode ser alterada")
+        raise HTTPException(
+            status_code=409, detail="Versão arquivada não pode ser alterada"
+        )
 
     import uuid
+
     contract = FinancingContract(id=str(uuid.uuid4()), **data.model_dump())
     db.add(contract)
     db.commit()

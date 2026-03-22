@@ -16,7 +16,7 @@ class ServicePlanMix:
 
     name: str = ""
     price_per_hour: float = 0.0  # R$/hora para este plano
-    mix_pct: float = 0.0          # participação no mix 0.0–1.0 (deve somar 1.0)
+    mix_pct: float = 0.0  # participação no mix 0.0–1.0 (deve somar 1.0)
 
 
 @dataclass
@@ -31,11 +31,11 @@ class FinancingContractInputs:
 
     name: str = ""
     financed_amount: float = 0.0
-    monthly_rate: float = 0.0           # ex.: 0.012 = 1.2% a.m.
+    monthly_rate: float = 0.0  # ex.: 0.012 = 1.2% a.m.
     term_months: int = 0
     grace_period_months: int = 0
-    down_payment_pct: float = 0.0       # % de entrada já paga (ex: 0.20 = 20%)
-    start_offset_months: int = 0        # offset desde o início do horizonte
+    down_payment_pct: float = 0.0  # % de entrada já paga (ex: 0.20 = 20%)
+    start_offset_months: int = 0  # offset desde o início do horizonte
 
 
 @dataclass
@@ -53,12 +53,12 @@ class RevenueInputs:
 
     # ── Modelo Coworking B2B ───────────────────────────────────────────────────
     # Campos operacionais da unidade (espelhados de Unit para o engine)
-    slots_per_hour: int = 10              # vagas simultâneas por hora
-    hours_per_day_weekday: float = 17.0   # horário seg–sex (ex: 05h–22h = 17h)
-    hours_per_day_saturday: float = 7.0   # horário sábado (ex: 08h–15h = 7h)
-    working_days_month: int = 22          # dias úteis no mês (seg–sex, sem feriados)
-    saturdays_month: int = 4              # sábados no mês
-    occupancy_rate: float = 0.0           # taxa de ocupação 0.0–1.0
+    slots_per_hour: int = 10  # vagas simultâneas por hora
+    hours_per_day_weekday: float = 17.0  # horário seg–sex (ex: 05h–22h = 17h)
+    hours_per_day_saturday: float = 7.0  # horário sábado (ex: 08h–15h = 7h)
+    working_days_month: int = 22  # dias úteis no mês (seg–sex, sem feriados)
+    saturdays_month: int = 4  # sábados no mês
+    occupancy_rate: float = 0.0  # taxa de ocupação 0.0–1.0
 
     # Mix de planos de serviço (Bronze/Prata/Ouro/Diamante).
     # Se preenchido, calcula avg_price_per_hour automaticamente.
@@ -106,7 +106,7 @@ class FixedCostInputs:
     commercial_staff_salary: float = 0.0
     manager_salary: float = 0.0
     fitness_teacher_salary: float = 0.0
-    pro_labore: float = 0.0           # NÃO incide encargos sociais
+    pro_labore: float = 0.0  # NÃO incide encargos sociais
     # GAP-04: encargos totais reais (~80% sobre salário bruto, ex: INSS+FGTS+benefícios)
     social_charges_rate: float = 0.80
     benefits_per_employee: float = 0.0
@@ -114,9 +114,11 @@ class FixedCostInputs:
 
     # ── Utilities (modelo misto — GAP-03) ─────────────────────────────────────
     # Energia: parcela fixa + parcela variável proporcional à ocupação
-    fixed_energy_cost: float = 0.0           # R$/mês (custo base independente de ocupação)
-    max_variable_energy_cost: float = 0.0    # R$/mês a 100% ocupação
-    automation_reduction: float = 0.0        # 0.0–1.0 (ex: 0.20 = 20% de economia por automação)
+    fixed_energy_cost: float = 0.0  # R$/mês (custo base independente de ocupação)
+    max_variable_energy_cost: float = 0.0  # R$/mês a 100% ocupação
+    automation_reduction: float = (
+        0.0  # 0.0–1.0 (ex: 0.20 = 20% de economia por automação)
+    )
     # Água: parcela fixa + parcela variável proporcional à ocupação
     fixed_water_cost: float = 0.0
     max_variable_water_cost: float = 0.0
@@ -148,7 +150,9 @@ class FixedCostInputs:
     # Other
     security_systems: float = 0.0
     financial_fees: float = 0.0
-    other_fixed_costs: float = 0.0   # ARCH-04: acumula premissas desconhecidas da categoria CUSTO_FIXO
+    other_fixed_costs: float = (
+        0.0  # ARCH-04: acumula premissas desconhecidas da categoria CUSTO_FIXO
+    )
 
 
 @dataclass
@@ -157,7 +161,9 @@ class VariableCostInputs:
 
     hygiene_kit_per_student: float = 0.0
     sales_commission_rate: float = 0.0  # % sobre receita
-    card_fee_rate: float = 0.0          # % sobre receita (taxa adquirente cartão, ex: 0.035 = 3,5%)
+    card_fee_rate: float = (
+        0.0  # % sobre receita (taxa adquirente cartão, ex: 0.035 = 3,5%)
+    )
     other_variable_costs: float = 0.0
 
 
@@ -173,12 +179,14 @@ class CapexInputs:
     technology_setup: float = 0.0
     other_capex: float = 0.0
     # GAP-05: itens adicionais da planilha
-    architect_fees: float = 0.0          # honorários de arquiteto
-    ac_automation: float = 0.0           # automação de A/C
-    branding_budget: float = 0.0         # identidade visual / branding
+    architect_fees: float = 0.0  # honorários de arquiteto
+    ac_automation: float = 0.0  # automação de A/C
+    branding_budget: float = 0.0  # identidade visual / branding
     # Vidas úteis para depreciação automática
-    equipment_useful_life_months: int = 60    # depreciação mensal = equipment_value / 60
-    renovation_useful_life_months: int = 120  # depreciação mensal = renovation_works / 120
+    equipment_useful_life_months: int = 60  # depreciação mensal = equipment_value / 60
+    renovation_useful_life_months: int = (
+        120  # depreciação mensal = renovation_works / 120
+    )
 
 
 @dataclass
@@ -265,27 +273,27 @@ class PeriodResult:
     net_margin: float = 0.0  # Net Result / Gross Revenue
 
     # KPIs — Coworking B2B
-    active_students: int = 0             # Equivalente a horas vendidas (compat.)
+    active_students: int = 0  # Equivalente a horas vendidas (compat.)
     occupancy_rate: float = 0.0
-    capacity_hours_month: float = 0.0    # Horas totais disponíveis no mês
-    active_hours_month: float = 0.0      # Horas efetivamente vendidas
-    avg_price_per_hour: float = 0.0      # Preço médio ponderado do mix
+    capacity_hours_month: float = 0.0  # Horas totais disponíveis no mês
+    active_hours_month: float = 0.0  # Horas efetivamente vendidas
+    avg_price_per_hour: float = 0.0  # Preço médio ponderado do mix
 
     # Breakeven
-    break_even_students: int = 0         # Horas/mês para break-even (compat.)
-    break_even_revenue: float = 0.0      # Receita mínima para break-even (R$)
+    break_even_students: int = 0  # Horas/mês para break-even (compat.)
+    break_even_revenue: float = 0.0  # Receita mínima para break-even (R$)
     break_even_occupancy_pct: float = 0.0  # Ocupação mínima para break-even
 
     # Margem
     contribution_margin_pct: float = 0.0  # Margem de contribuição (%)
 
-    burn_rate: float = 0.0               # Queima mensal (resultado negativo)
+    burn_rate: float = 0.0  # Queima mensal (resultado negativo)
     ebitda: float = 0.0
 
     # Professores necessários por cenário de break-even (GAP-06)
     teachers_needed_pessimistic: int = 0  # 1.0 aluno/prof
-    teachers_needed_medium: int = 0       # 1.5 alunos/prof
-    teachers_needed_optimistic: int = 0   # 2.0 alunos/prof
+    teachers_needed_medium: int = 0  # 1.5 alunos/prof
+    teachers_needed_optimistic: int = 0  # 2.0 alunos/prof
 
     # Trilha de cálculo auditavel por período
     calculation_trace: dict = field(default_factory=dict)

@@ -52,10 +52,11 @@ router = APIRouter()
 
 # ── Schemas de request/response ──────────────────────────────────────────────
 
+
 class SanityIssue(BaseModel):
-    severity: str   # "critical" | "warning" | "info"
-    code: str       # identificador técnico do problema
-    message: str    # descrição legível
+    severity: str  # "critical" | "warning" | "info"
+    code: str  # identificador técnico do problema
+    message: str  # descrição legível
     field: str | None = None  # campo/premissa afetado(a)
     suggestion: str | None = None  # sugestão de correção
 
@@ -64,14 +65,14 @@ class SanityCheckResponse(BaseModel):
     version_id: str
     version_name: str
     issues: list[SanityIssue]
-    score: int          # 0-100 (100 = sem problemas)
+    score: int  # 0-100 (100 = sem problemas)
     summary: str
-    ai_powered: bool    # False enquanto LLM não estiver integrado
+    ai_powered: bool  # False enquanto LLM não estiver integrado
 
 
 class CopilotRequest(BaseModel):
     question: str
-    version_id: str | None = None   # contexto opcional
+    version_id: str | None = None  # contexto opcional
     business_id: str | None = None  # contexto opcional
 
 
@@ -83,6 +84,7 @@ class CopilotResponse(BaseModel):
 
 
 # ── Helper: futura integração LLM ────────────────────────────────────────────
+
 
 def _call_llm(prompt: str) -> str:
     """
@@ -115,7 +117,10 @@ def _build_assumption_context(version_id: str, db: Session) -> dict[str, Any]:
     """Coleta premissas e resultados de uma versão para fornecer contexto ao LLM."""
     rows = (
         db.query(AssumptionValue, AssumptionDefinition)
-        .join(AssumptionDefinition, AssumptionValue.assumption_definition_id == AssumptionDefinition.id)
+        .join(
+            AssumptionDefinition,
+            AssumptionValue.assumption_definition_id == AssumptionDefinition.id,
+        )
         .filter(AssumptionValue.budget_version_id == version_id)
         .all()
     )
@@ -146,7 +151,9 @@ SANITY_RULES = [
 ]
 
 
-def _run_rule_based_checks(ctx: dict[str, Any], version: BudgetVersion) -> list[SanityIssue]:
+def _run_rule_based_checks(
+    ctx: dict[str, Any], version: BudgetVersion
+) -> list[SanityIssue]:
     """Verifica regras de negócio sem IA — determinísticas e rápidas."""
     issues: list[SanityIssue] = []
     a = ctx.get("assumptions", {})
@@ -154,24 +161,28 @@ def _run_rule_based_checks(ctx: dict[str, Any], version: BudgetVersion) -> list[
     # Verificação 1: taxa de ocupação inicial razoável (0–1)
     taxa = a.get("taxa_ocupacao", None)
     if taxa is not None and (taxa < 0 or taxa > 1):
-        issues.append(SanityIssue(
-            severity="critical",
-            code="INVALID_OCCUPANCY_RATE",
-            message=f"Taxa de ocupação fora do intervalo válido: {taxa:.2%}",
-            field="taxa_ocupacao",
-            suggestion="A taxa de ocupação deve estar entre 0 e 1 (ex: 0.75 = 75%).",
-        ))
+        issues.append(
+            SanityIssue(
+                severity="critical",
+                code="INVALID_OCCUPANCY_RATE",
+                message=f"Taxa de ocupação fora do intervalo válido: {taxa:.2%}",
+                field="taxa_ocupacao",
+                suggestion="A taxa de ocupação deve estar entre 0 e 1 (ex: 0.75 = 75%).",
+            )
+        )
 
     # Verificação 2: preço médio de hora positivo
     preco = a.get("preco_medio_hora", None)
     if preco is not None and preco <= 0:
-        issues.append(SanityIssue(
-            severity="critical",
-            code="INVALID_PRICE",
-            message=f"Preço médio por hora inválido: R${preco:.2f}",
-            field="preco_medio_hora",
-            suggestion="O preço médio deve ser positivo (ex: R$60/h).",
-        ))
+        issues.append(
+            SanityIssue(
+                severity="critical",
+                code="INVALID_PRICE",
+                message=f"Preço médio por hora inválido: R${preco:.2f}",
+                field="preco_medio_hora",
+                suggestion="O preço médio deve ser positivo (ex: R$60/h).",
+            )
+        )
 
     # Verificação 3: aluguel alto em relação à receita esperada
     aluguel = a.get("aluguel_mensal", 0)
@@ -181,13 +192,15 @@ def _run_rule_based_checks(ctx: dict[str, Any], version: BudgetVersion) -> list[
     preco_h = a.get("preco_medio_hora", 60)
     receita_max = slots * horas * dias * preco_h
     if receita_max > 0 and aluguel > receita_max * 0.5:
-        issues.append(SanityIssue(
-            severity="warning",
-            code="HIGH_RENT_TO_REVENUE",
-            message=f"Aluguel (R${aluguel:,.0f}) representa mais de 50% da receita máxima estimada (R${receita_max:,.0f}).",
-            field="aluguel_mensal",
-            suggestion="Verifique se o aluguel está correto ou revise a capacidade da unidade.",
-        ))
+        issues.append(
+            SanityIssue(
+                severity="warning",
+                code="HIGH_RENT_TO_REVENUE",
+                message=f"Aluguel (R${aluguel:,.0f}) representa mais de 50% da receita máxima estimada (R${receita_max:,.0f}).",
+                field="aluguel_mensal",
+                suggestion="Verifique se o aluguel está correto ou revise a capacidade da unidade.",
+            )
+        )
 
     # Verificação 4: mix de planos deve somar ~100%
     mix_sum = (
@@ -197,24 +210,28 @@ def _run_rule_based_checks(ctx: dict[str, Any], version: BudgetVersion) -> list[
         + a.get("mix_bronze_pct", 0)
     )
     if mix_sum > 0 and abs(mix_sum - 1.0) > 0.02:
-        issues.append(SanityIssue(
-            severity="warning",
-            code="MIX_DOESNT_SUM_100",
-            message=f"Mix de planos soma {mix_sum:.0%} (esperado: 100%).",
-            field="mix_diamante_pct / mix_ouro_pct / mix_prata_pct / mix_bronze_pct",
-            suggestion="Ajuste os percentuais para que a soma seja 1.0 (100%).",
-        ))
+        issues.append(
+            SanityIssue(
+                severity="warning",
+                code="MIX_DOESNT_SUM_100",
+                message=f"Mix de planos soma {mix_sum:.0%} (esperado: 100%).",
+                field="mix_diamante_pct / mix_ouro_pct / mix_prata_pct / mix_bronze_pct",
+                suggestion="Ajuste os percentuais para que a soma seja 1.0 (100%).",
+            )
+        )
 
     # Verificação 5: resultado líquido sempre negativo nos últimos 12 meses
     net_results = ctx.get("last_12_periods", {}).get("net_result", [])
     if net_results and all(v < 0 for v in net_results):
-        issues.append(SanityIssue(
-            severity="warning",
-            code="PERSISTENT_NEGATIVE_RESULT",
-            message="Resultado líquido negativo em todos os 12 últimos períodos calculados.",
-            field="net_result",
-            suggestion="Revise premissas de receita e custos. Verifique a curva de ocupação.",
-        ))
+        issues.append(
+            SanityIssue(
+                severity="warning",
+                code="PERSISTENT_NEGATIVE_RESULT",
+                message="Resultado líquido negativo em todos os 12 últimos períodos calculados.",
+                field="net_result",
+                suggestion="Revise premissas de receita e custos. Verifique a curva de ocupação.",
+            )
+        )
 
     return issues
 
@@ -243,12 +260,14 @@ def sanity_check(
     )
     ai_powered = llm_response != "__stub__"
     if ai_powered:
-        issues.append(SanityIssue(
-            severity="info",
-            code="AI_ANALYSIS",
-            message=llm_response[:500],
-            suggestion=None,
-        ))
+        issues.append(
+            SanityIssue(
+                severity="info",
+                code="AI_ANALYSIS",
+                message=llm_response[:500],
+                suggestion=None,
+            )
+        )
 
     # Score: começa em 100, -20 por crítico, -10 por warning
     score = 100
@@ -378,6 +397,7 @@ def copilot(
 
 # ── Geo-Pricing (stub) ────────────────────────────────────────────────────────
 
+
 class GeoPricingResponse(BaseModel):
     unit_id: str
     city: str
@@ -409,7 +429,7 @@ def geo_pricing(
 
     # Benchmarks por estado (stub — hardcoded para demo)
     state_benchmarks: dict[str, tuple[float, float, float]] = {
-        "SP": (55.0, 50.0, 75.0),   # (sugerido, min, max)
+        "SP": (55.0, 50.0, 75.0),  # (sugerido, min, max)
         "RJ": (50.0, 45.0, 70.0),
         "MG": (45.0, 40.0, 60.0),
         "RS": (45.0, 40.0, 60.0),
@@ -458,6 +478,7 @@ def _check_rate_limit(user_id: str, endpoint_key: str, limit: int) -> None:
 
 # ── POST /ai/sanity-check/{version_id} — AuditReport estruturado (Sprint 6) ────
 
+
 @router.post("/sanity-check/{version_id}", response_model=AuditReport)
 def ai_sanity_check_post(
     version_id: str,
@@ -469,7 +490,9 @@ def ai_sanity_check_post(
     Rate limit: AI_RATE_LIMIT_PER_USER_HOUR (padrão: 10/hora).
     Com AI_PROVIDER=mock retorna status "healthy" sem chamar LLM.
     """
-    _check_rate_limit(str(current_user.id), "sanity-check", settings.AI_RATE_LIMIT_PER_USER_HOUR)
+    _check_rate_limit(
+        str(current_user.id), "sanity-check", settings.AI_RATE_LIMIT_PER_USER_HOUR
+    )
 
     version = db.query(BudgetVersion).filter(BudgetVersion.id == version_id).first()
     if not version:
@@ -482,14 +505,16 @@ def ai_sanity_check_post(
 
     alerts: list[AuditAlert] = []
     for issue in legacy_issues:
-        alerts.append(AuditAlert(
-            severity=issue.severity,  # type: ignore[arg-type]
-            category=issue.code,
-            message=issue.message,
-            metric_affected=issue.field or "",
-            current_value=None,
-            threshold=None,
-        ))
+        alerts.append(
+            AuditAlert(
+                severity=issue.severity,  # type: ignore[arg-type]
+                category=issue.code,
+                message=issue.message,
+                metric_affected=issue.field or "",
+                current_value=None,
+                threshold=None,
+            )
+        )
 
     # Score: começa em 100, -20/crítico, -10/warning
     risk_score = 100
@@ -512,17 +537,23 @@ def ai_sanity_check_post(
     # Análise via LLM se disponível
     model_used = settings.AI_PROVIDER
     if settings.AI_PROVIDER != "mock":
-        with open("/workspaces/atlas/backend/app/services/ai/prompts/audit_system.txt") as f:
+        with open(
+            "/workspaces/atlas/backend/app/services/ai/prompts/audit_system.txt"
+        ) as f:
             system_prompt = f.read()
-        user_msg = f"Premissas: {json.dumps(ctx.get('assumptions', {}), ensure_ascii=False)}"
+        user_msg = (
+            f"Premissas: {json.dumps(ctx.get('assumptions', {}), ensure_ascii=False)}"
+        )
         llm_raw = ai_client.chat(system_prompt, user_msg, settings.AI_MODEL_AUDIT)
         if llm_raw and llm_raw != "__mock__":
-            alerts.append(AuditAlert(
-                severity="info",
-                category="AI_ANALYSIS",
-                message=llm_raw[:500],
-                metric_affected="",
-            ))
+            alerts.append(
+                AuditAlert(
+                    severity="info",
+                    category="AI_ANALYSIS",
+                    message=llm_raw[:500],
+                    metric_affected="",
+                )
+            )
 
     return AuditReport(
         overall_health=health,  # type: ignore[arg-type]
@@ -552,12 +583,22 @@ _NLP_KEYWORD_ACTIONS: list[tuple[list[str], str, dict]] = [
     (
         ["aluguel", "aluguel mensal"],
         "update_assumption",
-        {"version_id": "{version_id}", "code": "aluguel_mensal", "new_value": None, "rate_override": 0.15},
+        {
+            "version_id": "{version_id}",
+            "code": "aluguel_mensal",
+            "new_value": None,
+            "rate_override": 0.15,
+        },
     ),
     (
         ["pró-labore", "pro labore", "prolabore"],
         "update_assumption",
-        {"version_id": "{version_id}", "code": "pro_labore", "new_value": None, "rate_override": 0.10},
+        {
+            "version_id": "{version_id}",
+            "code": "pro_labore",
+            "new_value": None,
+            "rate_override": 0.10,
+        },
     ),
     (
         ["recalcular", "recalculate", "calcular"],
@@ -573,21 +614,27 @@ def _parse_command_mock(command: str, version_id: str) -> list[FunctionCall]:
     calls: list[FunctionCall] = []
     for keywords, func_name, base_args in _NLP_KEYWORD_ACTIONS:
         if any(kw in lower for kw in keywords):
-            args = {k: (v.replace("{version_id}", version_id) if isinstance(v, str) else v)
-                   for k, v in base_args.items()}
-            calls.append(FunctionCall(
-                function=func_name,
-                arguments=args,
-                description=f"Ação detectada: '{keywords[0]}' no comando",
-            ))
+            args = {
+                k: (v.replace("{version_id}", version_id) if isinstance(v, str) else v)
+                for k, v in base_args.items()
+            }
+            calls.append(
+                FunctionCall(
+                    function=func_name,
+                    arguments=args,
+                    description=f"Ação detectada: '{keywords[0]}' no comando",
+                )
+            )
             if len(calls) >= 5:
                 break
     if not calls:
-        calls.append(FunctionCall(
-            function="recalculate_version",
-            arguments={"version_id": version_id},
-            description="Nenhuma ação específica detectada — recalculando versão",
-        ))
+        calls.append(
+            FunctionCall(
+                function="recalculate_version",
+                arguments={"version_id": version_id},
+                description="Nenhuma ação específica detectada — recalculando versão",
+            )
+        )
     return calls
 
 
@@ -604,17 +651,22 @@ def scenario_copilot(
     """
     _check_rate_limit(str(current_user.id), "scenario-copilot", 5)
 
-    version = db.query(BudgetVersion).filter(BudgetVersion.id == data.budget_version_id).first()
+    version = (
+        db.query(BudgetVersion)
+        .filter(BudgetVersion.id == data.budget_version_id)
+        .first()
+    )
     if not version:
         raise HTTPException(status_code=404, detail="Versão não encontrada")
 
     # Interpreta o comando
     if settings.AI_PROVIDER != "mock":
-        with open("/workspaces/atlas/backend/app/services/ai/prompts/copilot_system.txt") as f:
+        with open(
+            "/workspaces/atlas/backend/app/services/ai/prompts/copilot_system.txt"
+        ) as f:
             system_prompt = f.read()
         user_msg = (
-            f"budget_version_id={data.budget_version_id}\n"
-            f"Comando: {data.command}"
+            f"budget_version_id={data.budget_version_id}\nComando: {data.command}"
         )
         raw = ai_client.chat(system_prompt, user_msg, settings.AI_MODEL_COPILOT)
         try:
@@ -695,7 +747,9 @@ def geo_pricing_post(
         "MG": {"bronze": 40.0, "prata": 45.0, "ouro": 55.0, "diamante": 65.0},
     }
     state = unit.state or "SP"
-    prices = state_benchmarks.get(state, {"bronze": 40.0, "prata": 45.0, "ouro": 55.0, "diamante": 65.0})
+    prices = state_benchmarks.get(
+        state, {"bronze": 40.0, "prata": 45.0, "ouro": 55.0, "diamante": 65.0}
+    )
 
     suggested = [
         SuggestedPrice(
@@ -716,10 +770,11 @@ def geo_pricing_post(
         revenue_impact={"estimated_annual_delta_pct": 0.05},
         confidence="low",
         data_sources=["Benchmark interno Atlas Finance"],
-        caveats=["Dados baseados em benchmarks estáticos. Para precisão, configure GOOGLE_PLACES_API_KEY."],
+        caveats=[
+            "Dados baseados em benchmarks estáticos. Para precisão, configure GOOGLE_PLACES_API_KEY."
+        ],
         model_used="mock" if settings.AI_PROVIDER == "mock" else settings.AI_PROVIDER,
     )
 
     _geo_cache[cache_key] = (time.time(), report)
     return report
-

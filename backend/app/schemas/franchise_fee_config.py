@@ -29,11 +29,11 @@ class FranchiseFeeConfigOut(FranchiseFeeConfigBase):
 
 # Response do endpoint /split
 class RevenueSplitPeriod(BaseModel):
-    period: str                        # Ex: "2026-01"
+    period: str  # Ex: "2026-01"
     gross_revenue: float
-    franchisee_revenue: float          # gross_revenue × (1 - platform_fee_pct)
-    platform_revenue: float            # gross_revenue × platform_fee_pct
-    referral_commission: float         # franchisee_revenue × referral_commission_pct
+    franchisee_revenue: float  # gross_revenue × (1 - platform_fee_pct)
+    platform_revenue: float  # gross_revenue × platform_fee_pct
+    referral_commission: float  # franchisee_revenue × referral_commission_pct
 
 
 class RevenueSplitResponse(BaseModel):
@@ -42,4 +42,4 @@ class RevenueSplitResponse(BaseModel):
     platform_fee_pct: float
     referral_commission_pct: float
     periods: list[RevenueSplitPeriod]
-    totals: RevenueSplitPeriod         # totais anualizados (period="TOTAL")
+    totals: RevenueSplitPeriod  # totais anualizados (period="TOTAL")

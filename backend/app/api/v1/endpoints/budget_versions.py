@@ -170,15 +170,17 @@ def clone_version(
         .all()
     )
     for val in source_values:
-        db.add(AssumptionValue(
-            budget_version_id=new_version.id,
-            assumption_definition_id=val.assumption_definition_id,
-            period_date=val.period_date,
-            value_numeric=val.value_numeric,
-            value_text=val.value_text,
-            source_type=val.source_type,
-            updated_by=current_user.id,
-        ))
+        db.add(
+            AssumptionValue(
+                budget_version_id=new_version.id,
+                assumption_definition_id=val.assumption_definition_id,
+                period_date=val.period_date,
+                value_numeric=val.value_numeric,
+                value_text=val.value_text,
+                source_type=val.source_type,
+                updated_by=current_user.id,
+            )
+        )
 
     db.commit()
     db.refresh(new_version)

@@ -3,7 +3,10 @@ Atlas Finance — Financing Calculator
 Calcula prestações usando sistema PRICE (PMT) para um ou múltiplos contratos.
 """
 
-from app.services.financial_engine.models import FinancingInputs, FinancingContractInputs
+from app.services.financial_engine.models import (
+    FinancingInputs,
+    FinancingContractInputs,
+)
 
 
 def calculate_pmt(principal: float, monthly_rate: float, term_months: int) -> float:
@@ -67,7 +70,11 @@ def get_payment_for_period(inputs: FinancingInputs, period_month: int) -> dict:
     if period_month > len(schedule):
         return {"payment": 0.0, "principal": 0.0, "interest": 0.0}
     entry = schedule[period_month - 1]
-    return {"payment": entry["payment"], "principal": entry["principal"], "interest": entry["interest"]}
+    return {
+        "payment": entry["payment"],
+        "principal": entry["principal"],
+        "interest": entry["interest"],
+    }
 
 
 def get_multi_contract_payment(
@@ -92,15 +99,27 @@ def get_multi_contract_payment(
         contract_month = period_month - contract.start_offset_months
         if contract_month < 1 or contract.term_months <= 0:
             contracts_detail.append(
-                {"name": contract.name, "payment": 0.0, "principal": 0.0, "interest": 0.0}
+                {
+                    "name": contract.name,
+                    "payment": 0.0,
+                    "principal": 0.0,
+                    "interest": 0.0,
+                }
             )
             continue
 
         # Desconta entrada
-        effective_amount = round(contract.financed_amount * (1.0 - contract.down_payment_pct), 2)
+        effective_amount = round(
+            contract.financed_amount * (1.0 - contract.down_payment_pct), 2
+        )
         if effective_amount <= 0:
             contracts_detail.append(
-                {"name": contract.name, "payment": 0.0, "principal": 0.0, "interest": 0.0}
+                {
+                    "name": contract.name,
+                    "payment": 0.0,
+                    "principal": 0.0,
+                    "interest": 0.0,
+                }
             )
             continue
 

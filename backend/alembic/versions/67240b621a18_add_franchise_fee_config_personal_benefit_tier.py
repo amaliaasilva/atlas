@@ -31,8 +31,12 @@ def upgrade() -> None:
             nullable=False,
             unique=True,
         ),
-        sa.Column("platform_fee_pct", sa.Float(), nullable=False, server_default="0.10"),
-        sa.Column("referral_commission_pct", sa.Float(), nullable=False, server_default="0.02"),
+        sa.Column(
+            "platform_fee_pct", sa.Float(), nullable=False, server_default="0.10"
+        ),
+        sa.Column(
+            "referral_commission_pct", sa.Float(), nullable=False, server_default="0.02"
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -46,7 +50,9 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
-    op.create_index("ix_franchise_fee_configs_business_id", "franchise_fee_configs", ["business_id"])
+    op.create_index(
+        "ix_franchise_fee_configs_business_id", "franchise_fee_configs", ["business_id"]
+    )
 
     # ── 2. personal_benefit_tiers ────────────────────────────────────────────
     op.create_table(
@@ -59,9 +65,13 @@ def upgrade() -> None:
             nullable=False,
             unique=True,
         ),
-        sa.Column("monthly_kit_value", sa.Float(), nullable=False, server_default="0.0"),
+        sa.Column(
+            "monthly_kit_value", sa.Float(), nullable=False, server_default="0.0"
+        ),
         sa.Column("insurance_value", sa.Float(), nullable=False, server_default="0.0"),
-        sa.Column("bonus_pct_on_extra", sa.Float(), nullable=False, server_default="0.0"),
+        sa.Column(
+            "bonus_pct_on_extra", sa.Float(), nullable=False, server_default="0.0"
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -75,12 +85,20 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
-    op.create_index("ix_personal_benefit_tiers_service_plan_id", "personal_benefit_tiers", ["service_plan_id"])
+    op.create_index(
+        "ix_personal_benefit_tiers_service_plan_id",
+        "personal_benefit_tiers",
+        ["service_plan_id"],
+    )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_personal_benefit_tiers_service_plan_id", table_name="personal_benefit_tiers")
+    op.drop_index(
+        "ix_personal_benefit_tiers_service_plan_id", table_name="personal_benefit_tiers"
+    )
     op.drop_table("personal_benefit_tiers")
 
-    op.drop_index("ix_franchise_fee_configs_business_id", table_name="franchise_fee_configs")
+    op.drop_index(
+        "ix_franchise_fee_configs_business_id", table_name="franchise_fee_configs"
+    )
     op.drop_table("franchise_fee_configs")

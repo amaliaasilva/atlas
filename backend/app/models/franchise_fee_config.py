@@ -43,7 +43,11 @@ class FranchiseFeeConfig(Base, TimestampMixin):
     platform_fee_pct: Mapped[float] = mapped_column(Float, default=0.10, nullable=False)
 
     # Comissão de indicação de novo PT (% da receita do franqueado)
-    referral_commission_pct: Mapped[float] = mapped_column(Float, default=0.02, nullable=False)
+    referral_commission_pct: Mapped[float] = mapped_column(
+        Float, default=0.02, nullable=False
+    )
 
     # Relationships
-    business: Mapped["Business"] = relationship("Business", backref="franchise_fee_config")
+    business: Mapped["Business"] = relationship(
+        "Business", backref="franchise_fee_config"
+    )

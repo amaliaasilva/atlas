@@ -62,5 +62,7 @@ class BudgetVersion(Base, TimestampMixin):
         cascade="all, delete-orphan",
     )
     financing_contracts: Mapped[list["FinancingContract"]] = relationship(
-        "FinancingContract", back_populates="budget_version", cascade="all, delete-orphan"
+        "FinancingContract",
+        back_populates="budget_version",
+        cascade="all, delete-orphan",
     )

@@ -38,7 +38,9 @@ class ServicePlan(Base, TimestampMixin):
     )
     # Identificação
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    code: Mapped[str] = mapped_column(String(50), nullable=False)  # bronze/prata/ouro/diamante
+    code: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # bronze/prata/ouro/diamante
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Precificação
@@ -55,4 +57,6 @@ class ServicePlan(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # Relationships
-    business: Mapped["Business"] = relationship("Business", back_populates="service_plans")
+    business: Mapped["Business"] = relationship(
+        "Business", back_populates="service_plans"
+    )

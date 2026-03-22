@@ -279,7 +279,10 @@ ASSUMPTION_DEFINITIONS = {
             True,
             "monthly",
             # ETAPA-2: curva de ocupação padrão — 10 anos
-            {"type": "curve", "values": [0.03, 0.12, 0.25, 0.40, 0.50, 0.60, 0.70, 0.75, 0.75, 0.75]},
+            {
+                "type": "curve",
+                "values": [0.03, 0.12, 0.25, 0.40, 0.50, 0.60, 0.70, 0.75, 0.75, 0.75],
+            },
         ),
         (
             "ticket_medio_plano_mensal",
@@ -453,7 +456,10 @@ ASSUMPTION_DEFINITIONS = {
             5000.0,
             True,
             "static",
-            {"type": "curve", "values": [5000, 5000, 5500, 5500, 6000, 6000, 6600, 6600, 7000, 7000]},
+            {
+                "type": "curve",
+                "values": [5000, 5000, 5500, 5500, 6000, 6000, 6600, 6600, 7000, 7000],
+            },
         ),
         (
             "encargos_folha_pct",
@@ -802,11 +808,43 @@ ASSUMPTION_DEFINITIONS = {
         ),
         ("outros_capex", "Outros CAPEX", "currency", "R$", 0.0, True, "one_time"),
         # GAP-05: itens faltantes versus planilha
-        ("honorarios_arquiteto", "Honorários de arquiteto", "currency", "R$", 0.0, True, "one_time"),
+        (
+            "honorarios_arquiteto",
+            "Honorários de arquiteto",
+            "currency",
+            "R$",
+            0.0,
+            True,
+            "one_time",
+        ),
         ("automacao_ac", "Automação de A/C", "currency", "R$", 0.0, True, "one_time"),
-        ("branding_identidade_visual", "Branding / Identidade visual", "currency", "R$", 0.0, True, "one_time"),
-        ("vida_util_equipamentos_meses", "Vida útil dos equipamentos (meses)", "integer", "meses", 60, True, "static"),
-        ("vida_util_reforma_meses", "Vida útil da reforma (meses)", "integer", "meses", 120, True, "static"),
+        (
+            "branding_identidade_visual",
+            "Branding / Identidade visual",
+            "currency",
+            "R$",
+            0.0,
+            True,
+            "one_time",
+        ),
+        (
+            "vida_util_equipamentos_meses",
+            "Vida útil dos equipamentos (meses)",
+            "integer",
+            "meses",
+            60,
+            True,
+            "static",
+        ),
+        (
+            "vida_util_reforma_meses",
+            "Vida útil da reforma (meses)",
+            "integer",
+            "meses",
+            120,
+            True,
+            "static",
+        ),
     ],
     "FINANCIAMENTO": [
         ("valor_financiado", "Valor financiado", "currency", "R$", 0.0, True, "static"),
@@ -1081,22 +1119,112 @@ LINE_ITEM_DEFINITIONS = [
         False,
     ),
     # ── KPIs B2B Coworking ────────────────────────────────────────────────────
-    ("occupancy_rate",         "Taxa de Ocupação (%)",               "result", "kpi", 61, True,  False, True),
-    ("capacity_hours_month",   "Capacidade (horas/mês)",             "result", "kpi", 62, False, False, False),
-    ("active_hours_month",     "Horas Vendidas (horas/mês)",         "result", "kpi", 63, False, False, False),
-    ("break_even_revenue",     "Break-even Receita (R$)",            "result", "kpi", 64, True,  True,  False),
-    ("break_even_occupancy_pct", "Break-even Ocupação (%)",          "result", "kpi", 65, True,  False, True),
-    ("contribution_margin_pct", "Margem de Contribuição (%)",        "result", "kpi", 66, True,  False, True),
-    ("net_margin",             "Margem Líquida (%)",                 "result", "kpi", 67, True,  False, True),
-    ("active_students",        "Slots Ativos / Horas Vendidas (int)","result", "kpi", 68, False, False, False),
+    ("occupancy_rate", "Taxa de Ocupação (%)", "result", "kpi", 61, True, False, True),
+    (
+        "capacity_hours_month",
+        "Capacidade (horas/mês)",
+        "result",
+        "kpi",
+        62,
+        False,
+        False,
+        False,
+    ),
+    (
+        "active_hours_month",
+        "Horas Vendidas (horas/mês)",
+        "result",
+        "kpi",
+        63,
+        False,
+        False,
+        False,
+    ),
+    (
+        "break_even_revenue",
+        "Break-even Receita (R$)",
+        "result",
+        "kpi",
+        64,
+        True,
+        True,
+        False,
+    ),
+    (
+        "break_even_occupancy_pct",
+        "Break-even Ocupação (%)",
+        "result",
+        "kpi",
+        65,
+        True,
+        False,
+        True,
+    ),
+    (
+        "contribution_margin_pct",
+        "Margem de Contribuição (%)",
+        "result",
+        "kpi",
+        66,
+        True,
+        False,
+        True,
+    ),
+    ("net_margin", "Margem Líquida (%)", "result", "kpi", 67, True, False, True),
+    (
+        "active_students",
+        "Slots Ativos / Horas Vendidas (int)",
+        "result",
+        "kpi",
+        68,
+        False,
+        False,
+        False,
+    ),
     # Sub-itens de staff (GAP-08)
-    ("fc_pro_labore",     "Pró-labore",                    "fixed_cost", "payroll", 120, False, False, False),
-    ("fc_clt_base",       "Folha CLT (base s/encargos)",    "fixed_cost", "payroll", 121, False, False, False),
-    ("fc_social_charges", "Encargos Sociais CLT (~80%)",    "fixed_cost", "payroll", 122, False, False, False),
+    ("fc_pro_labore", "Pró-labore", "fixed_cost", "payroll", 120, False, False, False),
+    (
+        "fc_clt_base",
+        "Folha CLT (base s/encargos)",
+        "fixed_cost",
+        "payroll",
+        121,
+        False,
+        False,
+        False,
+    ),
+    (
+        "fc_social_charges",
+        "Encargos Sociais CLT (~80%)",
+        "fixed_cost",
+        "payroll",
+        122,
+        False,
+        False,
+        False,
+    ),
     # Sub-itens de utilities (GAP-08)
-    ("fc_electricity",    "Energia Elétrica",               "fixed_cost", "utility", 123, False, False, False),
-    ("fc_water",          "Água e Esgoto",                  "fixed_cost", "utility", 124, False, False, False),
-    ("fc_internet",       "Internet + Telefonia",           "fixed_cost", "utility", 125, False, False, False),
+    (
+        "fc_electricity",
+        "Energia Elétrica",
+        "fixed_cost",
+        "utility",
+        123,
+        False,
+        False,
+        False,
+    ),
+    ("fc_water", "Água e Esgoto", "fixed_cost", "utility", 124, False, False, False),
+    (
+        "fc_internet",
+        "Internet + Telefonia",
+        "fixed_cost",
+        "utility",
+        125,
+        False,
+        False,
+        False,
+    ),
 ]
 
 
@@ -1174,8 +1302,16 @@ def run_seeds(db: Session):
 
     # 5. Units
     unit_ids = {}
-    MUTABLE_UNIT_FIELDS = ["status", "opening_date", "sort_order", "city", "state",
-                           "slots_per_hour", "hours_open_weekday", "hours_open_saturday"]
+    MUTABLE_UNIT_FIELDS = [
+        "status",
+        "opening_date",
+        "sort_order",
+        "city",
+        "state",
+        "slots_per_hour",
+        "hours_open_weekday",
+        "hours_open_saturday",
+    ]
     for u_data in UNITS_DATA:
         existing = (
             db.query(Unit)
@@ -1301,7 +1437,9 @@ def run_seeds(db: Session):
                 db.add(existing)
                 defn_updated += 1
     db.commit()
-    print(f"  ✓ {defn_count} definições de premissas criadas, {defn_updated} atualizadas com growth_rule")
+    print(
+        f"  ✓ {defn_count} definições de premissas criadas, {defn_updated} atualizadas com growth_rule"
+    )
 
     # 9. Line Item Definitions
     li_count = 0
@@ -1405,7 +1543,9 @@ def run_seeds(db: Session):
                     existing_bv.effective_start_date = opening
                     bv_updated += 1
     db.commit()
-    print(f"  ✓ {bv_created} versões de orçamento criadas, {bv_updated} datas corrigidas")
+    print(
+        f"  ✓ {bv_created} versões de orçamento criadas, {bv_updated} datas corrigidas"
+    )
 
     print("\n=== Seeds concluídos com sucesso! ===")
     print(f"  Organização:  {org.id}")

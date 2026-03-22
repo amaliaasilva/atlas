@@ -45,7 +45,9 @@ api_router.include_router(reports.router, prefix="/reports", tags=["reports"])
 api_router.include_router(imports.router, prefix="/imports", tags=["imports"])
 api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
 api_router.include_router(
-    financing_contracts.router, prefix="/financing-contracts", tags=["financing-contracts"]
+    financing_contracts.router,
+    prefix="/financing-contracts",
+    tags=["financing-contracts"],
 )
 api_router.include_router(
     service_plans.router, prefix="/service-plans", tags=["service-plans"]

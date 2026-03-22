@@ -1,6 +1,7 @@
 """
 Atlas Finance — AI Schemas: Geo-Pricing
 """
+
 from __future__ import annotations
 from datetime import datetime
 from typing import Literal
@@ -30,4 +31,4 @@ class GeoPricingReport(BaseModel):
 
 class GeoPricingRequest(BaseModel):
     unit_id: str
-    location: str | None = None       # CEP, bairro/cidade
+    location: str | None = None  # CEP, bairro/cidade

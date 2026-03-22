@@ -12,7 +12,11 @@ from app.api.v1.deps import get_current_user
 from app.models.user import User
 from app.models.unit import Unit
 from app.models.budget_version import BudgetVersion
-from app.models.assumption import AssumptionValue, AssumptionDefinition, AssumptionCategory
+from app.models.assumption import (
+    AssumptionValue,
+    AssumptionDefinition,
+    AssumptionCategory,
+)
 from app.models.financing_contract import FinancingContract
 from app.models.service_plan import ServicePlan
 from app.services.financial_engine import FinancialEngine
@@ -82,7 +86,9 @@ def _build_inputs_for_version(
 
     # ── ETAPA-1: Gera horizonte temporal a partir da data de abertura ──────
     version = db.query(BudgetVersion).filter(BudgetVersion.id == version_id).first()
-    unit = db.query(Unit).filter(Unit.id == version.unit_id).first() if version else None
+    unit = (
+        db.query(Unit).filter(Unit.id == version.unit_id).first() if version else None
+    )
 
     opening = None
     if version and version.effective_start_date:
@@ -113,7 +119,9 @@ def _build_inputs_for_version(
             )
             .all()
         )
-        base_year = opening.year if opening else (int(periods[0][:4]) if periods else 2026)
+        base_year = (
+            opening.year if opening else (int(periods[0][:4]) if periods else 2026)
+        )
         for defn in defns_with_rule:
             # Base value: valor estático explícito do usuário > primeiro período explícito > default da definição
             # O frontend salva valores com period_date='YYYY-MM', não None.
@@ -123,7 +131,9 @@ def _build_inputs_for_version(
                 base = values.get((defn.code, periods[0]))
             if base is None:
                 base = defn.default_value or 0.0
-            expanded = expand_assumption(defn.growth_rule, float(base), periods, base_year)
+            expanded = expand_assumption(
+                defn.growth_rule, float(base), periods, base_year
+            )
             for period, val in expanded.items():
                 # Só preenche se NÃO houver valor explícito para esse período
                 if (defn.code, period) not in values:
@@ -135,52 +145,89 @@ def _build_inputs_for_version(
     if unit:
         all_defns_with_cat = (
             db.query(AssumptionDefinition.code, AssumptionCategory.code)
-            .join(AssumptionCategory, AssumptionDefinition.category_id == AssumptionCategory.id)
+            .join(
+                AssumptionCategory,
+                AssumptionDefinition.category_id == AssumptionCategory.id,
+            )
             .filter(AssumptionDefinition.business_id == unit.business_id)
             .all()
         )
-        code_category_map = {defn_code: cat_code for defn_code, cat_code in all_defns_with_cat}
+        code_category_map = {
+            defn_code: cat_code for defn_code, cat_code in all_defns_with_cat
+        }
 
     # Codes já mapeados em inputs estruturados — não devem ser somados duas vezes
     KNOWN_FIXED_CODES = {
-        "aluguel_mensal", "condominio_mensal", "iptu_mensal",
-        "salario_limpeza", "salario_recepcao", "salario_marketing",
-        "salario_comercial", "salario_gerente", "salario_educador_fisico", "pro_labore",
-        "encargos_folha_pct", "beneficios_por_funcionario", "num_funcionarios",
-        "contabilidade_mensal", "marketing_digital_mensal", "material_identidade_visual",
-        "seguro_imovel", "seguro_equipamentos", "sistemas_seguranca",
-        "servicos_administrativos", "juridico_mensal", "sistema_gestao_mensal",
-        "material_escritorio", "higiene_limpeza_mensal", "material_publicitario",
-        "custo_energia_fixo", "custo_energia_variavel_max", "automacao_reducao_pct",
-        "kwh_consumo_mensal", "tarifa_kwh",
-        "custo_agua_fixo", "custo_agua_variavel_max",
-        "consumo_agua_m3_mensal", "tarifa_agua_m3",
+        "aluguel_mensal",
+        "condominio_mensal",
+        "iptu_mensal",
+        "salario_limpeza",
+        "salario_recepcao",
+        "salario_marketing",
+        "salario_comercial",
+        "salario_gerente",
+        "salario_educador_fisico",
+        "pro_labore",
+        "encargos_folha_pct",
+        "beneficios_por_funcionario",
+        "num_funcionarios",
+        "contabilidade_mensal",
+        "marketing_digital_mensal",
+        "material_identidade_visual",
+        "seguro_imovel",
+        "seguro_equipamentos",
+        "sistemas_seguranca",
+        "servicos_administrativos",
+        "juridico_mensal",
+        "sistema_gestao_mensal",
+        "material_escritorio",
+        "higiene_limpeza_mensal",
+        "material_publicitario",
+        "custo_energia_fixo",
+        "custo_energia_variavel_max",
+        "automacao_reducao_pct",
+        "kwh_consumo_mensal",
+        "tarifa_kwh",
+        "custo_agua_fixo",
+        "custo_agua_variavel_max",
+        "consumo_agua_m3_mensal",
+        "tarifa_agua_m3",
         "internet_telefonia_mensal",
-        "depreciacao_equipamentos", "manutencao_equipamentos",
+        "depreciacao_equipamentos",
+        "manutencao_equipamentos",
         "despesas_financeiras_taxas",
     }
     KNOWN_VARIABLE_CODES = {
-        "kit_higiene_por_aluno", "comissao_vendas_pct", "taxa_cartao_pct",
+        "kit_higiene_por_aluno",
+        "comissao_vendas_pct",
+        "taxa_cartao_pct",
         "outros_custos_variaveis",
     }
 
     # Identifica codes desconhecidos por categoria (conjuntos reutilizados no loop)
     extra_fixed_codes = {
-        code for (code, _) in values.keys()
+        code
+        for (code, _) in values.keys()
         if code not in KNOWN_FIXED_CODES and code_category_map.get(code) == "CUSTO_FIXO"
     }
     extra_var_codes = {
-        code for (code, _) in values.keys()
-        if code not in KNOWN_VARIABLE_CODES and code_category_map.get(code) == "CUSTO_VARIAVEL"
+        code
+        for (code, _) in values.keys()
+        if code not in KNOWN_VARIABLE_CODES
+        and code_category_map.get(code) == "CUSTO_VARIAVEL"
     }
 
     # ── ARCH-02: Carrega múltiplos contratos de financiamento ──────────────
     db_contracts = (
-        db.query(FinancingContract)
-        .filter(FinancingContract.budget_version_id == version_id)
-        .order_by(FinancingContract.sort_order)
-        .all()
-    ) if version else []
+        (
+            db.query(FinancingContract)
+            .filter(FinancingContract.budget_version_id == version_id)
+            .order_by(FinancingContract.sort_order)
+            .all()
+        )
+        if version
+        else []
+    )
 
     contract_inputs: list[FinancingContractInputs] = [
         FinancingContractInputs(
@@ -208,14 +255,18 @@ def _build_inputs_for_version(
             .all()
         )
 
-    service_plan_mix: list[ServicePlanMix] = [
-        ServicePlanMix(
-            name=sp.name,
-            price_per_hour=sp.price_per_hour,
-            mix_pct=sp.target_mix_pct,
-        )
-        for sp in db_plans
-    ] if db_plans else []
+    service_plan_mix: list[ServicePlanMix] = (
+        [
+            ServicePlanMix(
+                name=sp.name,
+                price_per_hour=sp.price_per_hour,
+                mix_pct=sp.target_mix_pct,
+            )
+            for sp in db_plans
+        ]
+        if db_plans
+        else []
+    )
 
     capex = CapexInputs(
         equipment_value=_get(values, "valor_equipamentos"),
@@ -229,8 +280,12 @@ def _build_inputs_for_version(
         architect_fees=_get(values, "honorarios_arquiteto"),
         ac_automation=_get(values, "automacao_ac"),
         branding_budget=_get(values, "branding_identidade_visual"),
-        equipment_useful_life_months=int(_get(values, "vida_util_equipamentos_meses", default=60)),
-        renovation_useful_life_months=int(_get(values, "vida_util_reforma_meses", default=120)),
+        equipment_useful_life_months=int(
+            _get(values, "vida_util_equipamentos_meses", default=60)
+        ),
+        renovation_useful_life_months=int(
+            _get(values, "vida_util_reforma_meses", default=120)
+        ),
     )
 
     # Legado: contrato único (usado apenas se não houver FinancingContract cadastrados)
@@ -249,8 +304,12 @@ def _build_inputs_for_version(
         revenue = RevenueInputs(
             # ── B2B Coworking (slot/hora) ──────────────────────────────────────
             slots_per_hour=int(_get(values, "slots_por_hora", p, default=10)),
-            hours_per_day_weekday=float(_get(values, "horas_dia_util", p, default=17.0)),
-            hours_per_day_saturday=float(_get(values, "horas_dia_sabado", p, default=7.0)),
+            hours_per_day_weekday=float(
+                _get(values, "horas_dia_util", p, default=17.0)
+            ),
+            hours_per_day_saturday=float(
+                _get(values, "horas_dia_sabado", p, default=7.0)
+            ),
             working_days_month=int(_get(values, "dias_uteis_mes", p, default=22)),
             saturdays_month=int(_get(values, "sabados_mes", p, default=4)),
             avg_price_per_hour=float(_get(values, "preco_medio_hora", p, default=60.0)),
@@ -259,14 +318,22 @@ def _build_inputs_for_version(
             # ── Legado (mantido para compat. de versões antigas) ──────────────
             max_students=int(_get(values, "alunos_capacidade_maxima", p, default=0)),
             occupancy_rate=_get(values, "taxa_ocupacao", p, default=0.0),
-            avg_ticket_monthly=_get(values, "ticket_medio_plano_mensal", p, default=0.0),
-            avg_ticket_quarterly=_get(values, "ticket_medio_plano_trimestral", p, default=0.0),
+            avg_ticket_monthly=_get(
+                values, "ticket_medio_plano_mensal", p, default=0.0
+            ),
+            avg_ticket_quarterly=_get(
+                values, "ticket_medio_plano_trimestral", p, default=0.0
+            ),
             avg_ticket_annual=_get(values, "ticket_medio_plano_anual", p, default=0.0),
             mix_monthly_pct=_get(values, "mix_plano_mensal_pct", p, default=1.0),
             mix_quarterly_pct=_get(values, "mix_plano_trimestral_pct", p, default=0.0),
             mix_annual_pct=_get(values, "mix_plano_anual_pct", p, default=0.0),
-            num_personal_trainers=int(_get(values, "num_personal_trainers", p, default=0)),
-            avg_personal_revenue_month=_get(values, "receita_media_personal_mes", p, default=0.0),
+            num_personal_trainers=int(
+                _get(values, "num_personal_trainers", p, default=0)
+            ),
+            avg_personal_revenue_month=_get(
+                values, "receita_media_personal_mes", p, default=0.0
+            ),
             other_revenue=_get(values, "outras_receitas", p, default=0.0),
         )
 
@@ -286,11 +353,15 @@ def _build_inputs_for_version(
             num_employees=int(_get(values, "num_funcionarios", p)),
             # ── Energia: modelo misto (fixo + variável × ocupação) ─────────────
             fixed_energy_cost=_get(values, "custo_energia_fixo", p, default=0.0),
-            max_variable_energy_cost=_get(values, "custo_energia_variavel_max", p, default=0.0),
+            max_variable_energy_cost=_get(
+                values, "custo_energia_variavel_max", p, default=0.0
+            ),
             automation_reduction=_get(values, "automacao_reducao_pct", p, default=0.0),
             # ── Água: modelo misto (fixo + variável × ocupação) ────────────────
             fixed_water_cost=_get(values, "custo_agua_fixo", p, default=0.0),
-            max_variable_water_cost=_get(values, "custo_agua_variavel_max", p, default=0.0),
+            max_variable_water_cost=_get(
+                values, "custo_agua_variavel_max", p, default=0.0
+            ),
             # ── Legado (kWh × tarifa) — usado se fixo/variável = 0 ────────────
             electricity_kwh=_get(values, "kwh_consumo_mensal", p, default=0.0),
             electricity_rate=_get(values, "tarifa_kwh", p, default=0.0),
@@ -328,7 +399,9 @@ def _build_inputs_for_version(
 
         for code in extra_var_codes:
             extra_val = _get(values, code, p, default=0.0)
-            variable.other_variable_costs = round(variable.other_variable_costs + extra_val, 2)
+            variable.other_variable_costs = round(
+                variable.other_variable_costs + extra_val, 2
+            )
 
         inputs_list.append(
             FinancialInputs(

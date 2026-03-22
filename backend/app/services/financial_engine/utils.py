@@ -8,7 +8,9 @@ from __future__ import annotations
 from datetime import date
 
 
-def generate_horizon_periods(opening_date: date, projection_years: int = 10) -> list[str]:
+def generate_horizon_periods(
+    opening_date: date, projection_years: int = 10
+) -> list[str]:
     """
     Gera a lista de períodos mensais ("YYYY-MM") a partir de uma data de abertura.
 

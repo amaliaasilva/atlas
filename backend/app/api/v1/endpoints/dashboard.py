@@ -76,8 +76,16 @@ def unit_dashboard(
 
     # Para KPIs de taxa/percentual, usar o ÚLTIMO período (não a soma)
     SNAPSHOT_KPI_CODES = {
-        "occupancy_rate", "break_even_occupancy_pct", "contribution_margin_pct",
-        "break_even_revenue", "break_even_students", "capacity_hours_month",        "teachers_needed_pessimistic", "teachers_needed_medium", "teachers_needed_optimistic",    }
+        "occupancy_rate",
+        "break_even_occupancy_pct",
+        "contribution_margin_pct",
+        "break_even_revenue",
+        "break_even_students",
+        "capacity_hours_month",
+        "teachers_needed_pessimistic",
+        "teachers_needed_medium",
+        "teachers_needed_optimistic",
+    }
     if all_periods := sorted(set(r.period_date for r, _ in results)):
         last_period = all_periods[-1]
         for code in SNAPSHOT_KPI_CODES:
@@ -133,7 +141,12 @@ def business_consolidated_dashboard(
     units_list = units_query.all()
 
     if not units_list:
-        return {"business_id": business_id, "scenario_id": scenario_id, "kpis": {}, "time_series": []}
+        return {
+            "business_id": business_id,
+            "scenario_id": scenario_id,
+            "kpis": {},
+            "time_series": [],
+        }
 
     # Melhor versão ativa por unidade (published > draft > planning)
     all_versions = (
@@ -149,22 +162,43 @@ def business_consolidated_dashboard(
     best_by_unit: dict[str, BudgetVersion] = {}
     for v in all_versions:
         existing = best_by_unit.get(v.unit_id)
-        if existing is None or status_priority.get(v.status, 9) < status_priority.get(existing.status, 9):
+        if existing is None or status_priority.get(v.status, 9) < status_priority.get(
+            existing.status, 9
+        ):
             best_by_unit[v.unit_id] = v
 
     version_ids = [v.id for v in best_by_unit.values()]
     if not version_ids:
-        return {"business_id": business_id, "scenario_id": scenario_id, "kpis": {}, "time_series": []}
+        return {
+            "business_id": business_id,
+            "scenario_id": scenario_id,
+            "kpis": {},
+            "time_series": [],
+        }
 
     # Métricas somáveis (excluindo derivadas percentuais)
-    SUMMABLE = [c for c in KPI_CODES if c not in {
-        "occupancy_rate", "break_even_occupancy_pct", "contribution_margin_pct", "net_margin"
-    }]
+    SUMMABLE = [
+        c
+        for c in KPI_CODES
+        if c
+        not in {
+            "occupancy_rate",
+            "break_even_occupancy_pct",
+            "contribution_margin_pct",
+            "net_margin",
+        }
+    ]
 
     # Agregação live diretamente de CalculatedResult
     raw_results = (
-        db.query(CalculatedResult.period_date, LineItemDefinition.code, CalculatedResult.value)
-        .join(LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id)
+        db.query(
+            CalculatedResult.period_date,
+            LineItemDefinition.code,
+            CalculatedResult.value,
+        )
+        .join(
+            LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id
+        )
         .filter(
             CalculatedResult.budget_version_id.in_(version_ids),
             LineItemDefinition.code.in_(SUMMABLE),
@@ -180,7 +214,9 @@ def business_consolidated_dashboard(
         all_periods_set.add(period_date)
 
     # KPIs totais acumulados
-    kpis: dict[str, float] = {code: round(sum(agg.get(code, {}).values()), 2) for code in SUMMABLE}
+    kpis: dict[str, float] = {
+        code: round(sum(agg.get(code, {}).values()), 2) for code in SUMMABLE
+    }
 
     # Deriva métricas percentuais (ponderadas pela capacidade agregada)
     total_cap = kpis.get("capacity_hours_month", 0)
@@ -194,10 +230,13 @@ def business_consolidated_dashboard(
 
     kpis["occupancy_rate"] = round(total_act / total_cap, 4) if total_cap > 0 else 0.0
     kpis["net_margin"] = round(net / rev, 4) if rev > 0 else 0.0
-    kpis["contribution_margin_pct"] = round((rev - vc - tax) / rev, 4) if rev > 0 else 0.0
+    kpis["contribution_margin_pct"] = (
+        round((rev - vc - tax) / rev, 4) if rev > 0 else 0.0
+    )
     kpis["break_even_occupancy_pct"] = (
         round(be_rev / (total_cap * avg_price_per_hour), 4)
-        if total_cap > 0 and avg_price_per_hour > 0 else 0.0
+        if total_cap > 0 and avg_price_per_hour > 0
+        else 0.0
     )
 
     # Série temporal — deriva percentuais por período
@@ -218,10 +257,13 @@ def business_consolidated_dashboard(
         p_avg_price = p_rev / max(p_act_h, 1)
         entry["occupancy_rate"] = round(p_act / p_cap, 4) if p_cap > 0 else 0.0
         entry["net_margin"] = round(p_net / p_rev, 4) if p_rev > 0 else 0.0
-        entry["contribution_margin_pct"] = round((p_rev - p_vc - p_tax) / p_rev, 4) if p_rev > 0 else 0.0
+        entry["contribution_margin_pct"] = (
+            round((p_rev - p_vc - p_tax) / p_rev, 4) if p_rev > 0 else 0.0
+        )
         entry["break_even_occupancy_pct"] = (
             round(p_be_rev / (p_cap * p_avg_price), 4)
-            if p_cap > 0 and p_avg_price > 0 else 0.0
+            if p_cap > 0 and p_avg_price > 0
+            else 0.0
         )
         time_series.append(entry)
 
@@ -263,7 +305,9 @@ def units_comparison(
     best_by_unit: dict[str, BudgetVersion] = {}
     for v in all_active_versions:
         existing = best_by_unit.get(v.unit_id)
-        if existing is None or status_priority.get(v.status, 9) < status_priority.get(existing.status, 9):
+        if existing is None or status_priority.get(v.status, 9) < status_priority.get(
+            existing.status, 9
+        ):
             best_by_unit[v.unit_id] = v
     versions = list(best_by_unit.values())
 
@@ -305,7 +349,12 @@ def _build_annual_from_time_series(time_series: list, summable_codes: list) -> l
     """Agrega série mensal por ano para uso nos endpoints consolidated e annual."""
     annual_agg: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     annual_counts: dict[str, int] = defaultdict(int)
-    PCT_CODES = {"occupancy_rate", "break_even_occupancy_pct", "contribution_margin_pct", "net_margin"}
+    PCT_CODES = {
+        "occupancy_rate",
+        "break_even_occupancy_pct",
+        "contribution_margin_pct",
+        "net_margin",
+    }
 
     for entry in time_series:
         year = str(entry.get("period", ""))[:4]
@@ -351,14 +400,34 @@ def unit_dre(
 ):
     """DRE completo linha a linha, mês a mês para uma versão de orçamento."""
     DRE_CODES = [
-        "revenue_total", "membership_revenue", "personal_training_revenue", "other_revenue",
-        "total_fixed_costs", "rent_total", "staff_costs",
-        "fc_pro_labore", "fc_clt_base", "fc_social_charges",
-        "utility_costs", "fc_electricity", "fc_water", "fc_internet",
-        "admin_costs", "marketing_costs", "equipment_costs", "insurance_costs", "other_fixed_costs",
-        "total_variable_costs", "hygiene_kit_cost", "sales_commission_cost", "card_fee_cost",
-        "taxes_on_revenue", "financing_payment",
-        "operating_result", "net_result", "ebitda",
+        "revenue_total",
+        "membership_revenue",
+        "personal_training_revenue",
+        "other_revenue",
+        "total_fixed_costs",
+        "rent_total",
+        "staff_costs",
+        "fc_pro_labore",
+        "fc_clt_base",
+        "fc_social_charges",
+        "utility_costs",
+        "fc_electricity",
+        "fc_water",
+        "fc_internet",
+        "admin_costs",
+        "marketing_costs",
+        "equipment_costs",
+        "insurance_costs",
+        "other_fixed_costs",
+        "total_variable_costs",
+        "hygiene_kit_cost",
+        "sales_commission_cost",
+        "card_fee_cost",
+        "taxes_on_revenue",
+        "financing_payment",
+        "operating_result",
+        "net_result",
+        "ebitda",
     ]
     version = db.query(BudgetVersion).filter(BudgetVersion.id == version_id).first()
     if not version:
@@ -366,7 +435,9 @@ def unit_dre(
 
     results = (
         db.query(CalculatedResult, LineItemDefinition)
-        .join(LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id)
+        .join(
+            LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id
+        )
         .filter(
             CalculatedResult.budget_version_id == version_id,
             LineItemDefinition.code.in_(DRE_CODES),
@@ -377,13 +448,15 @@ def unit_dre(
 
     by_period: dict[str, list] = defaultdict(list)
     for r, li in results:
-        by_period[r.period_date].append({
-            "code": li.code,
-            "name": li.name,
-            "category": li.category,
-            "display_order": li.display_order,
-            "value": r.value,
-        })
+        by_period[r.period_date].append(
+            {
+                "code": li.code,
+                "name": li.name,
+                "category": li.category,
+                "display_order": li.display_order,
+                "value": r.value,
+            }
+        )
 
     dre_periods = []
     for period in sorted(by_period.keys()):
@@ -415,7 +488,9 @@ def unit_audit_trace(
 
     results = (
         db.query(CalculatedResult, LineItemDefinition)
-        .join(LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id)
+        .join(
+            LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id
+        )
         .filter(
             CalculatedResult.budget_version_id == version_id,
             LineItemDefinition.code == "net_result",
@@ -461,7 +536,9 @@ def business_annual_summary(
     best_by_unit: dict[str, BudgetVersion] = {}
     for v in all_versions:
         existing = best_by_unit.get(v.unit_id)
-        if existing is None or status_priority.get(v.status, 9) < status_priority.get(existing.status, 9):
+        if existing is None or status_priority.get(v.status, 9) < status_priority.get(
+            existing.status, 9
+        ):
             best_by_unit[v.unit_id] = v
 
     version_ids = [v.id for v in best_by_unit.values()]
@@ -469,13 +546,26 @@ def business_annual_summary(
         return {"business_id": business_id, "scenario_id": scenario_id, "annual": []}
 
     ANNUAL_CODES = [
-        "revenue_total", "total_fixed_costs", "total_variable_costs",
-        "taxes_on_revenue", "financing_payment", "operating_result",
-        "net_result", "ebitda", "active_hours_month", "capacity_hours_month",
+        "revenue_total",
+        "total_fixed_costs",
+        "total_variable_costs",
+        "taxes_on_revenue",
+        "financing_payment",
+        "operating_result",
+        "net_result",
+        "ebitda",
+        "active_hours_month",
+        "capacity_hours_month",
     ]
     raw = (
-        db.query(CalculatedResult.period_date, LineItemDefinition.code, CalculatedResult.value)
-        .join(LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id)
+        db.query(
+            CalculatedResult.period_date,
+            LineItemDefinition.code,
+            CalculatedResult.value,
+        )
+        .join(
+            LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id
+        )
         .filter(
             CalculatedResult.budget_version_id.in_(version_ids),
             LineItemDefinition.code.in_(ANNUAL_CODES),
@@ -531,7 +621,9 @@ def business_portfolio(
     best_by_unit: dict[str, BudgetVersion] = {}
     for v in all_versions:
         existing = best_by_unit.get(v.unit_id)
-        if existing is None or status_priority.get(v.status, 9) < status_priority.get(existing.status, 9):
+        if existing is None or status_priority.get(v.status, 9) < status_priority.get(
+            existing.status, 9
+        ):
             best_by_unit[v.unit_id] = v
 
     PORTFOLIO_CODES = ["net_result", "financing_payment", "operating_result"]
@@ -541,8 +633,15 @@ def business_portfolio(
 
     for unit_id, version in best_by_unit.items():
         raw = (
-            db.query(CalculatedResult.period_date, LineItemDefinition.code, CalculatedResult.value)
-            .join(LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id)
+            db.query(
+                CalculatedResult.period_date,
+                LineItemDefinition.code,
+                CalculatedResult.value,
+            )
+            .join(
+                LineItemDefinition,
+                CalculatedResult.line_item_id == LineItemDefinition.id,
+            )
             .filter(
                 CalculatedResult.budget_version_id == version.id,
                 LineItemDefinition.code.in_(PORTFOLIO_CODES),
@@ -570,15 +669,17 @@ def business_portfolio(
         total_net += total_net_unit
         total_capex += capex
 
-        unit_results.append({
-            "unit_id": unit_id,
-            "unit_name": unit_map.get(unit_id, "Unidade"),
-            "version_id": version.id,
-            "capex": round(capex, 2),
-            "net_result": round(total_net_unit, 2),
-            "payback_months": payback_months,
-            "roi_pct": roi,
-        })
+        unit_results.append(
+            {
+                "unit_id": unit_id,
+                "unit_name": unit_map.get(unit_id, "Unidade"),
+                "version_id": version.id,
+                "capex": round(capex, 2),
+                "net_result": round(total_net_unit, 2),
+                "payback_months": payback_months,
+                "roi_pct": roi,
+            }
+        )
 
     unit_results.sort(key=lambda x: x.get("net_result", 0), reverse=True)
 
@@ -627,7 +728,9 @@ def unit_revenue_split(
     # Busca receita bruta período a período
     revenue_rows = (
         db.query(CalculatedResult.period_date, CalculatedResult.value)
-        .join(LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id)
+        .join(
+            LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id
+        )
         .filter(
             CalculatedResult.budget_version_id == version_id,
             LineItemDefinition.code == "revenue_total",
@@ -646,14 +749,20 @@ def unit_revenue_split(
         franchisee = round(gross_revenue * (1 - platform_fee_pct), 2)
         platform = round(gross_revenue * platform_fee_pct, 2)
         referral = round(franchisee * referral_commission_pct, 2)
-        period_str = period_date if isinstance(period_date, str) else period_date.strftime("%Y-%m")
-        periods.append({
-            "period": period_str,
-            "gross_revenue": round(gross_revenue, 2),
-            "franchisee_revenue": franchisee,
-            "platform_revenue": platform,
-            "referral_commission": referral,
-        })
+        period_str = (
+            period_date
+            if isinstance(period_date, str)
+            else period_date.strftime("%Y-%m")
+        )
+        periods.append(
+            {
+                "period": period_str,
+                "gross_revenue": round(gross_revenue, 2),
+                "franchisee_revenue": franchisee,
+                "platform_revenue": platform,
+                "referral_commission": referral,
+            }
+        )
         total_gross += gross_revenue
         total_franchisee += franchisee
         total_platform += platform

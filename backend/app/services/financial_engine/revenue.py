@@ -62,7 +62,7 @@ def calculate_gross_revenue(inputs: RevenueInputs) -> dict:
         return {
             "gross_revenue": total,
             "cowork_revenue": cowork_revenue,
-            "membership_revenue": cowork_revenue,   # alias compatibilidade
+            "membership_revenue": cowork_revenue,  # alias compatibilidade
             "personal_training_revenue": 0.0,
             "other_revenue": other,
             "capacity_hours_month": capacity_hours,
@@ -82,7 +82,9 @@ def calculate_gross_revenue(inputs: RevenueInputs) -> dict:
         + annual * inputs.avg_ticket_annual,
         2,
     )
-    personal = round(inputs.num_personal_trainers * inputs.avg_personal_revenue_month, 2)
+    personal = round(
+        inputs.num_personal_trainers * inputs.avg_personal_revenue_month, 2
+    )
     other = round(inputs.other_revenue, 2)
     total = round(membership + personal + other, 2)
     return {
