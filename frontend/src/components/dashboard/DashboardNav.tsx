@@ -17,6 +17,7 @@ import {
   Wallet,
   Search,
   Gift,
+  Layers,
   BarChart2,
 } from 'lucide-react';
 
@@ -32,7 +33,7 @@ const navItems = [
   { href: '/dashboard/dre', label: 'DRE', icon: Table2, short: 'DRE', matchPrefix: '/dashboard/dre' },
   { href: '/dashboard/capex', label: 'CAPEX', icon: Wallet, short: 'CAPEX', matchPrefix: '/dashboard/capex' },
   { href: '/dashboard/beneficios-personal', label: 'Benefícios', icon: Gift, short: 'Benefícios', matchPrefix: '/dashboard/beneficios-personal' },
-  { href: '/dashboard/planos', label: 'Planos', icon: Target, short: 'Planos', matchPrefix: '/dashboard/planos' },
+  { href: '/dashboard/planos', label: 'Planos', icon: Layers, short: 'Planos', matchPrefix: '/dashboard/planos' },
   { href: '/dashboard/auditoria-calculo', label: 'Auditoria', icon: Search, short: 'Auditoria', matchPrefix: '/dashboard/auditoria-calculo' },
 ];
 

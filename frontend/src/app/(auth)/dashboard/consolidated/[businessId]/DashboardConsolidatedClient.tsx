@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation';
 import { dashboardApi, calculationsApi } from '@/lib/api';
 import { useDashboardFilters } from '@/store/dashboard';
 import { Topbar } from '@/components/layout/Topbar';
+import { DashboardNav } from '@/components/dashboard/DashboardNav';
+import { GlobalFilters } from '@/components/dashboard/GlobalFilters';
 import { KpiCard } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingScreen } from '@/components/ui/Spinner';
@@ -43,73 +45,80 @@ export default function DashboardConsolidatedClient() {
   });
 
   return (
-    <>
-      <Topbar title="Dashboard Consolidado" />
-      <div className="flex-1 p-6 space-y-6 overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Visão Consolidada do Negócio</h2>
-            <p className="text-sm text-gray-500 mt-0.5">
-              {filterUnitIds.length > 0
-                ? `${filterUnitIds.length} unidade${filterUnitIds.length > 1 ? 's' : ''} selecionada${filterUnitIds.length > 1 ? 's' : ''} · ${ts.length} meses`
-                : `Rede inteira · ${ts.length} meses`}
-            </p>
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => consolidateMutation.mutate()}
-            loading={consolidateMutation.isPending}
-            disabled={!scenarioId}
-          >
-            <RefreshCw className="h-4 w-4" /> Consolidar
-          </Button>
-        </div>
-
-        {!scenarioId && (
-          <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-700">
-            Selecione um cenário nos filtros globais.
-          </div>
-        )}
-
-        {ts.length > 0 && (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <KpiCard
-                label="Receita Bruta Total"
-                value={formatCurrency(ts.reduce((s, d) => s + (d.revenue_total ?? 0), 0))}
-                icon={<DollarSign className="h-4 w-4" />}
-              />
-              <KpiCard
-                label="Resultado Líquido"
-                value={formatCurrency(ts.reduce((s, d) => s + (d.net_result ?? 0), 0))}
-                icon={<TrendingUp className="h-4 w-4" />}
-                trend={ts.reduce((s, d) => s + (d.net_result ?? 0), 0) >= 0 ? 'up' : 'down'}
-              />
-              <KpiCard
-                label="EBITDA Total"
-                value={formatCurrency(ts.reduce((s, d) => s + (d.ebitda ?? 0), 0))}
-                icon={<Target className="h-4 w-4" />}
-              />
-              <KpiCard
-                label="Taxa de Ocupação"
-                value={formatPercent(
-                  (() => {
-                    const cap = ts.reduce((s, d) => s + (d.capacity_hours_month ?? 0), 0);
-                    const act = ts.reduce((s, d) => s + (d.active_hours_month ?? 0), 0);
-                    return cap > 0 ? act / cap : 0;
-                  })()
-                )}
-                icon={<Users className="h-4 w-4" />}
-                sub={`${formatNumber(ts.reduce((s, d) => s + (d.active_hours_month ?? 0), 0), 0)} h vendidas`}
-              />
-            </div>
-
-            <RevenueChart data={ts} title="Receita Consolidada por Período" />
-          </>
-        )}
+    <div className="flex flex-col flex-1 overflow-hidden">
+      {/* Sub-navegação do Dashboard — mantém consistência com demais páginas do dashboard */}
+      <div className="sticky top-0 z-30">
+        <DashboardNav />
+        <GlobalFilters showUnit />
       </div>
-    </>
+
+      <div className="flex-1 overflow-auto bg-gray-50/50">
+        <Topbar title="Dashboard Consolidado" />
+        <div className="p-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Visão Consolidada do Negócio</h2>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {filterUnitIds.length > 0
+                  ? `${filterUnitIds.length} unidade${filterUnitIds.length > 1 ? 's' : ''} selecionada${filterUnitIds.length > 1 ? 's' : ''} · ${ts.length} meses`
+                  : `Rede inteira · ${ts.length} meses`}
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => consolidateMutation.mutate()}
+              loading={consolidateMutation.isPending}
+              disabled={!scenarioId}
+            >
+              <RefreshCw className="h-4 w-4" /> Consolidar
+            </Button>
+          </div>
+
+          {!scenarioId && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-700">
+              Selecione um cenário nos filtros globais.
+            </div>
+          )}
+
+          {ts.length > 0 && (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <KpiCard
+                  label="Receita Bruta Total"
+                  value={formatCurrency(ts.reduce((s, d) => s + (d.revenue_total ?? 0), 0))}
+                  icon={<DollarSign className="h-4 w-4" />}
+                />
+                <KpiCard
+                  label="Resultado Líquido"
+                  value={formatCurrency(ts.reduce((s, d) => s + (d.net_result ?? 0), 0))}
+                  icon={<TrendingUp className="h-4 w-4" />}
+                  trend={ts.reduce((s, d) => s + (d.net_result ?? 0), 0) >= 0 ? 'up' : 'down'}
+                />
+                <KpiCard
+                  label="EBITDA Total"
+                  value={formatCurrency(ts.reduce((s, d) => s + (d.ebitda ?? 0), 0))}
+                  icon={<Target className="h-4 w-4" />}
+                />
+                <KpiCard
+                  label="Taxa de Ocupação"
+                  value={formatPercent(
+                    (() => {
+                      const cap = ts.reduce((s, d) => s + (d.capacity_hours_month ?? 0), 0);
+                      const act = ts.reduce((s, d) => s + (d.active_hours_month ?? 0), 0);
+                      return cap > 0 ? act / cap : 0;
+                    })()
+                  )}
+                  icon={<Users className="h-4 w-4" />}
+                  sub={`${formatNumber(ts.reduce((s, d) => s + (d.active_hours_month ?? 0), 0), 0)} h vendidas`}
+                />
+              </div>
+
+              <RevenueChart data={ts} title="Receita Consolidada por Período" />
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
-

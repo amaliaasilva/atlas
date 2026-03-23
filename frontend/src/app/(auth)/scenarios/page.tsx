@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { scenariosApi, unitsApi, versionsApi } from '@/lib/api';
@@ -14,7 +14,7 @@ import { TrendingUp, ChevronRight, Plus, FileText, X } from 'lucide-react';
 const SCENARIO_TYPES = [
   { value: 'base', label: 'Base' },
   { value: 'conservative', label: 'Conservador' },
-  { value: 'aggressive', label: 'Agressivo' },
+  { value: 'aggressive', label: 'Otimista' },
   { value: 'custom', label: 'Personalizado' },
 ];
 
@@ -95,6 +95,14 @@ export default function ScenariosPage() {
   const { businessId, unitId: storeUnitId, setScenario, setVersion } = useNavStore();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [unitFilterId, setUnitFilterId] = useState<string>(qUnitId || storeUnitId || 'all');
+
+  // Mantém o filtro de unidade sincronizado com o contexto global da Sidebar.
+  // Parâmetro de URL tem precedência; depois vem o store; depois "todas".
+  useEffect(() => {
+    if (!qUnitId) {
+      setUnitFilterId(storeUnitId || 'all');
+    }
+  }, [storeUnitId, qUnitId]);
 
   const effectiveUnitId = unitFilterId === 'all' ? '' : unitFilterId;
 

@@ -160,6 +160,9 @@ export function Sidebar() {
                     <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
                 </select>
+                {!businessId && (
+                  <p className="text-[10px] text-gray-600 mt-0.5">Selecione um negócio primeiro.</p>
+                )}
               </div>
               <div>
                 <label className="block text-[10px] text-gray-400 mb-1">Cenário</label>

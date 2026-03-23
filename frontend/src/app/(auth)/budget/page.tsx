@@ -258,23 +258,7 @@ export default function BudgetPage() {
           </Button>
         </div>
 
-        {/* Resumo KPIs */}
-        {totalVersions > 0 && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { label: 'Total de versões', value: totalVersions, color: 'text-gray-900' },
-              { label: 'Publicadas', value: publishedCount, color: 'text-emerald-600' },
-              { label: 'Rascunhos', value: draftCount, color: 'text-gray-500' },
-              { label: 'Unidades ativas', value: activeUnitsCount, color: 'text-brand-700' },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 text-center">
-                <p className={cn('text-3xl font-bold tabular-nums', color)}>{value}</p>
-                <p className="text-xs text-gray-400 mt-1 uppercase tracking-wide font-medium">{label}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
+        {/* Filtro de cenário — ANTES dos KPIs para que o usuário entenda o escopo dos números */}
         {businessId && (
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
             <div className="flex flex-wrap items-end gap-3">
@@ -293,6 +277,23 @@ export default function BudgetPage() {
                 O filtro acima afeta somente esta tela. O contexto global de cenário continua preservado.
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Resumo KPIs */}
+        {totalVersions > 0 && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { label: 'Total de versões', value: totalVersions, color: 'text-gray-900' },
+              { label: 'Publicadas', value: publishedCount, color: 'text-emerald-600' },
+              { label: 'Rascunhos', value: draftCount, color: 'text-gray-500' },
+              { label: 'Unidades ativas', value: activeUnitsCount, color: 'text-brand-700' },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 text-center">
+                <p className={cn('text-3xl font-bold tabular-nums', color)}>{value}</p>
+                <p className="text-xs text-gray-400 mt-1 uppercase tracking-wide font-medium">{label}</p>
+              </div>
+            ))}
           </div>
         )}
 

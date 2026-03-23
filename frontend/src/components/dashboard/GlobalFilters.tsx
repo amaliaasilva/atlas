@@ -163,20 +163,31 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
   const nav = useNavStore();
   const filters = useDashboardFilters();
 
-  // Sincroniza filtros com o nav store ao montar
+  // Sincroniza navStore → dashboardFilters de forma reativa.
+  // Quando o usuário troca de negócio/cenário/unidade na Sidebar, os filtros do
+  // dashboard acompanham imediatamente — sem depender do estado anterior.
   useEffect(() => {
-    if (nav.businessId && !filters.businessId) {
+    if (nav.businessId !== filters.businessId) {
       filters.setBusinessId(nav.businessId);
+      filters.setScenarioId(null);
+      filters.setSelectedUnitIds([]);
     }
-    if (nav.scenarioId && !filters.scenarioId) {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nav.businessId]);
+
+  useEffect(() => {
+    if (nav.scenarioId !== filters.scenarioId) {
       filters.setScenarioId(nav.scenarioId);
     }
-    // Sync unitId do nav para o filtro (apenas na primeira carga / quando vazio)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nav.scenarioId]);
+
+  useEffect(() => {
     if (showUnit && nav.unitId && filters.selectedUnitIds.length === 0) {
       filters.setSelectedUnitIds([nav.unitId]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nav.businessId, nav.scenarioId, nav.unitId]);
+  }, [nav.unitId, showUnit]);
 
   // Busca businesses da organização selecionada
   const { data: businesses = [] } = useQuery({
@@ -287,9 +298,12 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
             label="Negócio"
             value={filters.businessId ?? ''}
             onChange={(v) => {
-              filters.setBusinessId(v || null);
+              const newBiz = v || null;
+              filters.setBusinessId(newBiz);
               filters.setScenarioId(null);
               filters.setSelectedUnitIds([]);
+              // Propaga para navStore para que Topbar e Sidebar fiquem sincronizados
+              nav.setBusiness(newBiz);
             }}
             options={businesses.map((b) => ({ value: b.id, label: b.name }))}
           />
@@ -299,7 +313,12 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
         <FilterSelect
           label="Cenário"
           value={filters.scenarioId ?? ''}
-          onChange={(v) => filters.setScenarioId(v || null)}
+          onChange={(v) => {
+            const newScen = v || null;
+            filters.setScenarioId(newScen);
+            // Propaga para navStore para que Topbar e Sidebar fiquem sincronizados
+            nav.setScenario(newScen);
+          }}
           options={scenarios.map((s) => ({
             value: s.id,
             label: `${s.name} (${scenarioTypeLabel[s.scenario_type] ?? s.scenario_type})`,
