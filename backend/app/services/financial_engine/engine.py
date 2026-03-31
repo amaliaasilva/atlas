@@ -103,7 +103,9 @@ class FinancialEngine:
             result.avg_price_per_hour_sold = (
                 round(_rev_total / _sold, 4) if _sold > 0 else 0.0
             )
-            result.avg_price_per_hour_occupied = result.avg_price_per_hour_sold  # igual no B2B
+            result.avg_price_per_hour_occupied = (
+                result.avg_price_per_hour_sold
+            )  # igual no B2B
             result.avg_price_per_hour_available = (
                 round(_rev_total / _available, 4) if _available > 0 else 0.0
             )

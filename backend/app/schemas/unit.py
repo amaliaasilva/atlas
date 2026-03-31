@@ -64,7 +64,9 @@ class UnitOut(UnitBase):
 
         if self.status == "closed":
             self.opening_phase = "closed"
-            self.months_since_opening = max(0, (today.year - od.year) * 12 + today.month - od.month)
+            self.months_since_opening = max(
+                0, (today.year - od.year) * 12 + today.month - od.month
+            )
         elif delta < 0:
             # ainda não abriu
             self.opening_phase = "future"
@@ -74,6 +76,8 @@ class UnitOut(UnitBase):
             self.months_since_opening = 0
         else:
             self.opening_phase = "operating"
-            self.months_since_opening = (today.year - od.year) * 12 + today.month - od.month
+            self.months_since_opening = (
+                (today.year - od.year) * 12 + today.month - od.month
+            )
 
         return self

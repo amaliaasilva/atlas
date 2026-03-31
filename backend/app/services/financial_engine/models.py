@@ -146,7 +146,9 @@ class FixedCostInputs:
     promotional_materials: float = 0.0
     # Equipment
     depreciation_equipment: float = 0.0
-    depreciation_renovation: float = 0.0  # depreciação linear de obras (renovation_works / vida útil)
+    depreciation_renovation: float = (
+        0.0  # depreciação linear de obras (renovation_works / vida útil)
+    )
     maintenance_equipment: float = 0.0
     # Other
     security_systems: float = 0.0
@@ -284,9 +286,13 @@ class PeriodResult:
     active_hours_month: float = 0.0  # Horas efetivamente vendidas
     avg_price_per_hour: float = 0.0  # Preço médio ponderado do mix
     # D-04: três variantes de preço médio/hora (denominadores distintos)
-    avg_price_per_hour_sold: float = 0.0      # receita / horas vendidas
-    avg_price_per_hour_occupied: float = 0.0  # receita / horas ocupadas (= sold para B2B)
-    avg_price_per_hour_available: float = 0.0 # receita / horas disponíveis (calendário)
+    avg_price_per_hour_sold: float = 0.0  # receita / horas vendidas
+    avg_price_per_hour_occupied: float = (
+        0.0  # receita / horas ocupadas (= sold para B2B)
+    )
+    avg_price_per_hour_available: float = (
+        0.0  # receita / horas disponíveis (calendário)
+    )
 
     # Breakeven
     break_even_students: int = 0  # Horas/mês para break-even (compat.)

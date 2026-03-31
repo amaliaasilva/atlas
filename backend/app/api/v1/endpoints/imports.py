@@ -183,7 +183,11 @@ def download_template(
 
         # Nota de instrução
         note_row = len(labels) + 3
-        ws.cell(note_row, 1, "⚠ Preencha os valores mensais nas colunas à direita de cada linha.")
+        ws.cell(
+            note_row,
+            1,
+            "⚠ Preencha os valores mensais nas colunas à direita de cada linha.",
+        )
         ws.cell(note_row, 1).font = Font(italic=True, color="888888")
 
     buf = io.BytesIO()
@@ -193,5 +197,7 @@ def download_template(
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=modelo_importacao_atlas.xlsx"},
+        headers={
+            "Content-Disposition": "attachment; filename=modelo_importacao_atlas.xlsx"
+        },
     )

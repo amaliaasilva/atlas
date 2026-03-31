@@ -184,9 +184,7 @@ def delete_exception(
 ):
     """Remove uma exceção de calendário. Feriados nacionais (seed) não podem ser removidos."""
     exc = (
-        db.query(CalendarException)
-        .filter(CalendarException.id == exception_id)
-        .first()
+        db.query(CalendarException).filter(CalendarException.id == exception_id).first()
     )
     if not exc:
         raise HTTPException(status_code=404, detail="Exceção não encontrada.")

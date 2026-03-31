@@ -18,13 +18,13 @@ class MonthlyCalendarSummary:
     unit_id: str | None
     year_month: str  # "YYYY-MM"
     calendar_days: int
-    weekend_days: int       # sábados + domingos
-    saturday_days: int      # só sábados
-    sunday_days: int        # só domingos
-    holiday_days: int       # feriados que caem em dias úteis (seg-sex)
-    working_days: int       # calendar_days - weekend_days
+    weekend_days: int  # sábados + domingos
+    saturday_days: int  # só sábados
+    sunday_days: int  # só domingos
+    holiday_days: int  # feriados que caem em dias úteis (seg-sex)
+    working_days: int  # calendar_days - weekend_days
     effective_working_days: int  # working_days - holiday_days
-    is_estimate: bool        # True quando não há dados de exceptions → usa fallback
+    is_estimate: bool  # True quando não há dados de exceptions → usa fallback
 
 
 class CalendarService:
@@ -101,7 +101,9 @@ class CalendarService:
             )
 
         all_exceptions = global_exceptions + unit_exceptions
-        has_exception_data = len(global_exceptions) > 0  # feriados nacionais servem como indicador
+        has_exception_data = (
+            len(global_exceptions) > 0
+        )  # feriados nacionais servem como indicador
 
         if not has_exception_data:
             # Sem dados de feriados → fallback

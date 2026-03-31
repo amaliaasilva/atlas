@@ -1234,9 +1234,36 @@ LINE_ITEM_DEFINITIONS = [
         False,
     ),
     # D-04: três variantes de preço médio/hora
-    ("avg_price_per_hour_sold", "Preço Médio / Hora Vendida (R$)", "result", "kpi", 130, False, False, False),
-    ("avg_price_per_hour_occupied", "Receita / Hora Ocupada (R$)", "result", "kpi", 131, False, False, False),
-    ("avg_price_per_hour_available", "Receita / Hora Disponível (R$)", "result", "kpi", 132, False, False, False),
+    (
+        "avg_price_per_hour_sold",
+        "Preço Médio / Hora Vendida (R$)",
+        "result",
+        "kpi",
+        130,
+        False,
+        False,
+        False,
+    ),
+    (
+        "avg_price_per_hour_occupied",
+        "Receita / Hora Ocupada (R$)",
+        "result",
+        "kpi",
+        131,
+        False,
+        False,
+        False,
+    ),
+    (
+        "avg_price_per_hour_available",
+        "Receita / Hora Disponível (R$)",
+        "result",
+        "kpi",
+        132,
+        False,
+        False,
+        False,
+    ),
 ]
 
 

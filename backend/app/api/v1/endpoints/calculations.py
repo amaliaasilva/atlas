@@ -322,8 +322,10 @@ def _build_inputs_for_version(
         # este período, usa o CalendarService que considera feriados nacionais.
         # Fallback final é 22 dias (mantido como constante transitória D-08).
         _unit_id_for_cal = unit.id if unit else None
-        _explicit_working_days = (p in {pp for (cc, pp) in values if cc == "dias_uteis_mes"})
-        _explicit_saturdays = (p in {pp for (cc, pp) in values if cc == "sabados_mes"})
+        _explicit_working_days = p in {
+            pp for (cc, pp) in values if cc == "dias_uteis_mes"
+        }
+        _explicit_saturdays = p in {pp for (cc, pp) in values if cc == "sabados_mes"}
 
         if _explicit_working_days:
             _working_days = int(_get(values, "dias_uteis_mes", p, default=22))
