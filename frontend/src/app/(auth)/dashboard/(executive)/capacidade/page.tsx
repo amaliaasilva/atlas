@@ -12,6 +12,7 @@ import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
 import { getRevenue } from '@/types/api';
 import { Gauge, Zap, TrendingUp, Activity } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { CalendarCapacityBlock } from '@/components/dashboard/CalendarCapacityBlock';
 
 export default function CapacidadePage() {
   const { businessId, scenarioId, selectedUnitIds, year, periodStart, periodEnd } = useDashboardFilters();
@@ -215,6 +216,16 @@ export default function CapacidadePage() {
             </>
           )}
         </div>
+
+        {/* Calendário Operacional */}
+        {selectedUnitIds.length === 1 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <CalendarCapacityBlock
+              unitId={selectedUnitIds[0]}
+              year={year ? parseInt(year, 10) : new Date().getFullYear()}
+            />
+          </div>
+        )}
 
         {/* Indicadores de contexto */}
         {!isLoading && (

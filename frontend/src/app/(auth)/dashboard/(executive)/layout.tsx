@@ -1,5 +1,6 @@
 import { DashboardNav } from '@/components/dashboard/DashboardNav';
 import { GlobalFilters } from '@/components/dashboard/GlobalFilters';
+import { StoreSync } from '@/components/layout/StoreSync';
 
 export default function ExecutiveDashboardLayout({
   children,
@@ -8,6 +9,8 @@ export default function ExecutiveDashboardLayout({
 }) {
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
+      {/* FE-B-11: sincroniza navStore → dashboardFilters em todas as rotas */}
+      <StoreSync />
       <div className="sticky top-0 z-30">
         {/* Sub-navegação entre dashboards */}
         <DashboardNav />

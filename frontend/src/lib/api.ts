@@ -166,6 +166,17 @@ export const dashboardApi = {
   // Sprint 4: Split de receita franqueador/franqueado
   revenueSplit: (version_id: string): Promise<import('@/types/api').RevenueSplitResponse> =>
     api.get(`/dashboard/unit/${version_id}/split`).then((r) => r.data),
+  // BE-B-01: DRE consolidado
+  dreConsolidated: (
+    business_id: string,
+    scenario_id: string,
+    unit_ids: string[] = [],
+  ): Promise<import('@/types/api').DREConsolidatedResponse> =>
+    api
+      .get(`/dashboard/business/${business_id}/dre/consolidated`, {
+        params: { scenario_id, ...(unit_ids.length > 0 ? { unit_ids } : {}) },
+      })
+      .then((r) => r.data),
 };
 
 // ── Reports ───────────────────────────────────────────────────────────────────
@@ -265,4 +276,17 @@ export const aiApi = {
     api.post('/ai/scenario-copilot', data).then((r) => r.data),
   geoPricing: (unit_id: string, location?: string): Promise<import('@/types/api').GeoPricingReport> =>
     api.post('/ai/geo-pricing', { unit_id, location }).then((r) => r.data),
+};
+
+// ── Calendar ─────────────────────────────────────────────────────────────────
+
+export const calendarApi = {
+  getUnit: (unit_id: string, year: number): Promise<import('@/types/api').CalendarYearOut> =>
+    api.get(`/calendar/${unit_id}`, { params: { year } }).then((r) => r.data),
+  getNational: (year: number): Promise<import('@/types/api').CalendarYearOut> =>
+    api.get(`/calendar/national/${year}`).then((r) => r.data),
+  createException: (data: import('@/types/api').CalendarExceptionIn): Promise<import('@/types/api').CalendarExceptionOut> =>
+    api.post('/calendar/exceptions', data).then((r) => r.data),
+  deleteException: (id: string): Promise<void> =>
+    api.delete(`/calendar/exceptions/${id}`).then((r) => r.data),
 };

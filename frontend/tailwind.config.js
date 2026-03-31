@@ -25,9 +25,29 @@ module.exports = {
           dark:  '#111827',
           night: '#1E2A44',
         },
+        // Status semântico (ok/warn/alert/neutral)
+        status: {
+          ok:      { DEFAULT: '#10B981', light: '#D1FAE5', dark: '#065F46' },
+          warn:    { DEFAULT: '#F59E0B', light: '#FEF3C7', dark: '#92400E' },
+          alert:   { DEFAULT: '#EF4444', light: '#FEE2E2', dark: '#991B1B' },
+          neutral: { DEFAULT: '#6B7280', light: '#F3F4F6', dark: '#374151' },
+        },
+        // Hierarquia de superfície (substitui gray-* ad hoc)
+        surface: {
+          base:   '#FFFFFF',
+          subtle: '#F9FAFB',
+          inset:  '#F3F4F6',
+          border: '#E5E7EB',
+          muted:  '#D1D5DB',
+        },
+        // Tipo de dado financeiro
+        real:      { DEFAULT: '#1E293B', light: '#F8FAFC', badge: '#CBD5E1' },
+        projected: { DEFAULT: '#1E40AF', light: '#EFF6FF', badge: '#BFDBFE' },
+        breakeven: { DEFAULT: '#92400E', light: '#FFFBEB', badge: '#FDE68A' },
       },
       fontFamily: {
         sans: ['Manrope', 'ui-sans-serif', 'system-ui'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       backgroundImage: {
         'atlas-gradient': 'linear-gradient(135deg, #1E2A44 0%, #3B82F6 55%, #22C7E6 100%)',

@@ -39,7 +39,7 @@ export function KpiCard({ label, value, sub, trend, icon }: KpiCardProps) {
         {icon && <span className="text-gray-400">{icon}</span>}
       </div>
       <div className="flex items-end gap-2">
-        <span className="text-2xl font-bold text-gray-900">{value}</span>
+        <span className="text-2xl font-bold text-gray-900 financial-value">{value}</span>
         {trend && (
           <span
             className={cn(

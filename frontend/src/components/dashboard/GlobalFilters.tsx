@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { businessesApi, dashboardApi, scenariosApi, unitsApi } from '@/lib/api';
-import { useDashboardFilters } from '@/store/dashboard';
+import { useDashboardFilters, type GranularityType } from '@/store/dashboard';
 import { useNavStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
 import { SlidersHorizontal, RefreshCw, ChevronDown, Check } from 'lucide-react';
@@ -81,7 +81,7 @@ function MultiSelectUnit({ label, selectedIds, onChange, options, disabled = fal
         : `${selectedIds.length} unidades`;
 
   return (
-    <div className="flex flex-col gap-1 min-w-[160px]" ref={ref}>
+    <div className="relative flex flex-col gap-1 min-w-[160px]" ref={ref}>
       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{label}</label>
       <button
         type="button"
@@ -247,6 +247,7 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
   const toPeriod = filters.periodEnd ?? '';
   const setPeriodRange = filters.setPeriodRange;
   const setYear = filters.setYear;
+  const applyYearPreset = filters.applyYearPreset;
 
   // Corrige estado persistido antigo quando não existe no novo contexto.
   useEffect(() => {
@@ -274,6 +275,15 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
       setYear(nextStart ? nextStart.slice(0, 4) : null);
     }
   }, [filters.periodEnd, filters.periodStart, monthYearOptions, setPeriodRange, setYear]);
+
+  // FE-A-17: Auto-inicializa o ano para o último ano completo disponível
+  useEffect(() => {
+    if (projectionYears.length === 0) return;
+    if (filters.year || filters.periodStart) return; // já tem filtro ativo
+    const lastYear = projectionYears[projectionYears.length - 1];
+    applyYearPreset(lastYear);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectionYears.length]); // executa uma vez quando a lista carrega
 
   return (
     <div
@@ -374,57 +384,52 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
         />
       </div>
 
-      {/* Reset */}
-      {(filters.scenarioId || filters.selectedUnitIds.length > 0 || filters.year || filters.periodStart) && (
+      {/* Presets de ano — visíveis sempre que houver anos disponíveis (fix B6) */}
+      {projectionYears.length > 0 && (
         <>
           <div className="h-5 w-px bg-gray-200 shrink-0" />
-          {/* Presets rápidos por ano (dinâmicos) */}
           <div className="flex items-center gap-1">
-            {projectionYears.slice(0, 6).map((y) => (
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mr-1">Ano</span>
+            {/* FIX B7: removido .slice(0,6) — exibe todos os anos do projeto */}
+            {projectionYears.map((y) => (
               <button
                 key={y}
-                onClick={() => {
-                  filters.setYear(y);
-                  filters.setPeriodRange(`${y}-01`, `${y}-12`);
-                }}
+                onClick={() => applyYearPreset(y)}
                 className={cn(
                   'px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors',
                   filters.year === y && filters.periodStart?.startsWith(y)
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-indigo-50 hover:text-indigo-700',
                 )}
               >
                 {y}
               </button>
             ))}
             {monthYearOptions.length > 0 && (
-              <>
-                <button
-                  onClick={() => {
-                    const end = monthYearOptions[monthYearOptions.length - 1].value;
-                    const startIndex = Math.max(monthYearOptions.length - 12, 0);
-                    const start = monthYearOptions[startIndex].value;
-                    filters.setYear(end.slice(0, 4));
-                    filters.setPeriodRange(start, end);
-                  }}
-                  className="px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors bg-gray-100 text-gray-600 hover:bg-gray-200"
-                >
-                  12M
-                </button>
-                <button
-                  onClick={() => {
-                    const start = monthYearOptions[0].value;
-                    const end = monthYearOptions[monthYearOptions.length - 1].value;
-                    filters.setYear(null);
-                    filters.setPeriodRange(start, end);
-                  }}
-                  className="px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors bg-gray-100 text-gray-600 hover:bg-gray-200"
-                >
-                  Tudo
-                </button>
-              </>
+              <button
+                onClick={() => {
+                  const start = monthYearOptions[0].value;
+                  const end = monthYearOptions[monthYearOptions.length - 1].value;
+                  filters.setYear(null);
+                  filters.setPeriodRange(start, end);
+                }}
+                className={cn(
+                  'px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors',
+                  !filters.year && filters.periodStart
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-indigo-50 hover:text-indigo-700'
+                )}
+              >
+                Tudo
+              </button>
             )}
           </div>
+        </>
+      )}
+
+      {/* Botão de reset — visível quando há filtros ativos */}
+      {(filters.scenarioId || filters.selectedUnitIds.length > 0 || filters.year || filters.periodStart) && (
+        <>
           <div className="h-5 w-px bg-gray-200 shrink-0" />
           <button
             onClick={() => {
@@ -433,7 +438,7 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
               filters.setYear(null);
               filters.setPeriodRange(null, null);
             }}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-rose-500 transition-colors"
           >
             <RefreshCw className="h-3 w-3" />
             Limpar

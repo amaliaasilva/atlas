@@ -14,7 +14,7 @@ export interface AnnualRow {
 
 /**
  * Agrega uma série temporal mensal em resumo anual.
- * Usado quando o endpoint /annual não está disponível ou como fallback.
+ * Usado quando o backend não retorna annual_summaries ou como fallback.
  */
 export function aggregateByYear(
   ts: Array<{ period: string; revenue: number; profit: number }>,
@@ -46,4 +46,24 @@ export function annualBackendToRows(summaries: AnnualSummaryBackend[]): AnnualRo
     profit: Math.round(s.net_result),
     margin: s.net_margin,
   }));
+}
+
+/**
+ * FIX B11: resolve annual data preferindo annual_summaries do backend (mais preciso)
+ * e fazendo fallback para agregação local do time_series.
+ */
+export function resolveAnnualData(
+  annualSummaries: AnnualSummaryBackend[] | undefined,
+  timeSeries: Array<{ period: string; revenue_total?: number; gross_revenue?: number; net_result: number }>,
+): AnnualRow[] {
+  if (annualSummaries && annualSummaries.length > 0) {
+    return annualBackendToRows(annualSummaries);
+  }
+  return aggregateByYear(
+    timeSeries.map((d) => ({
+      period: d.period,
+      revenue: d.revenue_total ?? d.gross_revenue ?? 0,
+      profit: d.net_result,
+    })),
+  );
 }

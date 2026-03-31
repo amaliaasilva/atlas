@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { unitsApi, versionsApi, scenariosApi } from '@/lib/api';
+import { unitsApi, versionsApi, scenariosApi, calculationsApi } from '@/lib/api';
 import { useNavStore } from '@/store/auth';
 import { Topbar } from '@/components/layout/Topbar';
 import { LoadingScreen } from '@/components/ui/Spinner';
@@ -178,10 +178,19 @@ export default function BudgetPage() {
   }, [searchParams]);
 
   const updateOpeningDateMutation = useMutation({
-    mutationFn: ({ unitId, openingDate }: { unitId: string; openingDate: string }) =>
-      unitsApi.update(unitId, { opening_date: openingDate }),
-    onSuccess: () => {
+    mutationFn: async ({ unitId, openingDate }: { unitId: string; openingDate: string }) => {
+      // 1. Persiste a nova data na unidade
+      await unitsApi.update(unitId, { opening_date: openingDate });
+      // 2. Recalcula todas as versões ativas da unidade (draft/published)
+      //    para que o motor financeiro reflita o novo horizon_start derivado do opening_date.
+      const versions = await versionsApi.list(unitId);
+      const active = versions.filter((v) => v.status !== 'archived');
+      await Promise.allSettled(active.map((v) => calculationsApi.recalculate(v.id)));
+    },
+    onSuccess: (_, { unitId }) => {
       queryClient.invalidateQueries({ queryKey: ['units', businessId] });
+      queryClient.invalidateQueries({ queryKey: ['versions', unitId] });
+      queryClient.invalidateQueries({ queryKey: ['versions'] });
     },
   });
 
@@ -384,9 +393,11 @@ export default function BudgetPage() {
                             updateOpeningDateMutation.mutate({ unitId: unit.id, openingDate: nextDate });
                           }}
                           disabled={updateOpeningDateMutation.isPending}
-                          title="Salvar nova data de abertura"
+                          title={updateOpeningDateMutation.isPending ? 'Recalculando...' : 'Salvar data e recalcular versões'}
                         >
-                          <Save className="h-3 w-3" />
+                          {updateOpeningDateMutation.isPending
+                            ? <span className="h-3 w-3 border-2 border-brand-400 border-t-transparent rounded-full animate-spin inline-block" />
+                            : <Save className="h-3 w-3" />}
                         </button>
                       </div>
                       <span className="text-xs text-gray-400">{versions.length} versão{versions.length !== 1 ? 'ões' : ''}</span>

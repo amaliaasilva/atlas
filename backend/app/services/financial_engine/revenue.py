@@ -19,10 +19,28 @@ def calculate_avg_price_per_hour(service_plans: list[ServicePlanMix]) -> float:
     """
     Preço médio ponderado (R$/hora) derivado do mix de planos de serviço.
     Ex: [Diamante 65×0.40, Ouro 60×0.30, Prata 55×0.20, Bronze 50×0.10] → R$ 60,00/h
+
+    §16.7 — mix_pct validation: se a soma diferir de 1.0 por mais de 1%,
+    normaliza automaticamente para garantir que o cálculo seja coerente.
     """
     if not service_plans:
         return 0.0
-    return round(sum(p.price_per_hour * p.mix_pct for p in service_plans), 2)
+    total_mix = sum(p.mix_pct for p in service_plans)
+    if total_mix <= 0:
+        return 0.0
+    # Normaliza se necessário (tolerância de 1%)
+    if abs(total_mix - 1.0) > 0.01:
+        plans = [
+            ServicePlanMix(
+                name=p.name,
+                price_per_hour=p.price_per_hour,
+                mix_pct=p.mix_pct / total_mix,
+            )
+            for p in service_plans
+        ]
+    else:
+        plans = service_plans
+    return round(sum(p.price_per_hour * p.mix_pct for p in plans), 2)
 
 
 def calculate_capacity_hours_month(inputs: RevenueInputs) -> float:

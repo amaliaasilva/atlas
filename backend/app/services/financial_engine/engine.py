@@ -96,8 +96,20 @@ class FinancialEngine:
             ]  # preço/hora não escala
             result.occupancy_rate = inp.revenue.occupancy_rate
 
+            # D-04: três variantes de avg_price_per_hour
+            _rev_total = result.gross_revenue
+            _sold = result.active_hours_month
+            _available = result.capacity_hours_month
+            result.avg_price_per_hour_sold = (
+                round(_rev_total / _sold, 4) if _sold > 0 else 0.0
+            )
+            result.avg_price_per_hour_occupied = result.avg_price_per_hour_sold  # igual no B2B
+            result.avg_price_per_hour_available = (
+                round(_rev_total / _available, 4) if _available > 0 else 0.0
+            )
+
             # Auto-depreciação (GAP-05): calcula a partir do CAPEX quando o usuário
-            # não informou depreciacao_equipamentos explicitamente (valor == 0).
+            # não informou depreciation_equipment explicitamente (valor == 0).
             if (
                 inp.fixed_costs.depreciation_equipment == 0
                 and capex.equipment_value > 0
@@ -105,6 +117,16 @@ class FinancialEngine:
             ):
                 inp.fixed_costs.depreciation_equipment = round(
                     capex.equipment_value / capex.equipment_useful_life_months, 2
+                )
+
+            # Auto-depreciação de obras (renovation_works) — vide §16.2
+            if (
+                inp.fixed_costs.depreciation_renovation == 0
+                and capex.renovation_works > 0
+                and capex.renovation_useful_life_months > 0
+            ):
+                inp.fixed_costs.depreciation_renovation = round(
+                    capex.renovation_works / capex.renovation_useful_life_months, 2
                 )
 
             # 2. Custos fixos (passa occupancy_rate para modelo misto de utilities)
@@ -432,6 +454,10 @@ class FinancialEngine:
                 ),
                 "teachers_needed_medium": float(period.teachers_needed_medium),
                 "teachers_needed_optimistic": float(period.teachers_needed_optimistic),
+                # D-04: três variantes de preço médio/hora
+                "avg_price_per_hour_sold": period.avg_price_per_hour_sold,
+                "avg_price_per_hour_occupied": period.avg_price_per_hour_occupied,
+                "avg_price_per_hour_available": period.avg_price_per_hour_available,
             }
             # Sub-itens de DRE extraídos do calculation_trace (GAP-08)
             trace = period.calculation_trace

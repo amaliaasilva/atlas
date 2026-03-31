@@ -363,7 +363,18 @@ deploy_backend() {
   # Monta as env vars para Cloud Run.
   # Usa "^|^" como delimitador para suportar valores com vírgulas (ex: CORS_ORIGINS).
   # Referência: https://cloud.google.com/sdk/gcloud/reference/topic/escaping
+  #
+  # CORS inclui Firebase Hosting + Cloud Run frontend (caso acesso direto pela URL do Cloud Run)
+  local frontend_run_url
+  frontend_run_url=$(gcloud run services describe "${FRONTEND_SERVICE}" \
+    --project="${GCP_PROJECT}" \
+    --region="${GCP_REGION}" \
+    --format="value(status.url)" 2>/dev/null || echo "")
   local cors_value="https://${FIREBASE_SITE}.web.app,https://${FIREBASE_SITE}.firebaseapp.com"
+  if [[ -n "$frontend_run_url" ]]; then
+    cors_value="${cors_value},${frontend_run_url}"
+    log_info "CORS inclui Cloud Run frontend: ${frontend_run_url}"
+  fi
   local env_vars="^|^ENVIRONMENT=${ENVIRONMENT}|CORS_ORIGINS=${cors_value}"
 
   if [[ -n "${DATABASE_URL:-}" ]]; then

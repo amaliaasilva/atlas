@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { TrendingUp, TrendingDown, Minus, Info } from 'lucide-react';
+import { DataTypeBadge, type DataType } from '@/components/ui/DataTypeBadge';
 
 interface MetricCardProps {
   label: string;
@@ -17,6 +18,8 @@ interface MetricCardProps {
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   onClick?: () => void;
+  /** D-06: badge indicando tipo de dado (projected/real/breakeven) */
+  dataType?: DataType;
 }
 
 const accent = {
@@ -70,6 +73,7 @@ export function MetricCard({
   size = 'md',
   loading = false,
   onClick,
+  dataType,
 }: MetricCardProps) {
   const [visible, setVisible] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -124,10 +128,11 @@ export function MetricCard({
     >
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider leading-none">
             {label}
           </span>
+          {dataType && <DataTypeBadge type={dataType} />}
           {tooltip && (
             <div className="group relative">
               <Info className="h-3 w-3 text-gray-300 cursor-help" />
@@ -146,7 +151,7 @@ export function MetricCard({
 
       {/* Value */}
       <div className="flex items-end gap-2 mb-1">
-        <span className={cn('font-bold text-gray-900 leading-none', valueSizeClasses)}>
+        <span className={cn('font-bold text-gray-900 leading-none financial-value', valueSizeClasses)}>
           {value}
         </span>
         {trendValue && (

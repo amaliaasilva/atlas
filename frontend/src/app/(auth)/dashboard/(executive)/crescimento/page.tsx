@@ -11,7 +11,7 @@ import { NoFiltersState, MetricCardSkeleton, ChartSkeleton } from '@/components/
 import { Topbar } from '@/components/layout/Topbar';
 import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
 import { getRevenue } from '@/types/api';
-import { aggregateByYear } from '@/lib/utils/dashboard';
+import { aggregateByYear, resolveAnnualData } from '@/lib/utils/dashboard';
 import { TrendingUp, Building2, BarChart2 } from 'lucide-react';
 
 export default function CrescimentoPage() {
@@ -39,7 +39,8 @@ export default function CrescimentoPage() {
     profit: d.net_result,
   }));
 
-  const annualData = aggregateByYear(seriesData);
+  // FIX B11: prefere annual_summaries do backend (calculado com precisão) antes de re-agregar
+  const annualData = resolveAnnualData(dashboard?.annual_summaries, ts);
 
   // Filtra por intervalo de período ou ano
   const filteredTs = ts.filter((d) => {
@@ -188,15 +189,22 @@ export default function CrescimentoPage() {
                     <th className="text-right text-xs font-semibold text-gray-500 px-6 py-3 uppercase tracking-wider">Receita</th>
                     <th className="text-right text-xs font-semibold text-gray-500 px-6 py-3 uppercase tracking-wider">Lucro</th>
                     <th className="text-right text-xs font-semibold text-gray-500 px-6 py-3 uppercase tracking-wider">Margem</th>
-                    <th className="text-right text-xs font-semibold text-gray-500 px-6 py-3 uppercase tracking-wider">Crescimento</th>
+                    <th className="text-right text-xs font-semibold text-gray-500 px-6 py-3 uppercase tracking-wider">ΔYoY</th>
+                    <th className="text-right text-xs font-semibold text-gray-500 px-6 py-3 uppercase tracking-wider">CAGR acum.</th>
                   </tr>
                 </thead>
                 <tbody>
                   {annualData.map((row, idx) => {
                     const prev = annualData[idx - 1];
+                    const first = annualData[0];
                     const growth = prev && prev.revenue > 0
                       ? (row.revenue - prev.revenue) / prev.revenue
                       : null;
+                    // CAGR acumulado: do primeiro ano até o ano atual
+                    const cagrAccum =
+                      idx > 0 && first.revenue > 0
+                        ? Math.pow(row.revenue / first.revenue, 1 / idx) - 1
+                        : null;
                     return (
                       <tr key={row.year} className="border-t border-gray-50 hover:bg-gray-50/80 transition-colors">
                         <td className="px-6 py-3.5 text-sm font-bold text-gray-800">{row.year}</td>
@@ -209,13 +217,50 @@ export default function CrescimentoPage() {
                         <td className="px-6 py-3.5 text-sm text-right text-gray-600 tabular-nums">
                           {formatPercent(row.margin)}
                         </td>
-                        <td className={`px-6 py-3.5 text-sm text-right font-medium tabular-nums ${growth !== null ? (growth >= 0 ? 'text-emerald-600' : 'text-rose-500') : 'text-gray-300'}`}>
-                          {growth !== null ? `${growth >= 0 ? '+' : ''}${formatPercent(growth)}` : '—'}
+                        {/* ΔYoY com badge colorido */}
+                        <td className="px-6 py-3.5 text-right">
+                          {growth !== null ? (
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold ${
+                              growth > 0.1 ? 'bg-emerald-100 text-emerald-700'
+                              : growth > 0 ? 'bg-amber-100 text-amber-700'
+                              : 'bg-rose-100 text-rose-700'
+                            }`}>
+                              {growth >= 0 ? '+' : ''}{formatPercent(growth)}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-300">—</span>
+                          )}
+                        </td>
+                        {/* CAGR acumulado */}
+                        <td className="px-6 py-3.5 text-right">
+                          {cagrAccum !== null ? (
+                            <span className={`text-xs font-semibold tabular-nums ${cagrAccum > 0.1 ? 'text-emerald-600' : cagrAccum > 0 ? 'text-amber-600' : 'text-rose-500'}`}>
+                              {formatPercent(cagrAccum)} a.a.
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-300">—</span>
+                          )}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
+                {/* Rodapé com CAGR global */}
+                {annualData.length >= 2 && (
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-200 bg-gray-50 text-xs">
+                      <td className="px-6 py-3 font-semibold text-gray-500 uppercase tracking-wide" colSpan={4}>
+                        CAGR global ({annualData[0].year}–{annualData[annualData.length - 1].year})
+                      </td>
+                      <td className="px-6 py-3" />
+                      <td className="px-6 py-3 text-right">
+                        <span className={`font-bold text-sm tabular-nums ${revenueCAGR > 0.1 ? 'text-emerald-600' : revenueCAGR > 0 ? 'text-amber-600' : 'text-rose-500'}`}>
+                          {singleYear ? '—' : `${formatPercent(revenueCAGR)} a.a.`}
+                        </span>
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </section>

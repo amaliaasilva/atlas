@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { dashboardApi, scenariosApi, unitsApi } from '@/lib/api';
 import { useDashboardFilters } from '@/store/dashboard';
 import { MetricCard, ProgressCard } from '@/components/dashboard/MetricCard';
@@ -15,8 +16,9 @@ import {
   Target, TrendingUp, TrendingDown, Zap, BarChart2,
   CheckCircle2, AlertCircle, XCircle, Activity, DollarSign,
 } from 'lucide-react';
-import { aggregateByYear } from '@/lib/utils/dashboard';
+import { aggregateByYear, resolveAnnualData } from '@/lib/utils/dashboard';
 import { PortfolioTable } from '@/components/tables/PortfolioTable';
+import { UnitRevSparkline } from '@/components/charts/UnitRevSparkline';
 
 const SCENARIO_LABELS: Record<string, string> = {
   conservative: 'Pessimista',
@@ -70,15 +72,17 @@ export default function EstrategicoPage() {
   });
 
   const { data: scenarios = [] } = useQuery({
-    queryKey: ['scenarios-estrategico', businessId],
+    queryKey: ['scenarios', businessId],
     queryFn: () => scenariosApi.list(businessId!),
     enabled: !!businessId,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: units = [] } = useQuery({
-    queryKey: ['units-estrategico', businessId],
+    queryKey: ['units', businessId],
     queryFn: () => unitsApi.list(businessId!),
     enabled: !!businessId,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Multi-cenário para comparação
@@ -99,6 +103,18 @@ export default function EstrategicoPage() {
     queryFn: () => dashboardApi.portfolio(businessId!, scenarioId!),
     enabled: !!businessId && !!scenarioId,
   });
+
+  const { data: unitsCompData } = useQuery({
+    queryKey: ['units-comparison', businessId, scenarioId, 'revenue_total'],
+    queryFn: () => dashboardApi.unitsComparison(businessId!, scenarioId!, 'revenue_total'),
+    enabled: !!businessId && !!scenarioId,
+  });
+
+  const unitSeriesMap = useMemo(() => {
+    const m = new Map<string, Record<string, number>>();
+    for (const u of unitsCompData?.units ?? []) m.set(u.unit_id, u.series);
+    return m;
+  }, [unitsCompData]);
 
   const ts = dashboard?.time_series ?? [];
   const filteredTs = ts.filter((d) => {
@@ -153,10 +169,8 @@ export default function EstrategicoPage() {
       ? 'warning'
       : 'danger';
 
-  // Dados anuais do cenário primário
-  const annualData = aggregateByYear(
-    filteredTs.map((d) => ({ period: d.period, revenue: getRevenue(d), profit: d.net_result })),
-  );
+  // FIX B11: prefere annual_summaries do backend ao invés de re-agregar
+  const annualData = resolveAnnualData(dashboard?.annual_summaries, filteredTs);
   const lastYear = annualData[annualData.length - 1];
   const prevYear = annualData[annualData.length - 2];
   const yoyGrowth =
@@ -772,6 +786,154 @@ export default function EstrategicoPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </section>
+        )}
+
+        {/* ScenarioColumns — comparação lado a lado dos cenários configurados */}
+        {!isLoading && scenarioComparison.length >= 2 && (
+          <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h3 className="text-sm font-bold text-gray-900">Comparação de Cenários</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Receita e lucro projetados por cenário — último ano disponível</p>
+            </div>
+            <div
+              className="grid divide-x divide-gray-100"
+              style={{ gridTemplateColumns: `repeat(${scenarioComparison.length}, 1fr)` }}
+            >
+              {scenarioComparison.map((s) => {
+                const isActive = s.scenario.id === scenarioId;
+                const scenarioLabel =
+                  s.scenario.scenario_type === 'conservative' ? 'Pessimista'
+                  : s.scenario.scenario_type === 'base' ? 'Moderado'
+                  : s.scenario.scenario_type === 'aggressive' ? 'Otimista'
+                  : s.scenario.name;
+                const accentClass =
+                  s.scenario.scenario_type === 'conservative' ? 'border-rose-300 bg-rose-50'
+                  : s.scenario.scenario_type === 'base' ? 'border-indigo-300 bg-indigo-50'
+                  : 'border-emerald-300 bg-emerald-50';
+                const textClass =
+                  s.scenario.scenario_type === 'conservative' ? 'text-rose-700'
+                  : s.scenario.scenario_type === 'base' ? 'text-indigo-700'
+                  : 'text-emerald-700';
+                return (
+                  <div key={s.scenario.id} className={`p-5 ${isActive ? 'bg-slate-50' : ''}`}>
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-bold ${accentClass} ${textClass}`}>
+                        {scenarioLabel}
+                      </span>
+                      {isActive && (
+                        <span className="text-[10px] font-semibold text-slate-500 bg-slate-200 rounded-full px-2 py-0.5">atual</span>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-0.5">Receita</p>
+                        <p className="text-xl font-bold text-gray-800 tabular-nums">{formatCurrency(s.revenue)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-0.5">Lucro</p>
+                        <p className={`text-xl font-bold tabular-nums ${s.profit >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{formatCurrency(s.profit)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-0.5">Margem</p>
+                        <p className={`text-base font-semibold tabular-nums ${s.margin > 0.1 ? 'text-emerald-600' : s.margin > 0 ? 'text-amber-600' : 'text-rose-500'}`}>
+                          {formatPercent(s.margin)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Barra comparativa de receita */}
+            {(() => {
+              const maxRev = Math.max(...scenarioComparison.map((s) => s.revenue), 1);
+              return (
+                <div className="px-6 py-4 border-t border-gray-100 bg-slate-50 space-y-2">
+                  <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-2">Receita relativa</p>
+                  {scenarioComparison.map((s) => {
+                    const pct = maxRev > 0 ? s.revenue / maxRev : 0;
+                    const barColor = s.scenario.scenario_type === 'conservative' ? 'bg-rose-400' : s.scenario.scenario_type === 'base' ? 'bg-indigo-400' : 'bg-emerald-400';
+                    const label = s.scenario.scenario_type === 'conservative' ? 'Pessimista' : s.scenario.scenario_type === 'base' ? 'Moderado' : 'Otimista';
+                    return (
+                      <div key={s.scenario.id} className="flex items-center gap-3">
+                        <span className="text-xs text-gray-500 w-20 shrink-0">{label}</span>
+                        <div className="flex-1 bg-gray-200 rounded-full h-2">
+                          <div className={`h-2 rounded-full ${barColor}`} style={{ width: `${pct * 100}%` }} />
+                        </div>
+                        <span className="text-xs font-semibold text-gray-600 w-10 text-right tabular-nums">{(pct * 100).toFixed(0)}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </section>
+        )}
+
+        {/* UnitStatusCard grid */}
+        {!isLoading && units.length > 0 && (
+          <section>
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-gray-900">Status por Unidade</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Situação operacional e financeira de cada unidade</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {units.map((unit) => {
+                const portfolioUnit = portfolioData?.units.find((u) => u.unit_id === unit.id);
+                const statusColor = unit.status === 'active' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : unit.status === 'pre_opening' ? 'bg-sky-100 text-sky-700 border-sky-200' : unit.status === 'planning' ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-gray-100 text-gray-500 border-gray-200';
+                const statusLabel = unit.status === 'active' ? 'Ativa' : unit.status === 'pre_opening' ? 'Pré-abertura' : unit.status === 'planning' ? 'Planejamento' : 'Encerrada';
+                const statusDot = unit.status === 'active' ? 'bg-emerald-500' : unit.status === 'pre_opening' ? 'bg-sky-400' : unit.status === 'planning' ? 'bg-indigo-400' : 'bg-gray-300';
+                return (
+                  <div key={unit.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3">
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <h4 className="text-sm font-bold text-gray-800 leading-tight">{unit.name}</h4>
+                        <span className={`inline-flex items-center gap-1 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusColor}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
+                          {statusLabel}
+                        </span>
+                      </div>
+                      {unit.city && <p className="text-xs text-gray-400">{unit.city}{unit.state ? `, ${unit.state}` : ''}</p>}
+                    </div>
+                    {unitSeriesMap.has(unit.id) && (
+                      <div className="mt-2 border-t border-gray-100 pt-2">
+                        <p className="text-[10px] text-gray-400 mb-1">Receita — últimos 6 meses</p>
+                        <UnitRevSparkline series={unitSeriesMap.get(unit.id)!} />
+                      </div>
+                    )}
+                    {portfolioUnit ? (
+                      <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-100">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">CAPEX</p>
+                          <p className="text-sm font-bold text-gray-800 tabular-nums">{formatCurrency(portfolioUnit.capex)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Resultado</p>
+                          <p className={`text-sm font-bold tabular-nums ${portfolioUnit.net_result >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{formatCurrency(portfolioUnit.net_result)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">ROI</p>
+                          <p className={`text-sm font-semibold tabular-nums ${portfolioUnit.roi_pct === null ? 'text-gray-400' : portfolioUnit.roi_pct >= 0.15 ? 'text-emerald-600' : portfolioUnit.roi_pct >= 0 ? 'text-amber-600' : 'text-rose-500'}`}>
+                            {portfolioUnit.roi_pct !== null ? formatPercent(portfolioUnit.roi_pct) : '—'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Payback</p>
+                          <p className="text-sm font-semibold text-gray-700 tabular-nums">
+                            {portfolioUnit.payback_months === null ? '—' : portfolioUnit.payback_months < 12 ? `${Math.round(portfolioUnit.payback_months)}m` : `${(portfolioUnit.payback_months / 12).toFixed(1)}a`}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-300 pt-3 border-t border-gray-100 italic">
+                        {unit.status === 'planning' ? 'Sem cálculo — em planejamento' : 'Execute o cálculo para ver KPIs'}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </section>
         )}

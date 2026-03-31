@@ -176,6 +176,7 @@ export default function UnitsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editUnit, setEditUnit] = useState<Unit | null>(null);
   const [form, setForm] = useState<Record<string, string | number>>(EMPTY_FORM);
+  const [editingDateUnitId, setEditingDateUnitId] = useState<string | null>(null);
 
   const effectiveBusinessId = qBusinessId || businessId || '';
 
@@ -284,9 +285,34 @@ export default function UnitsPage() {
                       {unit.area_m2 ? ` · ${unit.area_m2}m²` : ''}
                     </p>
                   )}
-                  {unit.opening_date && (
-                    <p className="text-xs text-gray-400 mt-1">
-                      Abertura: {new Date(unit.opening_date + 'T00:00:00').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+                  {editingDateUnitId === unit.id ? (
+                    <input
+                      type="date"
+                      autoFocus
+                      className="atlas-input mt-1 text-xs py-0.5 px-2 h-7"
+                      defaultValue={unit.opening_date ?? ''}
+                      onClick={(e) => e.stopPropagation()}
+                      onBlur={(e) => {
+                        const val = e.target.value;
+                        if (val && val !== unit.opening_date) {
+                          updateMutation.mutate({ id: unit.id, data: { opening_date: val } });
+                        }
+                        setEditingDateUnitId(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                        if (e.key === 'Escape') setEditingDateUnitId(null);
+                      }}
+                    />
+                  ) : (
+                    <p
+                      className="text-xs text-gray-400 mt-1 cursor-pointer hover:text-indigo-500 hover:underline transition-colors"
+                      title="Clique para editar data de abertura"
+                      onClick={(e) => { e.stopPropagation(); setEditingDateUnitId(unit.id); }}
+                    >
+                      {unit.opening_date
+                        ? `Abertura: ${new Date(unit.opening_date + 'T00:00:00').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}`
+                        : <span className="italic text-gray-300">Definir abertura…</span>}
                     </p>
                   )}
                   <div className="mt-2 flex items-center gap-3 text-xs text-gray-400">

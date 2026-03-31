@@ -124,7 +124,12 @@ def calculate_marketing_costs(inputs: FixedCostInputs) -> dict:
 
 
 def calculate_equipment_costs(inputs: FixedCostInputs) -> dict:
-    total = round(inputs.depreciation_equipment + inputs.maintenance_equipment, 2)
+    total = round(
+        inputs.depreciation_equipment
+        + inputs.depreciation_renovation
+        + inputs.maintenance_equipment,
+        2,
+    )
     return {"total_equipment": total}
 
 

@@ -36,6 +36,7 @@ from app.services.financial_engine.models import (
 from app.services.financial_engine.consolidator import consolidate_business
 from app.services.financial_engine.utils import generate_horizon_periods
 from app.services.financial_engine.expander import expand_assumption
+from app.services.calendar_service import calendar_service
 
 router = APIRouter()
 
@@ -315,6 +316,25 @@ def _build_inputs_for_version(
     inputs_list = []
     for idx, period in enumerate(periods):
         p = period  # alias
+
+        # ── BE-A-05: CalendarService — dias úteis e sábados reais ─────────────
+        # Se o usuário não cadastrou um valor explícito de "dias_uteis_mes" para
+        # este período, usa o CalendarService que considera feriados nacionais.
+        # Fallback final é 22 dias (mantido como constante transitória D-08).
+        _unit_id_for_cal = unit.id if unit else None
+        _explicit_working_days = (p in {pp for (cc, pp) in values if cc == "dias_uteis_mes"})
+        _explicit_saturdays = (p in {pp for (cc, pp) in values if cc == "sabados_mes"})
+
+        if _explicit_working_days:
+            _working_days = int(_get(values, "dias_uteis_mes", p, default=22))
+        else:
+            _working_days = calendar_service.get_working_days(db, _unit_id_for_cal, p)
+
+        if _explicit_saturdays:
+            _saturdays = int(_get(values, "sabados_mes", p, default=4))
+        else:
+            _saturdays = calendar_service.get_saturdays(db, _unit_id_for_cal, p)
+
         revenue = RevenueInputs(
             # ── B2B Coworking (slot/hora) ──────────────────────────────────────
             slots_per_hour=int(_get(values, "slots_por_hora", p, default=10)),
@@ -324,8 +344,8 @@ def _build_inputs_for_version(
             hours_per_day_saturday=float(
                 _get(values, "horas_dia_sabado", p, default=7.0)
             ),
-            working_days_month=int(_get(values, "dias_uteis_mes", p, default=22)),
-            saturdays_month=int(_get(values, "sabados_mes", p, default=4)),
+            working_days_month=_working_days,
+            saturdays_month=_saturdays,
             avg_price_per_hour=float(_get(values, "preco_medio_hora", p, default=60.0)),
             # GAP-02: mix real de planos (Bronze/Prata/Ouro/Diamante) do banco
             service_plans=service_plan_mix,

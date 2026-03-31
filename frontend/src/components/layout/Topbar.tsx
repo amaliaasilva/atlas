@@ -9,21 +9,21 @@ export function Topbar({ title }: { title?: string }) {
   const { organizationId, businessId, scenarioId, unitId } = useNavStore();
 
   const { data: businesses = [] } = useQuery({
-    queryKey: ['businesses-topbar', organizationId],
+    queryKey: ['businesses', organizationId],
     queryFn: () => businessesApi.list(organizationId!),
     enabled: !!organizationId,
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: scenarios = [] } = useQuery({
-    queryKey: ['scenarios-topbar', businessId],
+    queryKey: ['scenarios', businessId],
     queryFn: () => scenariosApi.list(businessId!),
     enabled: !!businessId,
     staleTime: 5 * 60 * 1000,
   });
 
   const { data: units = [] } = useQuery({
-    queryKey: ['units-topbar', businessId],
+    queryKey: ['units', businessId],
     queryFn: () => unitsApi.list(businessId!),
     enabled: !!businessId,
     staleTime: 5 * 60 * 1000,

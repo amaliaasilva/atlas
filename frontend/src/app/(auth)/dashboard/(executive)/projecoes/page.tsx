@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { dashboardApi, scenariosApi } from '@/lib/api';
+import { PaybackCurveChart } from '@/components/charts/PaybackCurveChart';
 import { useDashboardFilters } from '@/store/dashboard';
 import { MetricCard } from '@/components/dashboard/MetricCard';
 import { AnnualAreaChart } from '@/components/charts/AreaGrowthChart';
@@ -15,7 +16,7 @@ import { TrendingUp, BarChart2, Target, LineChart as LineChartIcon } from 'lucid
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-import { aggregateByYear } from '@/lib/utils/dashboard';
+import { aggregateByYear, resolveAnnualData } from '@/lib/utils/dashboard';
 
 const SCENARIO_LABELS: Record<string, string> = {
   conservative: 'Pessimista',
@@ -43,15 +44,23 @@ export default function ProjecoesPage() {
 
   // Cenários disponíveis para o negócio
   const { data: scenarios = [] } = useQuery({
-    queryKey: ['scenarios-projecoes', businessId],
+    queryKey: ['scenarios', businessId],
     queryFn: () => scenariosApi.list(businessId!),
     enabled: !!businessId,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Dados do cenário primário (selecionado nos filtros globais)
   const { data: primaryDashboard, isLoading: isLoadingPrimary } = useQuery({
     queryKey: ['dashboard-consolidated', businessId, scenarioId, unitScopeKey],
     queryFn: () => dashboardApi.consolidated(businessId!, scenarioId!, unitScope),
+    enabled: !!businessId && !!scenarioId,
+  });
+
+  // Portfolio para CAPEX total (payback curve)
+  const { data: portfolioData } = useQuery({
+    queryKey: ['portfolio', businessId, scenarioId],
+    queryFn: () => dashboardApi.portfolio(businessId!, scenarioId!),
     enabled: !!businessId && !!scenarioId,
   });
 
@@ -76,10 +85,8 @@ export default function ProjecoesPage() {
     return true;
   });
 
-  // Agrega por ano para o cenário primário
-  const primaryAnnual = aggregateByYear(
-    filteredTs.map((d) => ({ period: d.period, revenue: getRevenue(d), profit: d.net_result })),
-  );
+  // FIX B11: prefere annual_summaries do backend ao invés de re-agregar
+  const primaryAnnual = resolveAnnualData(primaryDashboard?.annual_summaries, filteredTs);
 
   // Todos os anos disponíveis em todos os cenários
   const allYears = [
@@ -117,9 +124,8 @@ export default function ProjecoesPage() {
 
   // KPIs sumários por cenário (último ano)
   const scenarioKPIs = allScenarioData.map((sd) => {
-    const sdAnnual = aggregateByYear(
-      sd.data.time_series.map((d) => ({ period: d.period, revenue: getRevenue(d), profit: d.net_result })),
-    );
+    // FIX B11: usa resolveAnnualData para aproveitar annual_summaries se disponível
+    const sdAnnual = resolveAnnualData(sd.data.annual_summaries, sd.data.time_series);
     const last = sdAnnual[sdAnnual.length - 1];
     return {
       scenario: sd.scenario,
@@ -395,6 +401,17 @@ export default function ProjecoesPage() {
                 </tbody>
               </table>
             </div>
+          </section>
+        )}
+
+        {/* Curva de payback */}
+        {!isLoadingPrimary && filteredTs.length > 0 && (portfolioData?.total_capex ?? 0) > 0 && (
+          <section>
+            <PaybackCurveChart
+              timeSeries={filteredTs}
+              totalCapex={portfolioData!.total_capex}
+              title="Curva de Payback — Recuperação do Investimento"
+            />
           </section>
         )}
 

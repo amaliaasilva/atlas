@@ -41,6 +41,10 @@ KPI_CODES = [
     "teachers_needed_pessimistic",
     "teachers_needed_medium",
     "teachers_needed_optimistic",
+    # D-04: três variantes de preço médio/hora
+    "avg_price_per_hour_sold",
+    "avg_price_per_hour_occupied",
+    "avg_price_per_hour_available",
 ]
 
 
@@ -87,6 +91,10 @@ def unit_dashboard(
         "teachers_needed_pessimistic",
         "teachers_needed_medium",
         "teachers_needed_optimistic",
+        # D-04: preços médios não são aditivos entre períodos
+        "avg_price_per_hour_sold",
+        "avg_price_per_hour_occupied",
+        "avg_price_per_hour_available",
     }
     if all_periods := sorted(set(r.period_date for r, _ in results)):
         last_period = all_periods[-1]
@@ -186,7 +194,7 @@ def business_consolidated_dashboard(
             "time_series": [],
         }
 
-    # Métricas somáveis (excluindo derivadas percentuais)
+    # Métricas somáveis (excluindo derivadas percentuais e preços médios)
     SUMMABLE = [
         c
         for c in KPI_CODES
@@ -196,6 +204,10 @@ def business_consolidated_dashboard(
             "break_even_occupancy_pct",
             "contribution_margin_pct",
             "net_margin",
+            # D-04: preços médios não são somáveis
+            "avg_price_per_hour_sold",
+            "avg_price_per_hour_occupied",
+            "avg_price_per_hour_available",
         }
     ]
 
@@ -486,6 +498,143 @@ def unit_dre(
         dre_periods.append({"period": period, "items": items})
 
     return {"version_id": version_id, "dre": dre_periods}
+
+
+@router.get("/business/{business_id}/dre/consolidated")
+def business_dre_consolidated(
+    business_id: str,
+    scenario_id: str = Query(...),
+    unit_ids: list[str] = Query(default=[]),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """DRE consolidado linha a linha, mês a mês para todas as unidades do negócio.
+
+    Agrega da melhor versão ativa por unidade (published > draft > planning).
+    """
+    verify_business_access(business_id, current_user, db)
+
+    units_query = db.query(Unit).filter(Unit.business_id == business_id)
+    if unit_ids:
+        units_query = units_query.filter(Unit.id.in_(unit_ids))
+    units_list = units_query.all()
+
+    if not units_list:
+        return {"business_id": business_id, "scenario_id": scenario_id, "dre": []}
+
+    all_versions = (
+        db.query(BudgetVersion)
+        .filter(
+            BudgetVersion.unit_id.in_([u.id for u in units_list]),
+            BudgetVersion.scenario_id == scenario_id,
+            BudgetVersion.is_active.is_(True),
+        )
+        .all()
+    )
+    status_priority = {"published": 0, "draft": 1, "planning": 2}
+    best_by_unit: dict[str, BudgetVersion] = {}
+    for v in all_versions:
+        existing = best_by_unit.get(v.unit_id)
+        if existing is None or status_priority.get(v.status, 9) < status_priority.get(
+            existing.status, 9
+        ):
+            best_by_unit[v.unit_id] = v
+
+    version_ids = [v.id for v in best_by_unit.values()]
+    if not version_ids:
+        return {"business_id": business_id, "scenario_id": scenario_id, "dre": []}
+
+    DRE_CODES = [
+        "revenue_total",
+        "membership_revenue",
+        "personal_training_revenue",
+        "other_revenue",
+        "total_fixed_costs",
+        "rent_total",
+        "staff_costs",
+        "fc_pro_labore",
+        "fc_clt_base",
+        "fc_social_charges",
+        "utility_costs",
+        "fc_electricity",
+        "fc_water",
+        "fc_internet",
+        "admin_costs",
+        "marketing_costs",
+        "equipment_costs",
+        "insurance_costs",
+        "other_fixed_costs",
+        "total_variable_costs",
+        "hygiene_kit_cost",
+        "sales_commission_cost",
+        "card_fee_cost",
+        "taxes_on_revenue",
+        "financing_payment",
+        "operating_result",
+        "net_result",
+        "ebitda",
+    ]
+
+    raw_results = (
+        db.query(
+            CalculatedResult.period_date,
+            LineItemDefinition.code,
+            LineItemDefinition.name,
+            LineItemDefinition.category,
+            LineItemDefinition.display_order,
+            CalculatedResult.value,
+        )
+        .join(
+            LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id
+        )
+        .filter(
+            CalculatedResult.budget_version_id.in_(version_ids),
+            LineItemDefinition.code.in_(DRE_CODES),
+        )
+        .order_by(CalculatedResult.period_date, LineItemDefinition.display_order)
+        .all()
+    )
+
+    # Aggregate: sum values by (period, code) - collect metadata from first occurrence
+    agg_values: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    meta: dict[str, dict] = {}
+    all_periods: set[str] = set()
+
+    for period_date, code, name, category, display_order, value in raw_results:
+        agg_values[period_date][code] += value
+        all_periods.add(period_date)
+        if code not in meta:
+            meta[code] = {
+                "code": code,
+                "name": name,
+                "category": category,
+                "display_order": display_order,
+            }
+
+    dre_periods = []
+    for period in sorted(all_periods):
+        items = []
+        rev = agg_values[period].get("revenue_total", 0.0)
+        denom = rev if rev != 0.0 else 1.0
+        for code in DRE_CODES:
+            if code not in meta:
+                continue
+            value = agg_values[period].get(code, 0.0)
+            items.append(
+                {
+                    **meta[code],
+                    "value": round(value, 2),
+                    "pct_of_revenue": round(value / denom, 4),
+                }
+            )
+        dre_periods.append({"period": period, "items": items})
+
+    return {
+        "business_id": business_id,
+        "scenario_id": scenario_id,
+        "unit_count": len(version_ids),
+        "dre": dre_periods,
+    }
 
 
 @router.get("/unit/{version_id}/audit")

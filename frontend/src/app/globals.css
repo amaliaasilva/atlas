@@ -1,16 +1,44 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
+  /* Brand */
   --color-brand: #3b82f6;
   --gradient-hero: linear-gradient(135deg, #1E2A44 0%, #3B82F6 55%, #22C7E6 100%);
+
+  /* Card tokens */
+  --card-radius: 1rem;
+  --card-padding: 1.5rem;
+  --card-border: 1px solid #E5E7EB;
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+
+  /* Layout */
+  --nav-height: 48px;
+  --sidebar-width: 240px;
+  --filter-bar-height: 52px;
 }
 
 body {
   font-family: 'Manrope', sans-serif;
+}
+
+/* Valores financeiros: sempre mono, tabular-nums */
+.financial-value {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Cards padrão */
+.atlas-card {
+  border-radius: var(--card-radius);
+  padding: var(--card-padding);
+  border: var(--card-border);
+  box-shadow: var(--card-shadow);
+  background: #FFFFFF;
 }
 
 /* Table styling */

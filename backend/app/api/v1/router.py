@@ -19,6 +19,7 @@ from app.api.v1.endpoints import (
     financing_contracts,
     service_plans,
     ai,
+    calendar,
 )
 
 api_router = APIRouter()
@@ -53,3 +54,4 @@ api_router.include_router(
     service_plans.router, prefix="/service-plans", tags=["service-plans"]
 )
 api_router.include_router(ai.router, prefix="/ai", tags=["ai"])
+api_router.include_router(calendar.router, prefix="/calendar", tags=["calendar"])

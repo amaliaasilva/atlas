@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { dashboardApi, unitsApi, versionsApi, aiApi } from '@/lib/api';
 import { useDashboardFilters } from '@/store/dashboard';
@@ -11,7 +11,8 @@ import { Topbar } from '@/components/layout/Topbar';
 import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
 import { getRevenue } from '@/types/api';
 import type { AuditReport } from '@/types/api';
-import { DollarSign, TrendingUp, Target, Building2, BarChart2, TrendingDown, Clock, Activity, Percent, Shield, ShieldAlert } from 'lucide-react';
+import { DollarSign, TrendingUp, Target, Building2, TrendingDown, Calendar, Shield, ShieldAlert, BarChart2, Clock, Activity, Percent } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const STATUS_PRIORITY: Record<string, number> = { published: 0, draft: 1, planning: 2 };
 
@@ -23,8 +24,28 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: 'dre', label: 'DRE' },
 ];
 
+// ── PeriodContextBadge ───────────────────────────────────────────────────────
+function PeriodContextBadge({ label, isDefault }: { label: string; isDefault: boolean }) {
+  return (
+    <div className={cn(
+      'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium',
+      isDefault
+        ? 'bg-gray-50 border-gray-200 text-gray-500'
+        : 'bg-indigo-50 border-indigo-200 text-indigo-700',
+    )}>
+      <Calendar className="h-3 w-3 shrink-0" />
+      {label}
+      {isDefault && (
+        <span className="ml-0.5 rounded-full bg-gray-200 px-1.5 py-0 text-[9px] font-bold text-gray-500 uppercase tracking-wide">
+          padrão
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function VisaoGeralPage() {
-  const { businessId, scenarioId, selectedUnitIds, periodStart, periodEnd, year } = useDashboardFilters();
+  const { businessId, scenarioId, selectedUnitIds, periodStart, periodEnd, year, applyYearPreset } = useDashboardFilters();
   const [activeTab, setActiveTab] = useState<TabId>('financeira');
   const [auditReport, setAuditReport] = useState<AuditReport | null>(null);
   const [showAudit, setShowAudit] = useState(false);
@@ -66,6 +87,21 @@ export default function VisaoGeralPage() {
     enabled: !!businessId,
   });
 
+  // Auto-init: quando há anos disponíveis mas nenhum filtro de período está ativo,
+  // seleciona automaticamente o último ano completo da projeção (D-05)
+  useEffect(() => {
+    // só inicializa uma vez (quando o cenário é carregado e não há filtro ativo)
+    if (!scenarioId) return;
+    if (year || periodStart) return;
+    const allPeriods = (dashboard?.time_series ?? []).map((d) => d.period);
+    if (allPeriods.length === 0) return;
+    const years = Array.from(new Set(allPeriods.map((p) => p.slice(0, 4)))).sort();
+    // D-05: último ano completo = penúltimo da lista (o último pode estar incompleto)
+    const defaultYear = years.length >= 2 ? years[years.length - 2] : years[years.length - 1];
+    if (defaultYear) applyYearPreset(defaultYear);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scenarioId, dashboard?.time_series?.length]);
+
   // Dashboard ativo (unidade específica ou consolidado)
   const effectiveDashboard = unitId ? unitDashboard : dashboard;
   const isLoadingSkeleton = unitId ? isLoadingUnit : isLoading;
@@ -98,6 +134,20 @@ export default function VisaoGeralPage() {
   const breakEvenOccupancy = lastTs?.break_even_occupancy_pct ?? effectiveDashboard?.kpis?.break_even_occupancy_pct ?? 0;
   const contributionMargin = lastTs?.contribution_margin_pct ?? effectiveDashboard?.kpis?.contribution_margin_pct ?? 0;
   const hasB2BData = totalCapacityHours > 0 || avgOccupancy > 0;
+
+  // D-04: preço médio ponderado pelas horas (média simples dos períodos)
+  const avgPricePerHourSold =
+    filteredTs.length > 0
+      ? filteredTs.reduce((acc, d) => acc + (d.avg_price_per_hour_sold ?? 0), 0) / filteredTs.length
+      : 0;
+  const avgPricePerHourOccupied =
+    filteredTs.length > 0
+      ? filteredTs.reduce((acc, d) => acc + (d.avg_price_per_hour_occupied ?? 0), 0) / filteredTs.length
+      : 0;
+  const avgPricePerHourAvailable =
+    filteredTs.length > 0
+      ? filteredTs.reduce((acc, d) => acc + (d.avg_price_per_hour_available ?? 0), 0) / filteredTs.length
+      : 0;
 
   // Tendência de receita (primeira vs segunda metade)
   const half = Math.floor(filteredTs.length / 2);
@@ -248,7 +298,12 @@ export default function VisaoGeralPage() {
               <h2 className="text-lg font-bold text-gray-900">
                 {unitId ? 'Visão da Unidade' : 'Visão Geral da Rede'}
               </h2>
-              <p className="text-sm text-gray-400 mt-0.5">{periodLabel}</p>
+              <div className="mt-1">
+                <PeriodContextBadge
+                  label={periodLabel}
+                  isDefault={!periodStart && !!year}
+                />
+              </div>
             </div>
             {totalProfit >= 0 ? (
               <span className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-1.5 rounded-full border border-emerald-200">
@@ -276,6 +331,7 @@ export default function VisaoGeralPage() {
                   icon={<DollarSign className="h-4 w-4" />}
                   accentColor="indigo"
                   tooltip="Receita bruta acumulada no período selecionado"
+                  dataType="projected"
                   size="lg"
                 />
                 <MetricCard
@@ -286,6 +342,7 @@ export default function VisaoGeralPage() {
                   accentColor={totalProfit >= 0 ? 'emerald' : 'rose'}
                   sub={`EBITDA: ${formatCurrency(totalEbitda)}`}
                   tooltip="Resultado líquido acumulado do período selecionado"
+                  dataType="projected"
                   size="lg"
                 />
                 <MetricCard
@@ -296,6 +353,7 @@ export default function VisaoGeralPage() {
                   accentColor={margin > 0.15 ? 'emerald' : margin > 0 ? 'amber' : 'rose'}
                   sub={`EBITDA Margin: ${formatPercent(ebitdaMargin)}`}
                   tooltip="Lucro líquido dividido pela receita bruta total"
+                  dataType="projected"
                   size="lg"
                 />
                 {unitId ? (
@@ -445,6 +503,44 @@ export default function VisaoGeralPage() {
                 </>
               )}
             </div>
+
+            {/* D-04: Preço Médio / Hora — 3 variantes */}
+            {!isLoadingSkeleton && hasB2BData && (
+              <>
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mt-6 mb-3">
+                  Preço Médio por Hora (média do período)
+                </h4>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <MetricCard
+                    label="Preço / Hora Vendida"
+                    value={avgPricePerHourSold > 0 ? formatCurrency(avgPricePerHourSold) : '—'}
+                    trend="neutral"
+                    icon={<DollarSign className="h-4 w-4" />}
+                    accentColor="indigo"
+                    sub="Receita ÷ horas efetivamente vendidas"
+                    tooltip="Preço médio calculado sobre as horas realmente ocupadas por clientes"
+                  />
+                  <MetricCard
+                    label="Receita / Hora Ocupada"
+                    value={avgPricePerHourOccupied > 0 ? formatCurrency(avgPricePerHourOccupied) : '—'}
+                    trend="neutral"
+                    icon={<Activity className="h-4 w-4" />}
+                    accentColor="violet"
+                    sub="Receita ÷ horas com operação ativa"
+                    tooltip="Igual ao preço por hora vendida no modelo B2B coworking"
+                  />
+                  <MetricCard
+                    label="Receita / Hora Disponível"
+                    value={avgPricePerHourAvailable > 0 ? formatCurrency(avgPricePerHourAvailable) : '—'}
+                    trend={avgPricePerHourAvailable > 0 && totalCapacityHours > 0 ? (avgPricePerHourAvailable / (avgPricePerHourSold || 1) > 0.6 ? 'up' : 'neutral') : 'neutral'}
+                    icon={<Clock className="h-4 w-4" />}
+                    accentColor="sky"
+                    sub="Receita ÷ horas totais do calendário"
+                    tooltip="Rendimento sobre toda a capacidade instalada, independente de ocupação"
+                  />
+                </div>
+              </>
+            )}
           </section>
         )}
 

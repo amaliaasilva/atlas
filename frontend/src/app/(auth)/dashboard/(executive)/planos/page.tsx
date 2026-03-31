@@ -1,28 +1,53 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { servicePlansApi, aiApi, unitsApi } from '@/lib/api';
 import { useDashboardFilters } from '@/store/dashboard';
 import { Topbar } from '@/components/layout/Topbar';
 import { formatCurrency, formatPercent } from '@/lib/utils';
-import type { GeoPricingReport } from '@/types/api';
-import { MapPin, Sparkles, X } from 'lucide-react';
+import type { GeoPricingReport, ServicePlan } from '@/types/api';
+import { MapPin, Sparkles, X, Pencil, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 export default function PlanosPage() {
   const { businessId, selectedUnitIds } = useDashboardFilters();
+  const queryClient = useQueryClient();
   const unitId = selectedUnitIds.length === 1 ? selectedUnitIds[0] : null;
 
   const [showGeoModal, setShowGeoModal] = useState(false);
   const [geoLocation, setGeoLocation] = useState('');
   const [geoReport, setGeoReport] = useState<GeoPricingReport | null>(null);
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Partial<ServicePlan>>({});
 
   const { data: plans = [], isLoading } = useQuery({
     queryKey: ['service-plans', businessId],
     queryFn: () => servicePlansApi.list(businessId!),
     enabled: !!businessId,
   });
+
+  const updatePlanMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<ServicePlan> }) =>
+      servicePlansApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-plans', businessId] });
+      setEditingPlanId(null);
+      setEditForm({});
+    },
+  });
+
+  const startEdit = (plan: ServicePlan) => {
+    setEditingPlanId(plan.id);
+    setEditForm({
+      price_per_hour: plan.price_per_hour,
+      target_mix_pct: plan.target_mix_pct,
+    });
+  };
+
+  const saveEdit = (planId: string) => {
+    updatePlanMutation.mutate({ id: planId, data: editForm });
+  };
 
   const { data: units = [] } = useQuery({
     queryKey: ['units', businessId],
@@ -88,10 +113,13 @@ export default function PlanosPage() {
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600">Mix alvo</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Aulas mín/máx</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Status</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">Ação</th>
                 </tr>
               </thead>
               <tbody>
-                {plans.map((plan) => (
+                {plans.map((plan) => {
+                  const isEditing = editingPlanId === plan.id;
+                  return (
                   <tr key={plan.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                     <td className="px-4 py-3">
                       <span className="font-semibold text-gray-800">{plan.name}</span>
@@ -100,10 +128,33 @@ export default function PlanosPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-gray-800">
-                      {formatCurrency(plan.price_per_hour)}/h
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.01}
+                          value={editForm.price_per_hour ?? ''}
+                          onChange={(e) => setEditForm((f) => ({ ...f, price_per_hour: parseFloat(e.target.value) || 0 }))}
+                          className="w-24 rounded border border-gray-300 px-2 py-0.5 text-right text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                        />
+                      ) : (
+                        `${formatCurrency(plan.price_per_hour)}/h`
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-700">
-                      {formatPercent(plan.target_mix_pct)}
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={editForm.target_mix_pct ?? ''}
+                          onChange={(e) => setEditForm((f) => ({ ...f, target_mix_pct: parseFloat(e.target.value) || 0 }))}
+                          className="w-20 rounded border border-gray-300 px-2 py-0.5 text-right text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                        />
+                      ) : (
+                        formatPercent(plan.target_mix_pct)
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center text-gray-600 text-xs">
                       {plan.min_classes_month} – {plan.max_classes_month} aulas/mês
@@ -113,8 +164,38 @@ export default function PlanosPage() {
                         {plan.is_active ? 'Ativo' : 'Inativo'}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-center">
+                      {isEditing ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => saveEdit(plan.id)}
+                            disabled={updatePlanMutation.isPending}
+                            className="text-emerald-600 hover:text-emerald-800 disabled:opacity-50"
+                            title="Salvar"
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => { setEditingPlanId(null); setEditForm({}); }}
+                            className="text-gray-400 hover:text-gray-600"
+                            title="Cancelar"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => startEdit(plan)}
+                          className="text-gray-400 hover:text-indigo-600"
+                          title="Editar"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      )}
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
               <tfoot className="bg-gray-50 border-t border-gray-200">
                 <tr>

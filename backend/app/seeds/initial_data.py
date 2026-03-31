@@ -1233,6 +1233,10 @@ LINE_ITEM_DEFINITIONS = [
         False,
         False,
     ),
+    # D-04: três variantes de preço médio/hora
+    ("avg_price_per_hour_sold", "Preço Médio / Hora Vendida (R$)", "result", "kpi", 130, False, False, False),
+    ("avg_price_per_hour_occupied", "Receita / Hora Ocupada (R$)", "result", "kpi", 131, False, False, False),
+    ("avg_price_per_hour_available", "Receita / Hora Disponível (R$)", "result", "kpi", 132, False, False, False),
 ]
 
 
@@ -1259,22 +1263,28 @@ def run_seeds(db: Session):
     db.commit()
     print(f"  ✓ {len(roles_data)} roles criados/verificados")
 
-    # 2. Admin user
+    # 2. Admin user — garante que senha e status estão sempre corretos
+    ADMIN_PASSWORD = "Atlas@2026!"
     admin = db.query(User).filter(User.email == "admin@atlasfinance.com").first()
     if not admin:
         admin = User(
             id=str(uuid.uuid4()),
             email="admin@atlasfinance.com",
             full_name="Administrador Atlas",
-            hashed_password=get_password_hash("Atlas@2026!"),
+            hashed_password=get_password_hash(ADMIN_PASSWORD),
             is_superuser=True,
             status="active",
         )
         db.add(admin)
         db.commit()
-        print("  ✓ Usuário admin criado: admin@atlasfinance.com")
+        print("  ✓ Usuário admin criado: admin@atlasfinance.com / Atlas@2026!")
     else:
-        print("  ✓ Usuário admin já existe")
+        # Sempre atualiza hash e status para garantir acesso após re-deploys
+        admin.hashed_password = get_password_hash(ADMIN_PASSWORD)
+        admin.status = "active"
+        admin.is_superuser = True
+        db.commit()
+        print("  ✓ Usuário admin sincronizado: admin@atlasfinance.com / Atlas@2026!")
 
     # 3. Organization
     org = db.query(Organization).filter(Organization.slug == "grupo-atlas").first()

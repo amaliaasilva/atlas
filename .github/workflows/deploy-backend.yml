@@ -264,6 +264,27 @@ jobs:
             --project="${{ env.GCP_PROJECT }}" \
             --wait || true
 
+      - name: Executar seed (usuário admin + dados base)
+        run: |
+          # Seed idempotente: garante admin@atlasfinance.com com senha correta.
+          # Roda SEMPRE após migration para sincronizar usuários e line items.
+          gcloud run jobs create atlas-seed-${{ needs.build-push.outputs.image-tag }} \
+            --image="${{ needs.build-push.outputs.full-image }}" \
+            --region="${{ env.GCP_REGION }}" \
+            --project="${{ env.GCP_PROJECT }}" \
+            --command="python" \
+            --args="-m,app.seeds.initial_data" \
+            --service-account="${{ secrets.WIF_SERVICE_ACCOUNT }}" \
+            --set-secrets="DATABASE_URL=atlas-database-url:latest" \
+            --add-cloudsql-instances="${{ env.CLOUDSQL_INSTANCE }}" \
+            --max-retries=1 \
+            --wait \
+            2>/dev/null || \
+          gcloud run jobs execute atlas-seed-${{ needs.build-push.outputs.image-tag }} \
+            --region="${{ env.GCP_REGION }}" \
+            --project="${{ env.GCP_PROJECT }}" \
+            --wait || true
+
       - name: Notificar resultado
         uses: actions/github-script@v7
         if: always()

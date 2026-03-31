@@ -182,6 +182,10 @@ export interface TimeSeries {
   capacity_hours_month?: number;
   active_hours_month?: number;
   avg_price_per_hour?: number;
+  // D-04: três variantes de preço médio/hora
+  avg_price_per_hour_sold?: number;
+  avg_price_per_hour_occupied?: number;
+  avg_price_per_hour_available?: number;
   break_even_revenue?: number;
   break_even_occupancy_pct?: number;
   contribution_margin_pct?: number;
@@ -338,6 +342,13 @@ export interface DREPeriod {
 
 export interface DREResponse {
   version_id: string;
+  dre: DREPeriod[];
+}
+
+export interface DREConsolidatedResponse {
+  business_id: string;
+  scenario_id: string;
+  unit_count: number;
   dre: DREPeriod[];
 }
 
@@ -546,4 +557,45 @@ export interface GeoPricingReport {
   caveats: string[];
   generated_at: string;
   model_used: string;
+}
+
+// ── Calendar ─────────────────────────────────────────────────────────────────
+
+export interface MonthSummaryOut {
+  year_month: string;         // "YYYY-MM"
+  calendar_days: number;
+  weekend_days: number;
+  saturday_days: number;
+  sunday_days: number;
+  holiday_days: number;
+  working_days: number;
+  effective_working_days: number;
+  is_estimate: boolean;
+}
+
+export interface CalendarYearOut {
+  unit_id: string | null;
+  year: number;
+  months: MonthSummaryOut[];
+  total_working_days: number;
+  total_holiday_days: number;
+  has_estimates: boolean;
+}
+
+export interface CalendarExceptionIn {
+  unit_id?: string | null;
+  exception_date: string;     // "YYYY-MM-DD"
+  exception_type: string;
+  description: string;
+  notes?: string;
+}
+
+export interface CalendarExceptionOut {
+  id: string;
+  unit_id: string | null;
+  exception_date: string;
+  exception_type: string;
+  description: string;
+  notes?: string;
+  created_at: string;
 }
