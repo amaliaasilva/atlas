@@ -106,7 +106,6 @@ def download_template(
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment
     from datetime import date
-    from calendar import monthrange
 
     wb = openpyxl.Workbook()
     wb.remove(wb.active)  # remove sheet padrão

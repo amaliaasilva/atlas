@@ -7,7 +7,7 @@ Integra calendar_exceptions (feriados e exceções manuais) com fallback de 22 d
 from __future__ import annotations
 
 import calendar as _cal
-from datetime import date, timedelta
+from datetime import date
 from dataclasses import dataclass
 
 
@@ -73,11 +73,6 @@ class CalendarService:
                 sunday_days += 1
         weekend_days = saturday_days + sunday_days
         working_days = days_in_month - weekend_days  # seg-sex sem feriados
-
-        # Monta conjunto de datas do mês
-        month_dates = {
-            date(year, month, d) for d in range(1, days_in_month + 1)
-        }
 
         # Busca exceções globais (feriados nacionais) para o mês
         global_exceptions = (
