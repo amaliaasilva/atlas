@@ -10,7 +10,8 @@ import { LoadingScreen } from '@/components/ui/Spinner';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import type { Unit } from '@/types/api';
-import { MapPin, ChevronRight, Plus, X, Pencil } from 'lucide-react';
+import { MapPin, ChevronRight, Plus, X, Pencil, Calendar } from 'lucide-react';
+import { UnitLifecycleBadge } from '@/components/ui/UnitLifecycleBadge';
 
 const EMPTY_FORM = {
   name: '',
@@ -176,7 +177,8 @@ export default function UnitsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editUnit, setEditUnit] = useState<Unit | null>(null);
   const [form, setForm] = useState<Record<string, string | number>>(EMPTY_FORM);
-  const [editingDateUnitId, setEditingDateUnitId] = useState<string | null>(null);
+  const [dateModalUnit, setDateModalUnit] = useState<Unit | null>(null);
+  const [dateValue, setDateValue] = useState('');
 
   const effectiveBusinessId = qBusinessId || businessId || '';
 
@@ -302,36 +304,18 @@ export default function UnitsPage() {
                       {unit.area_m2 ? ` · ${unit.area_m2}m²` : ''}
                     </p>
                   )}
-                  {editingDateUnitId === unit.id ? (
-                    <input
-                      type="date"
-                      autoFocus
-                      className="atlas-input mt-1 text-xs py-0.5 px-2 h-7"
-                      defaultValue={unit.opening_date ?? ''}
-                      onClick={(e) => e.stopPropagation()}
-                      onBlur={(e) => {
-                        const val = e.target.value;
-                        if (val && val !== unit.opening_date) {
-                          updateMutation.mutate({ id: unit.id, data: { opening_date: val } });
-                        }
-                        setEditingDateUnitId(null);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                        if (e.key === 'Escape') setEditingDateUnitId(null);
-                      }}
-                    />
-                  ) : (
-                    <p
-                      className="text-xs text-gray-400 mt-1 cursor-pointer hover:text-indigo-500 hover:underline transition-colors"
-                      title="Clique para editar a data de abertura. Usado apenas para exibição — o horizonte de cálculo é definido na versão de orçamento."
-                      onClick={(e) => { e.stopPropagation(); setEditingDateUnitId(unit.id); }}
-                    >
-                      {unit.opening_date
-                        ? `Abertura: ${new Date(unit.opening_date + 'T00:00:00').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}`
-                        : <span className="italic text-gray-300">Definir abertura…</span>}
-                    </p>
-                  )}
+                  {/* Badge de ciclo de vida — clicável para editar a data */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDateModalUnit(unit);
+                      setDateValue(unit.opening_date ?? '');
+                    }}
+                    className="mt-2 text-left"
+                    title="Clique para definir ou alterar a data de inauguração"
+                  >
+                    <UnitLifecycleBadge unit={unit} size="sm" />
+                  </button>
                   <div className="mt-2 flex items-center gap-3 text-xs text-gray-400">
                     <span>{unit.slots_per_hour ?? 10} slots/h</span>
                     <span>·</span>
@@ -421,6 +405,82 @@ export default function UnitsPage() {
                 <p className="text-xs text-red-500 text-center">Erro ao salvar. Verifique os dados.</p>
               )}
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Data de Abertura */}
+      {dateModalUnit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <div>
+                <h3 className="font-semibold text-gray-900">Data de Inauguração</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{dateModalUnit.name}</p>
+              </div>
+              <button onClick={() => setDateModalUnit(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* Contexto semântico */}
+              <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-4 text-xs text-indigo-700 space-y-2">
+                <div className="flex items-center gap-2 font-semibold">
+                  <Calendar className="h-4 w-4" />
+                  Para que serve a data de abertura?
+                </div>
+                <ul className="space-y-1 list-disc list-inside text-indigo-600">
+                  <li>Calcula há quantos meses a unidade está em operação</li>
+                  <li>Determina se está em fase pré-abertura ou já ativa</li>
+                  <li>Ancora a curva de payback no dashboard de projeções</li>
+                  <li>Alimenta o widget de próximas aberturas na visão geral</li>
+                  <li>O horizonte do cálculo financeiro é definido separadamente na versão de orçamento</li>
+                </ul>
+              </div>
+
+              {/* Estado atual */}
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2">Estado atual</p>
+                <UnitLifecycleBadge unit={dateModalUnit} size="md" />
+              </div>
+
+              {/* Input */}
+              <div>
+                <label className="atlas-label">Nova data de inauguração</label>
+                <input
+                  type="date"
+                  className="atlas-input"
+                  value={dateValue}
+                  onChange={(e) => setDateValue(e.target.value)}
+                />
+                <p className="text-[10px] text-gray-400 mt-1">
+                  Deixe em branco para remover a data. Alterações são registradas em auditoria.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-1">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setDateModalUnit(null)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={updateMutation.isPending}
+                  onClick={() => {
+                    updateMutation.mutate(
+                      { id: dateModalUnit.id, data: { opening_date: dateValue || null } as Parameters<typeof updateMutation.mutate>[0]['data'] },
+                      { onSuccess: () => setDateModalUnit(null) },
+                    );
+                  }}
+                >
+                  {updateMutation.isPending ? 'Salvando...' : 'Salvar Data'}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}

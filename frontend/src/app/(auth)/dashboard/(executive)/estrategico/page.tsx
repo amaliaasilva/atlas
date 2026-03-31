@@ -19,6 +19,7 @@ import {
 import { aggregateByYear, resolveAnnualData } from '@/lib/utils/dashboard';
 import { PortfolioTable } from '@/components/tables/PortfolioTable';
 import { UnitRevSparkline } from '@/components/charts/UnitRevSparkline';
+import { UnitLifecycleBadge, UnitOpeningProgress } from '@/components/ui/UnitLifecycleBadge';
 
 const SCENARIO_LABELS: Record<string, string> = {
   conservative: 'Pessimista',
@@ -896,6 +897,9 @@ export default function EstrategicoPage() {
                         </span>
                       </div>
                       {unit.city && <p className="text-xs text-gray-400">{unit.city}{unit.state ? `, ${unit.state}` : ''}</p>}
+                      <div className="mt-1.5">
+                        <UnitLifecycleBadge unit={unit} size="sm" />
+                      </div>
                     </div>
                     {unitSeriesMap.has(unit.id) && (
                       <div className="mt-2 border-t border-gray-100 pt-2">
@@ -904,28 +908,33 @@ export default function EstrategicoPage() {
                       </div>
                     )}
                     {portfolioUnit ? (
-                      <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-100">
-                        <div>
-                          <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">CAPEX</p>
-                          <p className="text-sm font-bold text-gray-800 tabular-nums">{formatCurrency(portfolioUnit.capex)}</p>
+                      <>
+                        <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-100">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">CAPEX</p>
+                            <p className="text-sm font-bold text-gray-800 tabular-nums">{formatCurrency(portfolioUnit.capex)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Resultado</p>
+                            <p className={`text-sm font-bold tabular-nums ${portfolioUnit.net_result >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{formatCurrency(portfolioUnit.net_result)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">ROI</p>
+                            <p className={`text-sm font-semibold tabular-nums ${portfolioUnit.roi_pct === null ? 'text-gray-400' : portfolioUnit.roi_pct >= 0.15 ? 'text-emerald-600' : portfolioUnit.roi_pct >= 0 ? 'text-amber-600' : 'text-rose-500'}`}>
+                              {portfolioUnit.roi_pct !== null ? formatPercent(portfolioUnit.roi_pct) : '—'}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Payback</p>
+                            <p className="text-sm font-semibold text-gray-700 tabular-nums">
+                              {portfolioUnit.payback_months === null ? '—' : portfolioUnit.payback_months < 12 ? `${Math.round(portfolioUnit.payback_months)}m` : `${(portfolioUnit.payback_months / 12).toFixed(1)}a`}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Resultado</p>
-                          <p className={`text-sm font-bold tabular-nums ${portfolioUnit.net_result >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{formatCurrency(portfolioUnit.net_result)}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">ROI</p>
-                          <p className={`text-sm font-semibold tabular-nums ${portfolioUnit.roi_pct === null ? 'text-gray-400' : portfolioUnit.roi_pct >= 0.15 ? 'text-emerald-600' : portfolioUnit.roi_pct >= 0 ? 'text-amber-600' : 'text-rose-500'}`}>
-                            {portfolioUnit.roi_pct !== null ? formatPercent(portfolioUnit.roi_pct) : '—'}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Payback</p>
-                          <p className="text-sm font-semibold text-gray-700 tabular-nums">
-                            {portfolioUnit.payback_months === null ? '—' : portfolioUnit.payback_months < 12 ? `${Math.round(portfolioUnit.payback_months)}m` : `${(portfolioUnit.payback_months / 12).toFixed(1)}a`}
-                          </p>
-                        </div>
-                      </div>
+                        {unit.opening_phase === 'operating' && unit.months_since_opening != null && portfolioUnit.payback_months != null && (
+                          <UnitOpeningProgress unit={unit} targetMonths={Math.round(portfolioUnit.payback_months)} />
+                        )}
+                      </>
                     ) : (
                       <p className="text-xs text-gray-300 pt-3 border-t border-gray-100 italic">
                         {unit.status === 'planning' ? 'Sem cálculo — em planejamento' : 'Execute o cálculo para ver KPIs'}
@@ -945,7 +954,7 @@ export default function EstrategicoPage() {
               <h3 className="text-sm font-bold text-gray-900">Portfólio — ROI & Payback por Unidade</h3>
               <p className="text-xs text-gray-400 mt-0.5">CAPEX vs resultado líquido acumulado por unidade</p>
             </div>
-            <PortfolioTable data={portfolioData} />
+            <PortfolioTable data={portfolioData} units={units} />
           </section>
         )}
       </div>

@@ -32,6 +32,10 @@ export interface Unit {
   area_m2?: number;
   notes?: string;
   sort_order?: number;
+  // Computed pelo backend a partir de opening_date
+  months_since_opening?: number | null;
+  days_to_opening?: number | null;
+  opening_phase?: 'future' | 'pre_opening' | 'operating' | 'closed' | null;
 }
 
 export interface Scenario {

@@ -13,6 +13,7 @@ import { getRevenue } from '@/types/api';
 import type { AuditReport } from '@/types/api';
 import { DollarSign, TrendingUp, Target, Building2, TrendingDown, Calendar, Shield, ShieldAlert, BarChart2, Clock, Activity, Percent } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { UnitLifecycleBadge } from '@/components/ui/UnitLifecycleBadge';
 
 const STATUS_PRIORITY: Record<string, number> = { published: 0, draft: 1, planning: 2 };
 
@@ -172,6 +173,7 @@ export default function VisaoGeralPage() {
 
   const totalUnits = units.length;
   const nonClosedUnits = units.filter((u) => u.status !== 'closed').length;
+  const futureUnits = units.filter((u) => u.opening_phase === 'future').sort((a, b) => (a.days_to_opening ?? 9999) - (b.days_to_opening ?? 9999));
 
   // Auditoria AI
   const auditMutation = useMutation({
@@ -381,6 +383,51 @@ export default function VisaoGeralPage() {
             )}
           </div>
         </section>
+
+        {/* Próximas Aberturas */}
+        {!unitId && futureUnits.length > 0 && (
+          <section>
+            <div className="mb-3 flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-amber-500" />
+              <h3 className="text-sm font-bold text-gray-900">Próximas Aberturas</h3>
+              <span className="ml-1 inline-flex items-center text-xs font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200">
+                {futureUnits.length}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {futureUnits.map((unit) => (
+                <div key={unit.id} className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col gap-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-sm font-bold text-gray-800 leading-tight">{unit.name}</span>
+                    {unit.days_to_opening != null && (
+                      <span className="shrink-0 text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                        {unit.days_to_opening}d
+                      </span>
+                    )}
+                  </div>
+                  {unit.city && (
+                    <p className="text-xs text-gray-400">{unit.city}{unit.state ? `, ${unit.state}` : ''}</p>
+                  )}
+                  <UnitLifecycleBadge unit={unit} size="sm" />
+                  {unit.days_to_opening != null && (
+                    <div className="mt-1">
+                      <div className="flex justify-between text-[10px] text-amber-600 mb-1">
+                        <span>Hoje</span>
+                        <span>Abertura</span>
+                      </div>
+                      <div className="h-1.5 bg-amber-200 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-amber-500 rounded-full transition-all"
+                          style={{ width: `${Math.max(4, Math.min(96, 100 - (unit.days_to_opening / 365) * 100))}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Gráfico de evolução */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">

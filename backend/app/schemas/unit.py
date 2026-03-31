@@ -1,5 +1,6 @@
 from datetime import datetime, date
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from typing import Literal
 
 
 class UnitBase(BaseModel):
@@ -43,4 +44,37 @@ class UnitOut(UnitBase):
     created_at: datetime
     updated_at: datetime
 
+    # ── Campos derivados de abertura ──────────────────────────────────────────
+    months_since_opening: int | None = None
+    days_to_opening: int | None = None
+    # "future" | "pre_opening" | "operating" | "closed" | None
+    opening_phase: str | None = None
+
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def compute_opening_fields(self) -> "UnitOut":
+        today = date.today()
+        od = self.opening_date
+
+        if od is None:
+            self.opening_phase = None
+            return self
+
+        delta = (today - od).days
+
+        if self.status == "closed":
+            self.opening_phase = "closed"
+            self.months_since_opening = max(0, (today.year - od.year) * 12 + today.month - od.month)
+        elif delta < 0:
+            # ainda não abriu
+            self.opening_phase = "future"
+            self.days_to_opening = abs(delta)
+        elif delta == 0:
+            self.opening_phase = "operating"
+            self.months_since_opening = 0
+        else:
+            self.opening_phase = "operating"
+            self.months_since_opening = (today.year - od.year) * 12 + today.month - od.month
+
+        return self
