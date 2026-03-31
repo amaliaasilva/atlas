@@ -29,6 +29,7 @@ interface NavItem {
 interface NavSection {
   label: string;
   items: NavItem[];
+  hint?: string;
 }
 
 // ── BusinessSelector ────────────────────────────────────────────────────────
@@ -197,12 +198,15 @@ function SidebarItem({ item, pathname }: { item: NavItem; pathname: string }) {
 }
 
 // ── Section label ────────────────────────────────────────────────────────────
-function SidebarSection({ label, items, pathname }: { label: string; items: NavItem[]; pathname: string }) {
+function SidebarSection({ label, items, pathname, hint }: { label: string; items: NavItem[]; pathname: string; hint?: string }) {
   return (
     <div className="space-y-0.5">
       <p className="px-3 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-gray-600">
         {label}
       </p>
+      {hint && (
+        <p className="px-3 pb-1 text-[9px] text-gray-600 leading-relaxed">{hint}</p>
+      )}
       {items.map((item) => (
         <SidebarItem key={item.href} item={item} pathname={pathname} />
       ))}
@@ -239,6 +243,7 @@ export function Sidebar() {
     },
     {
       label: 'Gestão',
+      hint: '① Unidades → ② Cenários → ③ Orçamento',
       items: [
         {
           label: 'Unidades',
@@ -320,6 +325,7 @@ export function Sidebar() {
             label={section.label}
             items={section.items}
             pathname={pathname}
+            hint={section.hint}
           />
         ))}
       </nav>

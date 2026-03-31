@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useQueries } from '@tanstack/react-query';
-import { versionsApi, calculationsApi, scenariosApi } from '@/lib/api';
+import { versionsApi, calculationsApi, scenariosApi, unitsApi } from '@/lib/api';
 import { useNavStore } from '@/store/auth';
 import { Topbar } from '@/components/layout/Topbar';
 import { LoadingScreen } from '@/components/ui/Spinner';
@@ -39,7 +39,17 @@ function formatValue(value: number, metric: string) {
 
 export default function CompareScenariosPage() {
   const [metric, setMetric] = useState('net_result');
-  const { unitId, businessId } = useNavStore();
+  const { unitId: navUnitId, businessId } = useNavStore();
+  const [selectedUnitId, setSelectedUnitId] = useState(navUnitId ?? '');
+
+  // Unidades do negócio para seleção inline
+  const { data: units = [] } = useQuery({
+    queryKey: ['units', businessId],
+    queryFn: () => unitsApi.list(businessId ?? ''),
+    enabled: !!businessId,
+  });
+
+  const unitId = selectedUnitId || navUnitId || '';
 
   // Todos os cenários do negócio
   const { data: scenarios = [] } = useQuery({
@@ -112,7 +122,7 @@ export default function CompareScenariosPage() {
       <Topbar title="Comparação entre Cenários" />
       <div className="flex-1 p-6 space-y-6 max-w-6xl">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Comparação entre Cenários</h2>
             <p className="text-sm text-gray-500 mt-0.5">
@@ -121,17 +131,32 @@ export default function CompareScenariosPage() {
                 : `${publishedVersions.length} versão${publishedVersions.length !== 1 ? 'ões' : ''} publicada${publishedVersions.length !== 1 ? 's' : ''}`}
             </p>
           </div>
-          <Select
-            value={metric}
-            onChange={(e) => setMetric(e.target.value)}
-            options={METRIC_OPTIONS}
-            className="w-56"
-          />
+          <div className="flex items-center gap-3">
+            {units.length > 0 && (
+              <Select
+                value={selectedUnitId}
+                onChange={(e) => setSelectedUnitId(e.target.value)}
+                options={[
+                  { value: '', label: 'Selecione a unidade…' },
+                  ...units.map((u) => ({ value: u.id, label: `${u.code} — ${u.name}` })),
+                ]}
+                className="w-56"
+              />
+            )}
+            <Select
+              value={metric}
+              onChange={(e) => setMetric(e.target.value)}
+              options={METRIC_OPTIONS}
+              className="w-56"
+            />
+          </div>
         </div>
 
         {!unitId ? (
           <div className="rounded-xl bg-blue-50 border border-blue-200 p-6 text-center text-sm text-blue-700">
-            Selecione uma unidade no contexto para ver a comparação entre cenários.
+            {units.length === 0
+              ? 'Nenhuma unidade disponível. Crie uma unidade em Gestão → Unidades.'
+              : 'Selecione uma unidade acima para comparar versões de orçamento entre cenários.'}
           </div>
         ) : publishedVersions.length < 2 ? (
           <div className="rounded-xl bg-amber-50 border border-amber-200 p-5 text-sm text-amber-700">

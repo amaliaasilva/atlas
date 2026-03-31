@@ -248,6 +248,23 @@ export default function UnitsPage() {
           </Button>
         </div>
 
+        {/* Banner de orientação de fluxo */}
+        {effectiveBusinessId && (
+          <div className="mb-6 rounded-xl bg-indigo-50 border border-indigo-100 px-5 py-3 flex items-center gap-3 text-sm text-indigo-700">
+            <span className="font-semibold whitespace-nowrap">Fluxo de uso:</span>
+            <span className="flex items-center gap-1.5 flex-wrap">
+              <span className="rounded-full bg-indigo-100 px-2 py-0.5 font-medium">① Unidade</span>
+              <span className="text-indigo-400">→</span>
+              <span className="rounded-full bg-indigo-100 px-2 py-0.5 font-medium">② Cenário</span>
+              <span className="text-indigo-400">→</span>
+              <span className="rounded-full bg-indigo-100 px-2 py-0.5 font-medium">③ Versão de Orçamento</span>
+              <span className="text-indigo-400">→</span>
+              <span className="rounded-full bg-indigo-100 px-2 py-0.5 font-medium">④ Calcular</span>
+            </span>
+            <span className="ml-auto text-xs text-indigo-500 whitespace-nowrap">Clique em uma unidade para começar</span>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {units?.map((unit) => (
             <div
@@ -307,7 +324,7 @@ export default function UnitsPage() {
                   ) : (
                     <p
                       className="text-xs text-gray-400 mt-1 cursor-pointer hover:text-indigo-500 hover:underline transition-colors"
-                      title="Clique para editar data de abertura"
+                      title="Clique para editar a data de abertura. Usado apenas para exibição — o horizonte de cálculo é definido na versão de orçamento."
                       onClick={(e) => { e.stopPropagation(); setEditingDateUnitId(unit.id); }}
                     >
                       {unit.opening_date
@@ -324,9 +341,9 @@ export default function UnitsPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center justify-end mt-4 text-brand-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <span className="text-xs">Ver cenários</span>
-                  <ChevronRight className="h-3 w-3 ml-1" />
+                <div className="flex items-center justify-end mt-4 text-brand-500 gap-1">
+                  <span className="text-xs font-medium">Ver cenários e orçamentos</span>
+                  <ChevronRight className="h-3 w-3" />
                 </div>
               </button>
             </div>

@@ -90,6 +90,9 @@ export default function SettingsPage() {
         {/* Planos de Serviço */}
         {businessId && (
           <Card title="Planos de Serviço (Bronze / Prata / Ouro / Diamante)">
+            <div className="mb-4 rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">
+              Estes planos são os <strong>padrões globais do negócio</strong>. Qualquer alteração reflete em todos os cálculos futuros de todas as unidades. Versões de orçamento já calculadas <strong>não são afetadas automaticamente</strong> — recalcule cada versão para aplicar os novos valores.
+            </div>
             {plans && plans.length > 0 ? (
               <>
                 <table className="atlas-table">
@@ -216,7 +219,7 @@ export default function SettingsPage() {
                   <tr key={u.id}>
                     <td>{u.full_name}</td>
                     <td className="text-gray-500 text-xs">{u.email}</td>
-                    <td><StatusBadge status={u.is_active ? 'active' : 'closed'} /></td>
+                    <td><StatusBadge status={u.is_active ? 'active' : 'inactive'} /></td>
                   </tr>
                 ))}
               </tbody>

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
 import { LoadingScreen } from '@/components/ui/Spinner';
 import { getErrorMessage } from '@/lib/utils';
-import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Clock, Download } from 'lucide-react';
 
 export default function ImportPage() {
   const { unitId, businessId } = useNavStore();
@@ -17,6 +17,24 @@ export default function ImportPage() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadTemplate = async () => {
+    setDownloading(true);
+    try {
+      const blob = await importsApi.downloadTemplate();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'modelo_importacao_atlas.xlsx';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError('Erro ao baixar o modelo. Tente novamente.');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const { data: jobs, isLoading, refetch } = useQuery({
     queryKey: ['import-jobs', unitId],
@@ -79,6 +97,24 @@ export default function ImportPage() {
           <p className="text-sm text-gray-500 mt-0.5">
             Faça upload das planilhas do modelo original para importar premissas automaticamente.
           </p>
+        </div>
+
+        {/* Banner com link para modelo */}
+        <div className="rounded-xl bg-indigo-50 border border-indigo-100 px-5 py-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-indigo-800">Ainda não tem a planilha no formato correto?</p>
+            <p className="text-xs text-indigo-600 mt-0.5">
+              Baixe o modelo (.xlsx) já com as abas e colunas esperadas pelo sistema.
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={downloading}
+            onClick={handleDownloadTemplate}
+          >
+            <Download className="h-4 w-4" /> Baixar Modelo
+          </Button>
         </div>
 
         {/* Seleção de unidade */}

@@ -200,6 +200,8 @@ export const importsApi = {
   },
   list: (unit_id?: string): Promise<ImportJob[]> =>
     api.get<ImportJob[]>('/imports/jobs', { params: { unit_id } }).then((r) => r.data),
+  downloadTemplate: (): Promise<Blob> =>
+    api.get<Blob>('/imports/template', { responseType: 'blob' }).then((r) => r.data),
 };
 
 // ── Audit ─────────────────────────────────────────────────────────────────────

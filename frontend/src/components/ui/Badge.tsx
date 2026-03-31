@@ -28,6 +28,7 @@ export function StatusBadge({ status }: { status: string }) {
     published:   { label: 'Publicado', color: 'green' },
     archived:    { label: 'Arquivado', color: 'yellow' },
     active:      { label: 'Ativo', color: 'green' },
+    inactive:    { label: 'Inativo', color: 'gray' },
     planning:    { label: 'Planejamento', color: 'blue' },
     pre_opening: { label: 'Pré-abertura', color: 'purple' },
     closed:      { label: 'Fechado', color: 'red' },
