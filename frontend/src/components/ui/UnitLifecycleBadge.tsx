@@ -1,6 +1,6 @@
 'use client';
 
-import { Calendar, Clock, MapPin, TrendingUp } from 'lucide-react';
+import { Calendar, Clock, MapPin, TrendingUp, Pencil } from 'lucide-react';
 import type { Unit } from '@/types/api';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -125,4 +125,98 @@ export function UnitOpeningProgress({ unit, targetMonths = 24 }: ProgressProps) 
       </div>
     </div>
   );
+}
+
+// ── UnitDateChip ──────────────────────────────────────────────────────────────
+
+/**
+ * Chip compacto de data de abertura para cards densos.
+ * Mostra apenas quando é contextualmente relevante:
+ *   - Unidade com abertura futura → countdown em dias (amber)
+ *   - Unidade recém-aberta (≤ 6 meses) → meses de operação (green)
+ *   - Unidade estabelecida → nada (ou ícone sutil de edição)
+ *   - Sem data → botão "Definir" (se onEdit fornecido)
+ *
+ * O pencil icon aparece no hover quando `onEdit` é passado.
+ */
+interface ChipProps {
+  unit: Pick<Unit, 'opening_date' | 'opening_phase' | 'months_since_opening' | 'days_to_opening'>;
+  onEdit?: () => void;
+}
+
+export function UnitDateChip({ unit, onEdit }: ChipProps) {
+  const phase = unit.opening_phase;
+  const months = unit.months_since_opening ?? 0;
+
+  if (!unit.opening_date) {
+    if (!onEdit) return null;
+    return (
+      <button
+        onClick={onEdit}
+        className="inline-flex items-center gap-1 text-[10px] text-gray-300 hover:text-gray-500 transition-colors"
+      >
+        <Calendar className="h-2.5 w-2.5" />
+        Definir data de abertura
+      </button>
+    );
+  }
+
+  if (phase === 'future') {
+    const days = unit.days_to_opening ?? 0;
+    return (
+      <span className="inline-flex items-center gap-1 group/chip">
+        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+          {days}d para abrir
+        </span>
+        {onEdit && (
+          <button
+            onClick={onEdit}
+            className="opacity-0 group-hover/chip:opacity-100 transition-opacity text-gray-300 hover:text-gray-600"
+          >
+            <Pencil className="h-2.5 w-2.5" />
+          </button>
+        )}
+      </span>
+    );
+  }
+
+  if (phase === 'operating' && months <= 6) {
+    return (
+      <span className="inline-flex items-center gap-1 group/chip">
+        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          {months === 0 ? 'Abriu hoje' : `${months}m de operação`}
+        </span>
+        {onEdit && (
+          <button
+            onClick={onEdit}
+            className="opacity-0 group-hover/chip:opacity-100 transition-opacity text-gray-300 hover:text-gray-600"
+          >
+            <Pencil className="h-2.5 w-2.5" />
+          </button>
+        )}
+      </span>
+    );
+  }
+
+  // Unidade estabelecida (operando há > 6 meses) — só mostra se houver edição disponível
+  if (onEdit) {
+    const abbr = new Date(unit.opening_date + 'T00:00:00').toLocaleDateString('pt-BR', {
+      month: 'short',
+      year: 'numeric',
+    });
+    return (
+      <button
+        onClick={onEdit}
+        className="inline-flex items-center gap-1 text-[10px] text-gray-300 hover:text-gray-500 transition-colors group/chip"
+      >
+        <Calendar className="h-2.5 w-2.5" />
+        <span>desde {abbr}</span>
+        <Pencil className="h-2.5 w-2.5 opacity-0 group-hover/chip:opacity-100 transition-opacity" />
+      </button>
+    );
+  }
+
+  return null;
 }

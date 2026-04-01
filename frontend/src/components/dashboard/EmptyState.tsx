@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 interface EmptyStateProps {
@@ -90,6 +91,7 @@ export function ErrorState({ message, onRetry }: { message?: string; onRetry?: (
 // ── No filters selected state ─────────────────────────────────────────────────
 
 export function NoFiltersState({ message, compact }: { message?: string; compact?: boolean }) {
+  const router = useRouter();
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="h-16 w-16 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
@@ -101,6 +103,15 @@ export function NoFiltersState({ message, compact }: { message?: string; compact
       <p className="text-sm text-gray-400 mt-1 max-w-xs leading-relaxed">
         {message ?? 'Selecione um negócio e cenário nos filtros acima para visualizar os dados.'}
       </p>
+      <button
+        onClick={() => router.push('/dashboard')}
+        className="mt-5 inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
+      >
+        Configurar negócio
+        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
     </div>
   );
 }

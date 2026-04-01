@@ -1,7 +1,7 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
 import { dashboardApi, scenariosApi, unitsApi } from '@/lib/api';
 import { useDashboardFilters } from '@/store/dashboard';
 import { MetricCard, ProgressCard } from '@/components/dashboard/MetricCard';
@@ -15,11 +15,13 @@ import { Card } from '@/components/ui/Card';
 import {
   Target, TrendingUp, TrendingDown, Zap, BarChart2,
   CheckCircle2, AlertCircle, XCircle, Activity, DollarSign,
+  Pencil, Check, X,
 } from 'lucide-react';
 import { aggregateByYear, resolveAnnualData } from '@/lib/utils/dashboard';
 import { PortfolioTable } from '@/components/tables/PortfolioTable';
 import { UnitRevSparkline } from '@/components/charts/UnitRevSparkline';
-import { UnitLifecycleBadge, UnitOpeningProgress } from '@/components/ui/UnitLifecycleBadge';
+import { UnitDateChip, UnitOpeningProgress } from '@/components/ui/UnitLifecycleBadge';
+import type { Unit } from '@/types/api';
 
 const SCENARIO_LABELS: Record<string, string> = {
   conservative: 'Pessimista',
@@ -65,6 +67,19 @@ export default function EstrategicoPage() {
   const { businessId, scenarioId, selectedUnitIds, year, periodStart, periodEnd } = useDashboardFilters();
   const unitScope = selectedUnitIds.length > 0 ? selectedUnitIds : [];
   const unitScopeKey = unitScope.join(',');
+
+  const queryClient = useQueryClient();
+  const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
+  const [editDateValue, setEditDateValue] = useState('');
+
+  const updateDateMutation = useMutation({
+    mutationFn: ({ id, opening_date }: { id: string; opening_date: string | undefined }) =>
+      unitsApi.update(id, { opening_date }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['units', businessId] });
+      setEditingUnit(null);
+    },
+  });
 
   const { data: dashboard, isLoading } = useQuery({
     queryKey: ['dashboard-consolidated', businessId, scenarioId, unitScopeKey],
@@ -271,6 +286,11 @@ export default function EstrategicoPage() {
   ];
 
   const activeUnits = units.filter((u) => u.status === 'active').length;
+
+  // Unidades com abertura futura — seção "Próximas Aberturas"
+  const upcomingUnits = units
+    .filter((u) => u.opening_phase === 'future' && u.days_to_opening != null)
+    .sort((a, b) => (a.days_to_opening ?? 0) - (b.days_to_opening ?? 0));
 
   if (!businessId || !scenarioId) {
     return (
@@ -873,6 +893,51 @@ export default function EstrategicoPage() {
           </section>
         )}
 
+        {/* Próximas Aberturas */}
+        {!isLoading && upcomingUnits.length > 0 && (
+          <section>
+            <div className="mb-3">
+              <h3 className="text-sm font-bold text-gray-900">Próximas Aberturas</h3>
+              <p className="text-xs text-gray-400 mt-0.5">{upcomingUnits.length} {upcomingUnits.length === 1 ? 'unidade' : 'unidades'} com abertura prevista</p>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {upcomingUnits.map((unit) => {
+                const days = unit.days_to_opening ?? 0;
+                const urgency = days <= 30 ? 'rose' : days <= 90 ? 'amber' : 'indigo';
+                const colors = {
+                  rose: { card: 'border-rose-200 bg-rose-50', badge: 'bg-rose-100 text-rose-700', dot: 'bg-rose-500 animate-pulse', label: 'text-rose-800' },
+                  amber: { card: 'border-amber-200 bg-amber-50', badge: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500 animate-pulse', label: 'text-amber-800' },
+                  indigo: { card: 'border-indigo-100 bg-indigo-50/60', badge: 'bg-indigo-100 text-indigo-700', dot: 'bg-indigo-400', label: 'text-indigo-800' },
+                }[urgency];
+                const openingFormatted = unit.opening_date
+                  ? new Date(unit.opening_date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+                  : '';
+                return (
+                  <div key={unit.id} className={`shrink-0 rounded-2xl border p-4 min-w-[200px] max-w-[220px] ${colors.card}`}>
+                    <div className="flex items-start justify-between gap-1 mb-2">
+                      <p className={`text-xs font-bold leading-tight ${colors.label}`}>{unit.name}</p>
+                      <button
+                        onClick={() => { setEditingUnit(unit); setEditDateValue(unit.opening_date ?? ''); }}
+                        className="text-gray-300 hover:text-gray-600 transition-colors shrink-0 mt-0.5"
+                        title="Editar data de abertura"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1.5 mb-3">
+                      <span className={`h-1.5 w-1.5 rounded-full ${colors.dot}`} />
+                      <span className={`text-xl font-black tabular-nums ${colors.label}`}>{days}</span>
+                      <span className={`text-xs ${colors.label} opacity-70`}>dias</span>
+                    </div>
+                    <p className={`text-[10px] ${colors.label} opacity-60`}>{openingFormatted}</p>
+                    {unit.city && <p className={`text-[10px] ${colors.label} opacity-50 mt-0.5`}>{unit.city}{unit.state ? `, ${unit.state}` : ''}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         {/* UnitStatusCard grid */}
         {!isLoading && units.length > 0 && (
           <section>
@@ -898,7 +963,10 @@ export default function EstrategicoPage() {
                       </div>
                       {unit.city && <p className="text-xs text-gray-400">{unit.city}{unit.state ? `, ${unit.state}` : ''}</p>}
                       <div className="mt-1.5">
-                        <UnitLifecycleBadge unit={unit} size="sm" />
+                        <UnitDateChip
+                          unit={unit}
+                          onEdit={() => { setEditingUnit(unit); setEditDateValue(unit.opening_date ?? ''); }}
+                        />
                       </div>
                     </div>
                     {unitSeriesMap.has(unit.id) && (
@@ -945,6 +1013,46 @@ export default function EstrategicoPage() {
               })}
             </div>
           </section>
+        )}
+
+        {/* Modal de edição de data de abertura */}
+        {editingUnit && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setEditingUnit(null)}>
+            <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-sm font-bold text-gray-900 mb-1">Data de Abertura</h3>
+              <p className="text-xs text-gray-400 mb-4">{editingUnit.name}</p>
+              <input
+                type="date"
+                value={editDateValue}
+                onChange={(e) => setEditDateValue(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => setEditingUnit(null)}
+                  className="flex-1 rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                {editDateValue && (
+                  <button
+                    onClick={() => updateDateMutation.mutate({ id: editingUnit.id, opening_date: undefined })}
+                    className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600 hover:bg-rose-100 transition-colors"
+                    title="Remover data"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <button
+                  onClick={() => updateDateMutation.mutate({ id: editingUnit.id, opening_date: editDateValue || undefined })}
+                  disabled={updateDateMutation.isPending}
+                  className="flex-1 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+                >
+                  {updateDateMutation.isPending ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Portfólio de Unidades */}

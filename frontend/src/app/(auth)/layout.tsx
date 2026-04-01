@@ -1,16 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/store/auth';
+import { useRouter, usePathname } from 'next/navigation';
+import { useAuthStore, useNavStore } from '@/store/auth';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { LoadingScreen } from '@/components/ui/Spinner';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { token } = useAuthStore();
-  // 'mounted' garante que não redirecionamos durante o render SSR (antes do localStorage).
-  // O zustand/persist com localStorage é síncrono, então após o mount o token já está disponível.
+  const { businessId } = useNavStore();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -18,8 +18,17 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   }, []);
 
   useEffect(() => {
-    if (mounted && !token) router.replace('/login');
-  }, [mounted, token, router]);
+    if (!mounted) return;
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
+    // Se está em uma sub-rota do dashboard e não tem negócio selecionado,
+    // redireciona para /dashboard (seletor de organização/negócio).
+    if (pathname.startsWith('/dashboard/') && !businessId) {
+      router.replace('/dashboard');
+    }
+  }, [mounted, token, businessId, pathname, router]);
 
   if (!mounted || !token) return <LoadingScreen />;
 
