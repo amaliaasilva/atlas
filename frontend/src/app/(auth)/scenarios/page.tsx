@@ -9,7 +9,7 @@ import { Topbar } from '@/components/layout/Topbar';
 import { LoadingScreen } from '@/components/ui/Spinner';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { TrendingUp, ChevronRight, Plus, FileText, X } from 'lucide-react';
+import { TrendingUp, ChevronRight, Plus, FileText, X, CalendarDays, Building2 } from 'lucide-react';
 
 const SCENARIO_TYPES = [
   { value: 'base', label: 'Base' },
@@ -140,6 +140,18 @@ export default function ScenariosPage() {
           </Button>
         </div>
 
+        <div className="mb-6 rounded-xl bg-indigo-50 border border-indigo-100 px-5 py-4 flex items-start gap-3">
+          <Building2 className="h-5 w-5 text-indigo-400 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-indigo-800">Como funciona o planejamento</p>
+            <p className="text-xs text-indigo-600 mt-1 leading-relaxed">
+              <strong>Cenário</strong> = hipótese de mercado (otimista, moderado, pessimista) ·{' '}
+              <strong>Versão de orçamento</strong> = premissas detalhadas de <em>uma unidade</em> dentro desse cenário ·{' '}
+              Crie versões para cada unidade e publique-as para gerar os resultados financeiros.
+            </p>
+          </div>
+        </div>
+
         <div className="mb-4 max-w-xs">
           <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Filtro de unidade</label>
           <select
@@ -202,9 +214,26 @@ export default function ScenariosPage() {
                         className="w-full flex items-center gap-4 px-5 py-3 hover:bg-gray-50 transition-colors group text-left"
                       >
                         <FileText className="h-4 w-4 text-gray-400 shrink-0" />
-                        <div className="flex-1">
-                          <span className="text-sm font-medium text-gray-700 group-hover:text-brand-600">{v.name}</span>
-                          <span className="text-xs text-gray-400 ml-3">{v.horizon_start} → {v.horizon_end}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium text-gray-700 group-hover:text-brand-600">{v.name}</span>
+                            {(() => {
+                              const unit = units.find((u) => u.id === v.unit_id);
+                              if (!unit) return null;
+                              return (
+                                <>
+                                  <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">{unit.code}</span>
+                                  {unit.opening_date && (
+                                    <span className="inline-flex items-center gap-1 text-xs text-indigo-600">
+                                      <CalendarDays className="h-3 w-3" />
+                                      {new Date(unit.opening_date + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+                                    </span>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
+                          <span className="text-xs text-gray-400">{v.horizon_start} → {v.horizon_end}</span>
                         </div>
                         <StatusBadge status={v.status} />
                         <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-brand-400" />

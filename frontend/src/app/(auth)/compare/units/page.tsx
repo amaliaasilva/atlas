@@ -83,6 +83,52 @@ export default function CompareUnitsPage() {
           <div className="text-center py-20 text-gray-400 text-sm">
             Selecione um negócio e cenário para ver a comparação
           </div>
+        ) : units.length === 0 ? (
+          <div className="rounded-xl bg-amber-50 border border-amber-200 p-6 text-sm text-amber-800">
+            <p className="font-semibold mb-1">Nenhum dado disponível</p>
+            <p>Nenhuma unidade possui versão de orçamento publicada e calculada neste cenário. Acesse <strong>Planejamento → Cenários & Versões</strong>, crie versões e publique-as para visualizar a comparação.</p>
+          </div>
+        ) : units.length < 2 ? (
+          <div className="space-y-4">
+            <div className="rounded-xl bg-blue-50 border border-blue-200 px-5 py-4 text-sm text-blue-700">
+              <p className="font-semibold">Apenas 1 unidade com dados calculados</p>
+              <p className="mt-1 text-blue-600">Para comparar unidades é necessário ter ao menos 2 com versões publicadas neste cenário. Publique mais versões em <strong>Planejamento → Cenários & Versões</strong>.</p>
+            </div>
+            <Card title={`${METRIC_OPTIONS.find((m) => m.value === metric)?.label} — ${units[0]?.unit_name}`}>
+              <ResponsiveContainer width="100%" height={360}>
+                <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="period" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    tickFormatter={(v) =>
+                      isPercent ? formatPercent(v) : isCurrency ? `R$${(v / 1000).toFixed(0)}k` : String(v)
+                    }
+                    tick={{ fontSize: 11, fill: '#9ca3af' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    formatter={(v: number, name: string) => [
+                      isPercent ? formatPercent(v) : isCurrency ? formatCurrency(v) : v,
+                      name,
+                    ]}
+                    contentStyle={{ fontSize: '12px', borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  {units.map((unit, i) => (
+                    <Line
+                      key={unit.unit_id}
+                      type="monotone"
+                      dataKey={unit.unit_name}
+                      stroke={COLORS[i % COLORS.length]}
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </Card>
+          </div>
         ) : (
           <Card title={`${METRIC_OPTIONS.find((m) => m.value === metric)?.label} por Unidade`}>
             <ResponsiveContainer width="100%" height={360}>

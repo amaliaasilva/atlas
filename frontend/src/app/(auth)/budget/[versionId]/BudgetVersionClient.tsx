@@ -462,6 +462,119 @@ export default function BudgetVersionClient() {
           </div>
         )}
 
+        {/* Contratos de Financiamento */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-gray-700">Contratos de Financiamento</h2>
+            <Button variant="secondary" size="sm" onClick={() => setShowAddContract(!showAddContract)}>
+              <Plus className="h-3.5 w-3.5" /> Adicionar
+            </Button>
+          </div>
+
+          {showAddContract && (
+            <div className="mb-4 p-4 rounded-lg border border-gray-200 bg-gray-50 grid grid-cols-3 gap-3">
+              <input
+                className="col-span-3 rounded border border-gray-300 px-3 py-1.5 text-sm"
+                placeholder="Nome do contrato (ex: Imóvel FINAME)"
+                value={newContract.name}
+                onChange={(e) => setNewContract((p) => ({ ...p, name: e.target.value }))}
+              />
+              <label className="text-xs text-gray-500">
+                Valor financiado (R$)
+                <input type="number" className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                  value={newContract.financed_amount}
+                  onChange={(e) => setNewContract((p) => ({ ...p, financed_amount: parseFloat(e.target.value) || 0 }))}
+                />
+              </label>
+              <label className="text-xs text-gray-500">
+                Taxa mensal (ex: 0.012)
+                <input type="number" step="0.001" className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                  value={newContract.monthly_rate}
+                  onChange={(e) => setNewContract((p) => ({ ...p, monthly_rate: parseFloat(e.target.value) || 0 }))}
+                />
+              </label>
+              <label className="text-xs text-gray-500">
+                Prazo (meses)
+                <input type="number" className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                  value={newContract.term_months}
+                  onChange={(e) => setNewContract((p) => ({ ...p, term_months: parseInt(e.target.value) || 0 }))}
+                />
+              </label>
+              <label className="text-xs text-gray-500">
+                Carência (meses)
+                <input type="number" className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                  value={newContract.grace_period_months}
+                  onChange={(e) => setNewContract((p) => ({ ...p, grace_period_months: parseInt(e.target.value) || 0 }))}
+                />
+              </label>
+              <label className="text-xs text-gray-500">
+                Entrada (% — ex: 0.20)
+                <input type="number" step="0.01" className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                  value={newContract.down_payment_pct}
+                  onChange={(e) => setNewContract((p) => ({ ...p, down_payment_pct: parseFloat(e.target.value) || 0 }))}
+                />
+              </label>
+              <div className="col-span-3 flex gap-2 justify-end">
+                <Button variant="ghost" size="sm" onClick={() => setShowAddContract(false)}>Cancelar</Button>
+                <Button size="sm" onClick={() => addContractMutation.mutate()} loading={addContractMutation.isPending}
+                  disabled={!newContract.name}>
+                  Salvar contrato
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {contracts && contracts.length > 0 ? (
+            <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Nome</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Valor Financiado</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Taxa Mensal</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Prazo</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Carência</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Entrada</th>
+                    <th className="px-2 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contracts.map((c: FinancingContract) => (
+                    <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50">
+                      <td className="px-4 py-2 font-medium text-gray-800">{c.name}</td>
+                      <td className="px-4 py-2 text-right text-gray-700">
+                        {c.financed_amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </td>
+                      <td className="px-4 py-2 text-right text-gray-600">
+                        {c.term_months === 0 ? '—' : `${(c.monthly_rate * 100).toFixed(2)}% a.m.`}
+                      </td>
+                      <td className="px-4 py-2 text-right text-gray-600">
+                        {c.term_months === 0 ? 'Pagamento único' : `${c.term_months} meses`}
+                      </td>
+                      <td className="px-4 py-2 text-right text-gray-600">{c.grace_period_months}m</td>
+                      <td className="px-4 py-2 text-right text-gray-600">
+                        {c.down_payment_pct > 0 ? `${(c.down_payment_pct * 100).toFixed(0)}%` : '—'}
+                      </td>
+                      <td className="px-2 py-2">
+                        <button
+                          onClick={() => deleteContractMutation.mutate(c.id)}
+                          className="text-gray-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 italic">
+              Nenhum contrato cadastrado. O motor usará as premissas de financiamento legadas.
+            </p>
+          )}
+        </div>
+
         {/* Copiloto NLP (Sprint 6) */}
         <div className="mb-3 flex items-center gap-2">
           <input
@@ -811,119 +924,6 @@ export default function BudgetVersionClient() {
                 })}
             </tbody>
           </table>
-        </div>
-
-        {/* Contratos de Financiamento */}
-        <div className="mt-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-gray-700">Contratos de Financiamento</h2>
-            <Button variant="secondary" size="sm" onClick={() => setShowAddContract(!showAddContract)}>
-              <Plus className="h-3.5 w-3.5" /> Adicionar
-            </Button>
-          </div>
-
-          {showAddContract && (
-            <div className="mb-4 p-4 rounded-lg border border-gray-200 bg-gray-50 grid grid-cols-3 gap-3">
-              <input
-                className="col-span-3 rounded border border-gray-300 px-3 py-1.5 text-sm"
-                placeholder="Nome do contrato (ex: Imóvel FINAME)"
-                value={newContract.name}
-                onChange={(e) => setNewContract((p) => ({ ...p, name: e.target.value }))}
-              />
-              <label className="text-xs text-gray-500">
-                Valor financiado (R$)
-                <input type="number" className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                  value={newContract.financed_amount}
-                  onChange={(e) => setNewContract((p) => ({ ...p, financed_amount: parseFloat(e.target.value) || 0 }))}
-                />
-              </label>
-              <label className="text-xs text-gray-500">
-                Taxa mensal (ex: 0.012)
-                <input type="number" step="0.001" className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                  value={newContract.monthly_rate}
-                  onChange={(e) => setNewContract((p) => ({ ...p, monthly_rate: parseFloat(e.target.value) || 0 }))}
-                />
-              </label>
-              <label className="text-xs text-gray-500">
-                Prazo (meses)
-                <input type="number" className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                  value={newContract.term_months}
-                  onChange={(e) => setNewContract((p) => ({ ...p, term_months: parseInt(e.target.value) || 0 }))}
-                />
-              </label>
-              <label className="text-xs text-gray-500">
-                Carência (meses)
-                <input type="number" className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                  value={newContract.grace_period_months}
-                  onChange={(e) => setNewContract((p) => ({ ...p, grace_period_months: parseInt(e.target.value) || 0 }))}
-                />
-              </label>
-              <label className="text-xs text-gray-500">
-                Entrada (% — ex: 0.20)
-                <input type="number" step="0.01" className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                  value={newContract.down_payment_pct}
-                  onChange={(e) => setNewContract((p) => ({ ...p, down_payment_pct: parseFloat(e.target.value) || 0 }))}
-                />
-              </label>
-              <div className="col-span-3 flex gap-2 justify-end">
-                <Button variant="ghost" size="sm" onClick={() => setShowAddContract(false)}>Cancelar</Button>
-                <Button size="sm" onClick={() => addContractMutation.mutate()} loading={addContractMutation.isPending}
-                  disabled={!newContract.name}>
-                  Salvar contrato
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {contracts && contracts.length > 0 ? (
-            <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">Nome</th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Valor Financiado</th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Taxa Mensal</th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Prazo</th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Carência</th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600">Entrada</th>
-                    <th className="px-2 py-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {contracts.map((c: FinancingContract) => (
-                    <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50">
-                      <td className="px-4 py-2 font-medium text-gray-800">{c.name}</td>
-                      <td className="px-4 py-2 text-right text-gray-700">
-                        {c.financed_amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                      </td>
-                      <td className="px-4 py-2 text-right text-gray-600">
-                        {c.term_months === 0 ? '—' : `${(c.monthly_rate * 100).toFixed(2)}% a.m.`}
-                      </td>
-                      <td className="px-4 py-2 text-right text-gray-600">
-                        {c.term_months === 0 ? 'Pagamento único' : `${c.term_months} meses`}
-                      </td>
-                      <td className="px-4 py-2 text-right text-gray-600">{c.grace_period_months}m</td>
-                      <td className="px-4 py-2 text-right text-gray-600">
-                        {c.down_payment_pct > 0 ? `${(c.down_payment_pct * 100).toFixed(0)}%` : '—'}
-                      </td>
-                      <td className="px-2 py-2">
-                        <button
-                          onClick={() => deleteContractMutation.mutate(c.id)}
-                          className="text-gray-400 hover:text-red-500 transition-colors"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="text-xs text-gray-400 italic">
-              Nenhum contrato cadastrado. O motor usará as premissas de financiamento legadas.
-            </p>
-          )}
         </div>
 
         {/* Painel de histórico de auditoria */}
