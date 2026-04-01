@@ -436,7 +436,9 @@ def unit_period_trace(
     """
     result = (
         db.query(CalculatedResult)
-        .join(LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id)
+        .join(
+            LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id
+        )
         .filter(
             CalculatedResult.budget_version_id == version_id,
             CalculatedResult.period_date == period,
@@ -465,10 +467,14 @@ def unit_period_trace(
             "water": round(util.get("water", 0.0), 2),
             "internet_phone": round(util.get("internet_phone", 0.0), 2),
             "electricity_fixed": round(util_detail.get("electricity_fixed", 0.0), 2),
-            "electricity_variable": round(util_detail.get("electricity_variable", 0.0), 2),
+            "electricity_variable": round(
+                util_detail.get("electricity_variable", 0.0), 2
+            ),
             "water_fixed": round(util_detail.get("water_fixed", 0.0), 2),
             "water_variable": round(util_detail.get("water_variable", 0.0), 2),
-            "occupancy_rate_used": round(util_detail.get("occupancy_rate_used", 0.0), 4),
+            "occupancy_rate_used": round(
+                util_detail.get("occupancy_rate_used", 0.0), 4
+            ),
         },
         "staff": {
             "total": round(staff.get("total_staff", 0.0), 2),
@@ -480,14 +486,25 @@ def unit_period_trace(
         },
         "revenue": {
             "occupancy_rate": round(revenue_trace.get("occupancy_rate", 0.0), 4),
-            "capacity_hours_month": round(revenue_trace.get("capacity_hours_month", 0.0), 1),
-            "active_hours_month": round(revenue_trace.get("active_hours_month", 0.0), 1),
+            "capacity_hours_month": round(
+                revenue_trace.get("capacity_hours_month", 0.0), 1
+            ),
+            "active_hours_month": round(
+                revenue_trace.get("active_hours_month", 0.0), 1
+            ),
         },
         "admin": {
-            "total": round(admin.get("total_admin", 0.0) if isinstance(admin, dict) else 0.0, 2),
+            "total": round(
+                admin.get("total_admin", 0.0) if isinstance(admin, dict) else 0.0, 2
+            ),
         },
         "marketing": {
-            "total": round(marketing.get("total_marketing", 0.0) if isinstance(marketing, dict) else 0.0, 2),
+            "total": round(
+                marketing.get("total_marketing", 0.0)
+                if isinstance(marketing, dict)
+                else 0.0,
+                2,
+            ),
         },
     }
 
