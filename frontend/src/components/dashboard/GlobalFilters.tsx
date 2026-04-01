@@ -163,9 +163,9 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
   const nav = useNavStore();
   const filters = useDashboardFilters();
 
-  // Sincroniza navStore → dashboardFilters de forma reativa.
-  // Quando o usuário troca de negócio/cenário/unidade na Sidebar, os filtros do
-  // dashboard acompanham imediatamente — sem depender do estado anterior.
+  // FIX B9: a sincronização navStore → dashboardFilters agora é feita diretamente em
+  // useNavStore.setBusiness/setScenario (store/auth.ts). Os useEffect abaixo ficam
+  // apenas como safety-net para hidratação (persist) e para o unitId contextual.
   useEffect(() => {
     if (nav.businessId !== filters.businessId) {
       filters.setBusinessId(nav.businessId);
