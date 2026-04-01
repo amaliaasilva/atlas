@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { dashboardApi, versionsApi, reportsApi } from '@/lib/api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { dashboardApi, versionsApi, reportsApi, calculationsApi } from '@/lib/api';
 import { useDashboardFilters } from '@/store/dashboard';
 import { DRETable } from '@/components/tables/DRETable';
 import { NoFiltersState, ChartSkeleton } from '@/components/dashboard/EmptyState';
@@ -66,10 +66,19 @@ function dreConsolidatedToResponse(data: DREConsolidatedResponse): DREResponse {
 
 export default function DREPage() {
   const { businessId, scenarioId, selectedUnitIds } = useDashboardFilters();
+  const queryClient = useQueryClient();
   const [isExporting, setIsExporting] = useState(false);
   const [granularity, setGranularity] = useState<DREGranularity>('monthly');
 
   const unitId = selectedUnitIds.length === 1 ? selectedUnitIds[0] : null;
+
+  const recalcMutation = useMutation({
+    mutationFn: () => calculationsApi.recalculate(activeVersion!.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dre', activeVersion?.id] });
+      queryClient.invalidateQueries({ queryKey: ['dre-consolidated'] });
+    },
+  });
 
   const { data: unitVersions = [] } = useQuery({
     queryKey: ['unit-versions-dre', unitId, scenarioId],
@@ -153,11 +162,22 @@ export default function DREPage() {
 
           {/* Toggle mensal / anual */}
           {dreData && (
-            <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
-              {(['monthly', 'annual'] as DREGranularity[]).map((g) => (
+            <div className="flex items-center gap-2 flex-wrap">
+              {activeVersion && (
                 <button
-                  key={g}
-                  onClick={() => setGranularity(g)}
+                  onClick={() => recalcMutation.mutate()}
+                  disabled={recalcMutation.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors disabled:opacity-50"
+                  title="Recalcular motor financeiro para refletir mudanças na data de abertura ou premissas"
+                >
+                  {recalcMutation.isPending ? 'Recalculando...' : '⟳ Recalcular'}
+                </button>
+              )}
+              <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
+                {(['monthly', 'annual'] as DREGranularity[]).map((g) => (
+                  <button
+                    key={g}
+                    onClick={() => setGranularity(g)}
                   className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
                     granularity === g
                       ? 'bg-white shadow text-slate-800'
@@ -166,8 +186,7 @@ export default function DREPage() {
                 >
                   {g === 'monthly' ? 'Mensal' : 'Anual'}
                 </button>
-              ))}
-            </div>
+              ))}              </div>            </div>
           )}
         </div>
 

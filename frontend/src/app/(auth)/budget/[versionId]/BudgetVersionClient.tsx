@@ -400,6 +400,8 @@ export default function BudgetVersionClient() {
     onSuccess: (data) => {
       setToast(`Calculado: ${data.periods_calculated} períodos`);
       setTimeout(() => setToast(''), 3000);
+      queryClient.invalidateQueries({ queryKey: ['dre'] });
+      queryClient.invalidateQueries({ queryKey: ['dre-consolidated'] });
       router.push(`/results/${versionId}`);
     },
     onError: (err) => setToast(`Erro: ${getErrorMessage(err)}`),

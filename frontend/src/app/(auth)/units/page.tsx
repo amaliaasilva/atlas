@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { unitsApi } from '@/lib/api';
+import { unitsApi, versionsApi, calculationsApi } from '@/lib/api';
 import { useNavStore } from '@/store/auth';
 import { Topbar } from '@/components/layout/Topbar';
 import { LoadingScreen } from '@/components/ui/Spinner';
@@ -202,6 +202,22 @@ export default function UnitsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['units', effectiveBusinessId] });
       setEditUnit(null);
+    },
+  });
+
+  // Mutation específica para abertura: salva + recalcula todas as versões ativas
+  const updateOpeningDateMutation = useMutation({
+    mutationFn: async ({ id, date }: { id: string; date: string | null }) => {
+      await unitsApi.update(id, { opening_date: date || null });
+      const versions = await versionsApi.list(id);
+      const active = versions.filter((v) => v.status !== 'archived');
+      await Promise.allSettled(active.map((v) => calculationsApi.recalculate(v.id)));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['units', effectiveBusinessId] });
+      queryClient.invalidateQueries({ queryKey: ['dre'] });
+      queryClient.invalidateQueries({ queryKey: ['dre-consolidated'] });
+      setDateModalUnit(null);
     },
   });
 
@@ -469,15 +485,12 @@ export default function UnitsPage() {
                 </Button>
                 <Button
                   size="sm"
-                  disabled={updateMutation.isPending}
+                  disabled={updateOpeningDateMutation.isPending}
                   onClick={() => {
-                    updateMutation.mutate(
-                      { id: dateModalUnit.id, data: { opening_date: dateValue || null } as Parameters<typeof updateMutation.mutate>[0]['data'] },
-                      { onSuccess: () => setDateModalUnit(null) },
-                    );
+                    updateOpeningDateMutation.mutate({ id: dateModalUnit.id, date: dateValue || null });
                   }}
                 >
-                  {updateMutation.isPending ? 'Salvando...' : 'Salvar Data'}
+                  {updateOpeningDateMutation.isPending ? 'Salvando e recalculando...' : 'Salvar Data'}
                 </Button>
               </div>
             </div>

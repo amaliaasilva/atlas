@@ -191,6 +191,8 @@ export default function BudgetPage() {
       queryClient.invalidateQueries({ queryKey: ['units', businessId] });
       queryClient.invalidateQueries({ queryKey: ['versions', unitId] });
       queryClient.invalidateQueries({ queryKey: ['versions'] });
+      queryClient.invalidateQueries({ queryKey: ['dre'] });
+      queryClient.invalidateQueries({ queryKey: ['dre-consolidated'] });
     },
   });
 
