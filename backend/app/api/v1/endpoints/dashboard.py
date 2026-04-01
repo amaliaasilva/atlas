@@ -430,9 +430,8 @@ def unit_period_trace(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Retorna o cálculo detalhado (drill-down) para um período específico.
+    Retorna o cálculo detalhado (drill-down) para qualquer linha da DRE, num período.
     Extrai do calculation_trace salvo junto ao net_result.
-    Usado para o popover de drill-down na DRETable.
     """
     result = (
         db.query(CalculatedResult)
@@ -451,16 +450,77 @@ def unit_period_trace(
         return {"period": period, "has_trace": False}
 
     trace = result.calculation_trace
-    util = trace.get("fixed_costs", {}).get("detail", {}).get("utilities", {})
+    rev = trace.get("revenue", {})
+    fc = trace.get("fixed_costs", {})
+    fc_detail = fc.get("detail", {})
+    util = fc_detail.get("utilities", {})
     util_detail = util.get("detail", {})
-    staff = trace.get("fixed_costs", {}).get("detail", {}).get("staff", {})
-    revenue_trace = trace.get("revenue", {})
-    admin = trace.get("fixed_costs", {}).get("detail", {}).get("admin", {})
-    marketing = trace.get("fixed_costs", {}).get("detail", {}).get("marketing", {})
+    staff = fc_detail.get("staff", {})
+    vc = trace.get("variable_costs", {})
+    taxes = trace.get("taxes", {})
+    fin = trace.get("financing", {})
+    kpis = trace.get("kpis", {})
+
+    fc_rent = round(fc.get("rent", 0.0), 2)
+    fc_staff = round(fc.get("staff", 0.0), 2)
+    fc_util = round(fc.get("utilities", 0.0), 2)
+    fc_admin = round(fc.get("admin", 0.0), 2)
+    fc_marketing = round(fc.get("marketing", 0.0), 2)
+    fc_equipment = round(fc.get("equipment", 0.0), 2)
+    fc_insurance = round(fc.get("insurance", 0.0), 2)
+    fc_other = round(fc.get("other", 0.0), 2)
+    fc_total = round(
+        fc_rent
+        + fc_staff
+        + fc_util
+        + fc_admin
+        + fc_marketing
+        + fc_equipment
+        + fc_insurance
+        + fc_other,
+        2,
+    )
+
+    vc_hygiene = round(vc.get("hygiene_kit", 0.0), 2)
+    vc_commission = round(vc.get("sales_commission", 0.0), 2)
+    vc_card = round(vc.get("card_fee", 0.0), 2)
+    vc_other = round(vc.get("other", 0.0), 2)
+    vc_total = round(vc_hygiene + vc_commission + vc_card + vc_other, 2)
+
+    rev_cowork = round(rev.get("cowork_revenue", 0.0), 2)
+    rev_other = round(rev.get("other_revenue", 0.0), 2)
+    rev_total = round(rev_cowork + rev_other, 2)
 
     return {
         "period": period,
         "has_trace": True,
+        "occupancy_rate": round(rev.get("occupancy_rate", 0.0), 4),
+        "revenue": {
+            "total": rev_total,
+            "cowork_revenue": rev_cowork,
+            "other_revenue": rev_other,
+            "capacity_hours_month": round(rev.get("capacity_hours_month", 0.0), 1),
+            "active_hours_month": round(rev.get("active_hours_month", 0.0), 1),
+            "occupancy_rate": round(rev.get("occupancy_rate", 0.0), 4),
+            "avg_price_per_hour": round(rev.get("avg_price_per_hour", 0.0), 2),
+            "service_plans": rev.get("service_plans", []),
+            "working_days_month": rev.get("working_days_month", 0),
+            "saturdays_month": rev.get("saturdays_month", 0),
+            "slots_per_hour": rev.get("slots_per_hour", 0),
+            "hours_per_day_weekday": rev.get("hours_per_day_weekday", 0.0),
+            "hours_per_day_saturday": rev.get("hours_per_day_saturday", 0.0),
+        },
+        "fixed_costs": {
+            "total": fc_total,
+            "rent": fc_rent,
+            "staff": fc_staff,
+            "utilities": fc_util,
+            "admin": fc_admin,
+            "marketing": fc_marketing,
+            "equipment": fc_equipment,
+            "insurance": fc_insurance,
+            "other": fc_other,
+        },
         "utilities": {
             "total": round(util.get("total_utilities", 0.0), 2),
             "electricity": round(util.get("electricity", 0.0), 2),
@@ -484,26 +544,33 @@ def unit_period_trace(
             "social_charges": round(staff.get("social_charges", 0.0), 2),
             "benefits": round(staff.get("benefits", 0.0), 2),
         },
-        "revenue": {
-            "occupancy_rate": round(revenue_trace.get("occupancy_rate", 0.0), 4),
-            "capacity_hours_month": round(
-                revenue_trace.get("capacity_hours_month", 0.0), 1
-            ),
-            "active_hours_month": round(
-                revenue_trace.get("active_hours_month", 0.0), 1
-            ),
+        "variable_costs": {
+            "total": vc_total,
+            "hygiene_kit": vc_hygiene,
+            "sales_commission": vc_commission,
+            "card_fee": vc_card,
+            "other": vc_other,
         },
-        "admin": {
-            "total": round(
-                admin.get("total_admin", 0.0) if isinstance(admin, dict) else 0.0, 2
-            ),
+        "taxes": {
+            "tax_rate": round(taxes.get("tax_rate", 0.0), 4),
+            "taxes_on_revenue": round(taxes.get("taxes_on_revenue", 0.0), 2),
         },
-        "marketing": {
-            "total": round(
-                marketing.get("total_marketing", 0.0)
-                if isinstance(marketing, dict)
-                else 0.0,
-                2,
+        "financing": {
+            "total_payment": round(fin.get("total_payment", 0.0), 2),
+            "principal": round(fin.get("principal", 0.0), 2),
+            "interest": round(fin.get("interest", 0.0), 2),
+            "contracts": fin.get("contracts", []),
+        },
+        "kpis": {
+            "operating_result": round(kpis.get("operating_result", 0.0), 2),
+            "net_result": round(kpis.get("net_result", 0.0), 2),
+            "ebitda": round(kpis.get("ebitda", 0.0), 2),
+            "break_even_revenue": round(kpis.get("break_even_revenue", 0.0), 2),
+            "break_even_occupancy_pct": round(
+                kpis.get("break_even_occupancy_pct", 0.0), 4
+            ),
+            "contribution_margin_pct": round(
+                kpis.get("contribution_margin_pct", 0.0), 4
             ),
         },
     }

@@ -101,3 +101,44 @@ def update_unit(
     db.commit()
     db.refresh(unit)
     return unit
+
+
+@router.delete("/{unit_id}", status_code=204)
+def delete_unit(
+    unit_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Remove (soft-delete via status=closed) uma unidade. Bloqueado se houver versões ativas."""
+    unit = db.query(Unit).filter(Unit.id == unit_id).first()
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unidade não encontrada")
+    if unit.status == "closed":
+        raise HTTPException(status_code=404, detail="Unidade não encontrada")
+
+    active_versions = (
+        db.query(BudgetVersion)
+        .filter(
+            BudgetVersion.unit_id == unit_id,
+            BudgetVersion.is_active == True,
+            BudgetVersion.status != "archived",
+        )
+        .count()
+    )
+    if active_versions > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Unidade possui {active_versions} versão(ões) ativa(s). Arquive-as antes de excluir a unidade.",
+        )
+
+    unit.status = "closed"
+    db.add(
+        AuditLog(
+            entity_type="unit",
+            entity_id=unit_id,
+            action=AuditAction.delete,
+            performed_by=current_user.id,
+            notes=f"Unidade '{unit.code}' excluída (marcada como closed)",
+        )
+    )
+    db.commit()

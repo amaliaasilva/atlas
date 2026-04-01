@@ -10,8 +10,9 @@ import { LoadingScreen } from '@/components/ui/Spinner';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import type { Unit } from '@/types/api';
-import { MapPin, ChevronRight, Plus, X, Pencil, Calendar } from 'lucide-react';
+import { MapPin, ChevronRight, Plus, X, Pencil, Calendar, Trash2 } from 'lucide-react';
 import { UnitLifecycleBadge } from '@/components/ui/UnitLifecycleBadge';
+import { ConfirmDeleteModal } from '@/components/ui/ConfirmDeleteModal';
 
 const EMPTY_FORM = {
   name: '',
@@ -176,6 +177,7 @@ export default function UnitsPage() {
 
   const [showModal, setShowModal] = useState(false);
   const [editUnit, setEditUnit] = useState<Unit | null>(null);
+  const [deletingUnit, setDeletingUnit] = useState<Unit | null>(null);
   const [form, setForm] = useState<Record<string, string | number>>(EMPTY_FORM);
   const [dateModalUnit, setDateModalUnit] = useState<Unit | null>(null);
   const [dateValue, setDateValue] = useState('');
@@ -229,6 +231,19 @@ export default function UnitsPage() {
       queryClient.invalidateQueries({ queryKey: ['dre'] });
       queryClient.invalidateQueries({ queryKey: ['dre-consolidated'] });
       setDateModalUnit(null);
+    },
+  });
+
+  const deleteUnitMutation = useMutation({
+    mutationFn: (id: string) => unitsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['units', effectiveBusinessId] });
+      setDeletingUnit(null);
+    },
+    onError: (err: { response?: { data?: { detail?: string } } }) => {
+      const detail = err?.response?.data?.detail ?? 'Erro ao excluir unidade.';
+      alert(detail);
+      setDeletingUnit(null);
     },
   });
 
@@ -302,13 +317,22 @@ export default function UnitsPage() {
               className="flex flex-col bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-400 hover:shadow-md transition-all group relative"
             >
               {/* Botão editar */}
-              <button
-                onClick={(e) => { e.stopPropagation(); openEdit(unit); }}
-                className="absolute top-3 right-3 p-1.5 rounded-lg text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                title="Editar unidade"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
+              <div className="absolute top-3 right-3 flex items-center gap-1">
+                <button
+                  onClick={(e) => { e.stopPropagation(); openEdit(unit); }}
+                  className="p-1.5 rounded-lg text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                  title="Editar unidade"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setDeletingUnit(unit); }}
+                  className="p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors"
+                  title="Excluir unidade"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
 
               <button
                 onClick={() => {
@@ -437,7 +461,6 @@ export default function UnitsPage() {
         </div>
       )}
 
-      {/* Modal de Data de Abertura */}
       {dateModalUnit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4">
@@ -508,6 +531,20 @@ export default function UnitsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {deletingUnit && (
+        <ConfirmDeleteModal
+          title="Excluir Unidade"
+          description={`Tem certeza que deseja excluir a unidade "${deletingUnit.name}"? Esta ação não pode ser desfeita.`}
+          warningItems={[
+            'Unidades com versões de orçamento ativas não podem ser excluídas.',
+            'Arquive todas as versões vinculadas antes de excluir.',
+          ]}
+          onConfirm={() => deleteUnitMutation.mutate(deletingUnit.id)}
+          onClose={() => setDeletingUnit(null)}
+          isPending={deleteUnitMutation.isPending}
+        />
       )}
     </>
   );

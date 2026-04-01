@@ -33,7 +33,9 @@ export const organizationsApi = {
   create: (data: Partial<Organization>): Promise<Organization> =>
     api.post<Organization>('/organizations', data).then((r) => r.data),
   update: (id: string, data: Partial<Organization>): Promise<Organization> =>
-    api.put<Organization>(`/organizations/${id}`, data).then((r) => r.data),
+    api.patch<Organization>(`/organizations/${id}`, data).then((r) => r.data),
+  delete: (id: string): Promise<void> =>
+    api.delete(`/organizations/${id}`).then(() => {}),
 };
 
 // ── Businesses ───────────────────────────────────────────────────────────────
@@ -45,6 +47,10 @@ export const businessesApi = {
     api.get<Business>(`/businesses/${id}`).then((r) => r.data),
   create: (data: Partial<Business>): Promise<Business> =>
     api.post<Business>('/businesses', data).then((r) => r.data),
+  update: (id: string, data: Partial<Business>): Promise<Business> =>
+    api.patch<Business>(`/businesses/${id}`, data).then((r) => r.data),
+  delete: (id: string): Promise<void> =>
+    api.delete(`/businesses/${id}`).then(() => {}),
 };
 
 // ── Units ────────────────────────────────────────────────────────────────────
@@ -58,6 +64,8 @@ export const unitsApi = {
     api.post<Unit>('/units', data).then((r) => r.data),
   update: (id: string, data: Partial<Unit>): Promise<Unit> =>
     api.patch<Unit>(`/units/${id}`, data).then((r) => r.data),
+  delete: (id: string): Promise<void> =>
+    api.delete(`/units/${id}`).then(() => {}),
 };
 
 // ── Scenarios ────────────────────────────────────────────────────────────────
@@ -69,6 +77,10 @@ export const scenariosApi = {
     api.get<Scenario>(`/scenarios/${id}`).then((r) => r.data),
   create: (data: Partial<Scenario>): Promise<Scenario> =>
     api.post<Scenario>('/scenarios', data).then((r) => r.data),
+  update: (id: string, data: Partial<Scenario>): Promise<Scenario> =>
+    api.patch<Scenario>(`/scenarios/${id}`, data).then((r) => r.data),
+  delete: (id: string): Promise<void> =>
+    api.delete(`/scenarios/${id}`).then(() => {}),
 };
 
 // ── Budget Versions ──────────────────────────────────────────────────────────
@@ -86,12 +98,16 @@ export const versionsApi = {
     api.get<BudgetVersion>(`/budget-versions/${id}`).then((r) => r.data),
   create: (data: Partial<BudgetVersion>): Promise<BudgetVersion> =>
     api.post<BudgetVersion>('/budget-versions', data).then((r) => r.data),
+  update: (id: string, data: Partial<BudgetVersion>): Promise<BudgetVersion> =>
+    api.patch<BudgetVersion>(`/budget-versions/${id}`, data).then((r) => r.data),
   publish: (id: string): Promise<BudgetVersion> =>
     api.post<BudgetVersion>(`/budget-versions/${id}/publish`).then((r) => r.data),
   archive: (id: string): Promise<BudgetVersion> =>
     api.post<BudgetVersion>(`/budget-versions/${id}/archive`).then((r) => r.data),
   clone: (id: string, newName?: string): Promise<BudgetVersion> =>
     api.post<BudgetVersion>(`/budget-versions/${id}/clone`, { new_name: newName }).then((r) => r.data),
+  delete: (id: string): Promise<void> =>
+    api.delete(`/budget-versions/${id}`).then(() => {}),
 };
 
 // ── Assumptions ──────────────────────────────────────────────────────────────

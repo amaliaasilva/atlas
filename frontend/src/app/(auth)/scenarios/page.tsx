@@ -9,7 +9,9 @@ import { Topbar } from '@/components/layout/Topbar';
 import { LoadingScreen } from '@/components/ui/Spinner';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { TrendingUp, ChevronRight, Plus, FileText, X, CalendarDays, Building2 } from 'lucide-react';
+import { ConfirmDeleteModal } from '@/components/ui/ConfirmDeleteModal';
+import type { Scenario } from '@/types/api';
+import { TrendingUp, ChevronRight, Plus, FileText, X, CalendarDays, Building2, Pencil, Trash2 } from 'lucide-react';
 
 const SCENARIO_TYPES = [
   { value: 'base', label: 'Base' },
@@ -88,12 +90,83 @@ function CreateScenarioModal({ businessId, onClose }: { businessId: string; onCl
   );
 }
 
+function EditScenarioModal({ scenario, businessId, onClose }: { scenario: Scenario; businessId: string; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState(scenario.name);
+  const [scenarioType, setScenarioType] = useState<'base' | 'conservative' | 'aggressive' | 'custom'>(scenario.scenario_type);
+  const [description, setDescription] = useState(scenario.description ?? '');
+  const [error, setError] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      scenariosApi.update(scenario.id, { name, scenario_type: scenarioType as 'base' | 'conservative' | 'aggressive' | 'custom', description }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scenarios', businessId] });
+      onClose();
+    },
+    onError: () => setError('Erro ao salvar. Verifique os dados (o nome deve ser único por negócio).'),
+  });
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <h3 className="text-lg font-semibold text-gray-900">Editar Cenário</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo *</label>
+            <select
+              value={scenarioType}
+              onChange={(e) => setScenarioType(e.target.value as 'base' | 'conservative' | 'aggressive' | 'custom')}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              {SCENARIO_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+            />
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+        </div>
+        <div className="flex justify-end gap-3 px-6 pb-6">
+          <Button variant="secondary" size="sm" onClick={onClose}>Cancelar</Button>
+          <Button size="sm" disabled={!name.trim() || mutation.isPending} onClick={() => mutation.mutate()}>
+            {mutation.isPending ? 'Salvando...' : 'Salvar'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ScenariosPage() {
   const router = useRouter();
   const params = useSearchParams();
   const qUnitId = params.get('unit_id') ?? '';
-  const { businessId, unitId: storeUnitId, setScenario, setVersion } = useNavStore();
+  const queryClient = useQueryClient();
+  const { businessId, unitId: storeUnitId, setScenario, setVersion, scenarioId: activeScenarioId } = useNavStore();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingScenario, setEditingScenario] = useState<Scenario | null>(null);
+  const [deletingScenario, setDeletingScenario] = useState<Scenario | null>(null);
   const [unitFilterId, setUnitFilterId] = useState<string>(qUnitId || storeUnitId || 'all');
 
   // Mantém o filtro de unidade sincronizado com o contexto global da Sidebar.
@@ -110,6 +183,21 @@ export default function ScenariosPage() {
     queryKey: ['scenarios', businessId],
     queryFn: () => scenariosApi.list(businessId ?? ''),
     enabled: !!businessId,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => scenariosApi.delete(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['scenarios', businessId] });
+      // Se o cenário excluído era o ativo, limpa o contexto
+      if (activeScenarioId === id) setScenario(null);
+      setDeletingScenario(null);
+    },
+    onError: (err: { response?: { data?: { detail?: string } } }) => {
+      const detail = err?.response?.data?.detail ?? 'Erro ao excluir cenário.';
+      alert(detail);
+      setDeletingScenario(null);
+    },
   });
 
   const { data: units = [] } = useQuery({
@@ -188,16 +276,32 @@ export default function ScenariosPage() {
                       <p className="text-xs text-gray-400 mt-0.5">{scenario.description}</p>
                     )}
                   </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setScenario(scenario.id);
-                      router.push(`/budget?scenario_id=${scenario.id}${effectiveUnitId ? `&unit_id=${effectiveUnitId}` : ''}`);
-                    }}
-                  >
-                    <Plus className="h-3 w-3" /> Nova Versão
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setEditingScenario(scenario)}
+                      className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                      title="Editar cenário"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setDeletingScenario(scenario)}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Excluir cenário"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setScenario(scenario.id);
+                        router.push(`/budget?scenario_id=${scenario.id}${effectiveUnitId ? `&unit_id=${effectiveUnitId}` : ''}`);
+                      }}
+                    >
+                      <Plus className="h-3 w-3" /> Nova Versão
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Versões deste cenário */}
@@ -251,6 +355,22 @@ export default function ScenariosPage() {
 
       {showCreateModal && businessId && (
         <CreateScenarioModal businessId={businessId} onClose={() => setShowCreateModal(false)} />
+      )}
+      {editingScenario && businessId && (
+        <EditScenarioModal scenario={editingScenario} businessId={businessId} onClose={() => setEditingScenario(null)} />
+      )}
+      {deletingScenario && (
+        <ConfirmDeleteModal
+          title="Excluir Cenário"
+          description={`Tem certeza que deseja excluir o cenário "${deletingScenario.name}"? Esta ação não pode ser desfeita.`}
+          warningItems={[
+            'Cenários com versões de orçamento ativas não podem ser excluídos.',
+            'Archive todas as versões vinculadas antes de excluir.',
+          ]}
+          onConfirm={() => deleteMutation.mutate(deletingScenario.id)}
+          onClose={() => setDeletingScenario(null)}
+          isPending={deleteMutation.isPending}
+        />
       )}
     </>
   );

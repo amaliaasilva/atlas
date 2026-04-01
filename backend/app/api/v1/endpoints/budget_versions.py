@@ -8,6 +8,7 @@ from app.api.v1.deps import get_current_user
 from app.models.user import User
 from app.models.budget_version import BudgetVersion
 from app.models.assumption import AssumptionValue
+from app.models.audit_log import AuditAction, AuditLog
 from app.models.unit import Unit
 from app.schemas.budget_version import (
     BudgetVersionCreate,
@@ -39,6 +40,9 @@ def list_budget_versions(
         )
     if status:
         q = q.filter(BudgetVersion.status == status)
+    else:
+        # Por padrão, exclui versões arquivadas da listagem
+        q = q.filter(BudgetVersion.status != "archived")
     return q.order_by(BudgetVersion.created_at.desc()).all()
 
 
@@ -191,3 +195,35 @@ def clone_version(
     db.commit()
     db.refresh(new_version)
     return new_version
+
+
+@router.delete("/{version_id}", status_code=204)
+def delete_budget_version(
+    version_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Remove (soft-delete) uma versão de orçamento. Apenas rascunhos podem ser excluídos."""
+    v = (
+        db.query(BudgetVersion)
+        .filter(BudgetVersion.id == version_id, BudgetVersion.is_active == True)
+        .first()
+    )
+    if not v:
+        raise HTTPException(status_code=404, detail="Versão não encontrada")
+    if v.status != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail="Apenas versões em rascunho podem ser excluídas. Use arquivar para versões publicadas.",
+        )
+    v.is_active = False
+    db.add(
+        AuditLog(
+            entity_type="budget_version",
+            entity_id=version_id,
+            action=AuditAction.delete,
+            performed_by=current_user.id,
+            notes=f"Versão '{v.version_name}' excluída",
+        )
+    )
+    db.commit()

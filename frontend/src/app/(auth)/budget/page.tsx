@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { EmptyState } from '@/components/dashboard/EmptyState';
 import type { BudgetVersion, Unit, Scenario } from '@/types/api';
-import { FileSpreadsheet, Plus, ChevronRight, MapPin, Calendar, Lock, Edit3, Archive, X, Save } from 'lucide-react';
+import { FileSpreadsheet, Plus, ChevronRight, MapPin, Calendar, Lock, Edit3, Archive, X, Save, Trash2 } from 'lucide-react';
+import { ConfirmDeleteModal } from '@/components/ui/ConfirmDeleteModal';
 import { cn } from '@/lib/utils';
 
 const STATUS_META: Record<string, { label: string; icon: React.ReactNode; cls: string }> = {
@@ -154,6 +155,7 @@ export default function BudgetPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('all');
   const [openingDrafts, setOpeningDrafts] = useState<Record<string, string>>({});
+  const [deletingVersion, setDeletingVersion] = useState<BudgetVersion | null>(null);
 
   const { data: units = [], isLoading: loadingUnits } = useQuery({
     queryKey: ['units', businessId],
@@ -176,6 +178,18 @@ export default function BudgetPage() {
     const urlScenarioId = searchParams.get('scenario_id');
     if (urlScenarioId) setSelectedScenarioId(urlScenarioId);
   }, [searchParams]);
+
+  const deleteVersionMutation = useMutation({
+    mutationFn: (versionId: string) => versionsApi.delete(versionId),
+    onSuccess: (_, versionId) => {
+      queryClient.invalidateQueries({ queryKey: ['versions'] });
+      setDeletingVersion(null);
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      alert(msg ?? 'Erro ao excluir versão.');
+    },
+  });
 
   const updateOpeningDateMutation = useMutation({
     mutationFn: async ({ unitId, openingDate }: { unitId: string; openingDate: string }) => {
@@ -424,14 +438,14 @@ export default function BudgetPage() {
                         const statusMeta = STATUS_META[version.status] ?? STATUS_META.draft;
 
                         return (
-                          <button
+                          <div
                             key={version.id}
                             onClick={() => {
                               if (scenario) setScenario(scenario.id);
                               setVersion(version.id);
                               router.push(`/budget/${version.id}`);
                             }}
-                            className="w-full flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/70 transition-colors group text-left"
+                            className="w-full flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/70 transition-colors group text-left cursor-pointer"
                           >
                             {/* Status icon */}
                             <span className={cn('inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium', statusMeta.cls)}>
@@ -457,9 +471,20 @@ export default function BudgetPage() {
                               </div>
                             </div>
 
-                            {/* CTA */}
-                            <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-brand-400 shrink-0 transition-colors" />
-                          </button>
+                            {/* Actions */}
+                            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                              {version.status === 'draft' && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setDeletingVersion(version); }}
+                                  className="p-1 text-gray-300 hover:text-red-500 transition-colors rounded opacity-0 group-hover:opacity-100"
+                                  title="Excluir rascunho"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                              <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-brand-400 shrink-0 transition-colors" />
+                            </div>
+                          </div>
                         );
                       })}
                     </div>
@@ -470,6 +495,20 @@ export default function BudgetPage() {
           </div>
         )}
       </div>
+
+      {deletingVersion && (
+        <ConfirmDeleteModal
+          title="Excluir Versão de Orçamento"
+          description={`Tem certeza que deseja excluir a versão "${deletingVersion.name}"? Esta ação não pode ser desfeita.`}
+          warningItems={[
+            'Somente versões em rascunho podem ser excluídas.',
+            'Todos os dados de linhas de orçamento desta versão serão perdidos.',
+          ]}
+          onConfirm={() => deleteVersionMutation.mutate(deletingVersion.id)}
+          onClose={() => setDeletingVersion(null)}
+          isPending={deleteVersionMutation.isPending}
+        />
+      )}
     </>
   );
 }

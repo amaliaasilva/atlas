@@ -608,6 +608,33 @@ export interface CalendarExceptionOut {
 export interface PeriodTraceResponse {
   period: string;
   has_trace: boolean;
+  occupancy_rate?: number;
+  revenue?: {
+    total: number;
+    cowork_revenue: number;
+    other_revenue: number;
+    capacity_hours_month: number;
+    active_hours_month: number;
+    occupancy_rate: number;
+    avg_price_per_hour: number;
+    service_plans: Array<{ name: string; price: number; mix: number }>;
+    working_days_month: number;
+    saturdays_month: number;
+    slots_per_hour: number;
+    hours_per_day_weekday: number;
+    hours_per_day_saturday: number;
+  };
+  fixed_costs?: {
+    total: number;
+    rent: number;
+    staff: number;
+    utilities: number;
+    admin: number;
+    marketing: number;
+    equipment: number;
+    insurance: number;
+    other: number;
+  };
   utilities?: {
     total: number;
     electricity: number;
@@ -627,11 +654,34 @@ export interface PeriodTraceResponse {
     social_charges: number;
     benefits: number;
   };
-  revenue?: {
-    occupancy_rate: number;
-    capacity_hours_month: number;
-    active_hours_month: number;
+  variable_costs?: {
+    total: number;
+    hygiene_kit: number;
+    sales_commission: number;
+    card_fee: number;
+    other: number;
   };
-  admin?: { total: number };
-  marketing?: { total: number };
+  taxes?: {
+    tax_rate: number;
+    taxes_on_revenue: number;
+  };
+  financing?: {
+    total_payment: number;
+    principal: number;
+    interest: number;
+    contracts: Array<{
+      name?: string;
+      payment?: number;
+      principal?: number;
+      interest?: number;
+    }>;
+  };
+  kpis?: {
+    operating_result: number;
+    net_result: number;
+    ebitda: number;
+    break_even_revenue: number;
+    break_even_occupancy_pct: number;
+    contribution_margin_pct: number;
+  };
 }

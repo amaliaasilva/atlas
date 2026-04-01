@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.api.v1.deps import get_current_user
 from app.models.user import User
 from app.models.service_plan import ServicePlan
+from app.models.audit_log import AuditAction, AuditLog
 from app.schemas.service_plan import (
     ServicePlanCreate,
     ServicePlanUpdate,
@@ -106,5 +107,14 @@ def delete_plan(
     p = db.query(ServicePlan).filter(ServicePlan.id == plan_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Plano não encontrado")
+    db.add(
+        AuditLog(
+            entity_type="service_plan",
+            entity_id=plan_id,
+            action=AuditAction.delete,
+            performed_by=current_user.id,
+            notes=f"Plano '{p.name}' excluído do negócio {p.business_id}",
+        )
+    )
     db.delete(p)
     db.commit()

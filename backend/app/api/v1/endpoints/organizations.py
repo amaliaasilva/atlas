@@ -2,9 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.api.v1.deps import get_current_user
+from app.api.v1.deps import get_current_user, require_superuser
 from app.models.user import User
 from app.models.organization import Organization
+from app.models.business import Business
+from app.models.audit_log import AuditAction, AuditLog
 from app.schemas.organization import (
     OrganizationCreate,
     OrganizationUpdate,
@@ -69,3 +71,42 @@ def update_organization(
     db.commit()
     db.refresh(org)
     return org
+
+
+@router.delete("/{org_id}", status_code=204)
+def delete_organization(
+    org_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    """Remove (soft-delete) uma organização. Restrito a superusuários. Bloqueado se houver negócios ativos."""
+    org = (
+        db.query(Organization)
+        .filter(Organization.id == org_id, Organization.is_active == True)
+        .first()
+    )
+    if not org:
+        raise HTTPException(status_code=404, detail="Organização não encontrada")
+
+    biz_count = (
+        db.query(Business)
+        .filter(Business.organization_id == org_id, Business.is_active == True)
+        .count()
+    )
+    if biz_count > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Organização possui {biz_count} negócio(s) ativo(s). Exclua-os antes de excluir a organização.",
+        )
+
+    org.is_active = False
+    db.add(
+        AuditLog(
+            entity_type="organization",
+            entity_id=org_id,
+            action=AuditAction.delete,
+            performed_by=current_user.id,
+            notes=f"Organização '{org.name}' excluída",
+        )
+    )
+    db.commit()

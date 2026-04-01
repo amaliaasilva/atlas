@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.api.v1.deps import get_current_user, require_superuser
 from app.core.security import get_password_hash
 from app.models.user import User
+from app.models.audit_log import AuditAction, AuditLog
 from app.schemas.user import UserCreate, UserOut, UserUpdate
 
 router = APIRouter()
@@ -59,3 +60,32 @@ def update_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.delete("/{user_id}", status_code=204)
+def delete_user(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_superuser),
+):
+    """Desativa um usuário. Restrito a superusuários. Não é possível excluir o próprio usuário."""
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=400,
+            detail="Não é possível excluir o próprio usuário",
+        )
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+    user.status = "inactive"
+    db.add(
+        AuditLog(
+            entity_type="user",
+            entity_id=user_id,
+            action=AuditAction.delete,
+            performed_by=current_user.id,
+            notes=f"Usuário '{user.email}' desativado",
+        )
+    )
+    db.commit()

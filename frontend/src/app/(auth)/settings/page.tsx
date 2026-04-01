@@ -10,8 +10,10 @@ import { Card } from '@/components/ui/Card';
 import { LoadingScreen } from '@/components/ui/Spinner';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import type { ServicePlan } from '@/types/api';
-import { Pencil, Check, X } from 'lucide-react';
+import { Input } from '@/components/ui/Input';
+import { ConfirmDeleteModal } from '@/components/ui/ConfirmDeleteModal';
+import type { ServicePlan, ServicePlanInput } from '@/types/api';
+import { Pencil, Check, X, Trash2, Plus } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user } = useAuthStore();
@@ -20,6 +22,12 @@ export default function SettingsPage() {
 
   const [editingPlan, setEditingPlan] = useState<ServicePlan | null>(null);
   const [editForm, setEditForm] = useState<Partial<ServicePlan>>({});
+  const [deletingPlan, setDeletingPlan] = useState<ServicePlan | null>(null);
+  const [showCreatePlan, setShowCreatePlan] = useState(false);
+  const [createForm, setCreateForm] = useState<Partial<ServicePlanInput>>({
+    name: '', code: '', price_per_hour: 0, target_mix_pct: 0.25,
+    min_classes_month: 4, max_classes_month: 12, sort_order: 99, is_active: true,
+  });
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['users'],
@@ -40,6 +48,23 @@ export default function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ['service-plans', businessId] });
       setEditingPlan(null);
       setEditForm({});
+    },
+  });
+
+  const createPlanMutation = useMutation({
+    mutationFn: (data: ServicePlanInput) => servicePlansApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-plans', businessId] });
+      setShowCreatePlan(false);
+      setCreateForm({ name: '', code: '', price_per_hour: 0, target_mix_pct: 0.25, min_classes_month: 4, max_classes_month: 12, sort_order: 99, is_active: true });
+    },
+  });
+
+  const deletePlanMutation = useMutation({
+    mutationFn: (id: string) => servicePlansApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-plans', businessId] });
+      setDeletingPlan(null);
     },
   });
 
@@ -89,7 +114,16 @@ export default function SettingsPage() {
 
         {/* Planos de Serviço */}
         {businessId && (
-          <Card title="Planos de Serviço (Bronze / Prata / Ouro / Diamante)">
+          <Card
+            title="Planos de Serviço (Bronze / Prata / Ouro / Diamante)"
+            actions={
+              user?.is_superuser ? (
+                <Button size="sm" onClick={() => setShowCreatePlan(true)}>
+                  <Plus className="h-4 w-4" /> Novo Plano
+                </Button>
+              ) : undefined
+            }
+          >
             <div className="mb-4 rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">
               Estes planos são os <strong>padrões globais do negócio</strong>. Qualquer alteração reflete em todos os cálculos futuros de todas as unidades. Versões de orçamento já calculadas <strong>não são afetadas automaticamente</strong> — recalcule cada versão para aplicar os novos valores.
             </div>
@@ -177,12 +211,22 @@ export default function SettingsPage() {
                             <td className="text-right">{plan.min_classes_month}</td>
                             <td className="text-right">{plan.max_classes_month ?? '—'}</td>
                             <td className="text-right">
-                              <button
-                                onClick={() => startEdit(plan)}
-                                className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
+                              <div className="flex gap-1 justify-end">
+                                <button
+                                  onClick={() => startEdit(plan)}
+                                  className="p-1 text-gray-400 hover:text-gray-700 hover:bg-gray-50 rounded"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                {user?.is_superuser && (
+                                  <button
+                                    onClick={() => setDeletingPlan(plan)}
+                                    className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </>
                         )}
@@ -232,6 +276,109 @@ export default function SettingsPage() {
           Atlas Finance · v1.0.0 · Build {new Date().getFullYear()}
         </div>
       </div>
+
+      {/* Modal: Criar Plano */}
+      {showCreatePlan && businessId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">Novo Plano de Serviço</h3>
+              <button onClick={() => setShowCreatePlan(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Nome"
+                  value={createForm.name ?? ''}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="Ex: Ouro"
+                />
+                <Input
+                  label="Código"
+                  value={createForm.code ?? ''}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, code: e.target.value }))}
+                  placeholder="Ex: GOLD"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="R$/hora"
+                  type="number"
+                  step="0.5"
+                  value={String(createForm.price_per_hour ?? '')}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, price_per_hour: +e.target.value }))}
+                />
+                <Input
+                  label="Mix % (0-1)"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="1"
+                  value={String(createForm.target_mix_pct ?? '')}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, target_mix_pct: +e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <Input
+                  label="Aulas mín/mês"
+                  type="number"
+                  value={String(createForm.min_classes_month ?? '')}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, min_classes_month: +e.target.value }))}
+                />
+                <Input
+                  label="Aulas máx/mês"
+                  type="number"
+                  value={String(createForm.max_classes_month ?? '')}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, max_classes_month: +e.target.value }))}
+                />
+                <Input
+                  label="Ordem"
+                  type="number"
+                  value={String(createForm.sort_order ?? '')}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, sort_order: +e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+              <Button variant="ghost" size="sm" onClick={() => setShowCreatePlan(false)}>Cancelar</Button>
+              <Button
+                size="sm"
+                onClick={() =>
+                  createPlanMutation.mutate({
+                    ...(createForm as ServicePlanInput),
+                    business_id: businessId,
+                    is_active: true,
+                  })
+                }
+                loading={createPlanMutation.isPending}
+                disabled={!createForm.name || !createForm.code}
+              >
+                <Plus className="h-4 w-4" /> Criar Plano
+              </Button>
+            </div>
+            {createPlanMutation.isError && (
+              <p className="px-6 pb-4 text-xs text-red-500">Erro ao criar plano. Verifique os dados.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirmar exclusão de plano */}
+      {deletingPlan && (
+        <ConfirmDeleteModal
+          title="Excluir Plano de Serviço"
+          description={`Tem certeza que deseja excluir o plano "${deletingPlan.name}"?`}
+          warningItems={[
+            'A exclusão impacta a soma do mix percentual dos planos restantes.',
+            'Versões de orçamento já calculadas não são afetadas automaticamente.',
+          ]}
+          onConfirm={() => deletePlanMutation.mutate(deletingPlan.id)}
+          onClose={() => setDeletingPlan(null)}
+          isPending={deletePlanMutation.isPending}
+        />
+      )}
     </>
   );
 }
