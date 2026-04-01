@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from dateutil.relativedelta import relativedelta
 
 from app.core.database import get_db
 from app.api.v1.deps import get_current_user
 from app.models.audit_log import AuditAction, AuditLog
+from app.models.budget_version import BudgetVersion
 from app.models.unit import Unit
 from app.models.user import User
 from app.schemas.unit import UnitCreate, UnitOut, UnitUpdate
@@ -64,6 +66,27 @@ def update_unit(
 
     for k, v in changes.items():
         setattr(unit, k, v)
+
+    # Se opening_date foi atualizado, sincronizar effective_start_date e
+    # effective_end_date em todas as versões ativas da unidade, para que
+    # o motor financeiro gere o horizonte correto ao recalcular.
+    if "opening_date" in changes and unit.opening_date:
+        active_versions = (
+            db.query(BudgetVersion)
+            .filter(
+                BudgetVersion.unit_id == unit.id,
+                BudgetVersion.is_active == True,
+            )
+            .all()
+        )
+        for version in active_versions:
+            version.effective_start_date = unit.opening_date
+            horizon_years = version.projection_horizon_years or 10
+            version.effective_end_date = (
+                unit.opening_date
+                + relativedelta(months=horizon_years * 12)
+                - relativedelta(days=1)
+            )
 
     log = AuditLog(
         entity_type="unit",
