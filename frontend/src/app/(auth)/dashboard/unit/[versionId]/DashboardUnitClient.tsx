@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { dashboardApi, calculationsApi, versionsApi } from '@/lib/api';
 import { getRevenue } from '@/types/api';
@@ -24,6 +24,8 @@ export default function DashboardUnitClient() {
     queryFn: () => versionsApi.get(versionId),
   });
 
+  const queryClient = useQueryClient();
+
   const { data: dashboard, isLoading, refetch } = useQuery({
     queryKey: ['dashboard-unit', versionId],
     queryFn: () => dashboardApi.unit(versionId),
@@ -32,7 +34,13 @@ export default function DashboardUnitClient() {
 
   const recalcMutation = useMutation({
     mutationFn: () => calculationsApi.recalculate(versionId),
-    onSuccess: () => refetch(),
+    onSuccess: () => {
+      refetch();
+      queryClient.invalidateQueries({ queryKey: ['dre', versionId] });
+      queryClient.invalidateQueries({ queryKey: ['dre-consolidated'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-consolidated'] });
+      queryClient.invalidateQueries({ queryKey: ['results', versionId] });
+    },
   });
 
   if (isLoading) return <LoadingScreen />;

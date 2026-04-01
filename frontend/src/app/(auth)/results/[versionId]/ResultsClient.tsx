@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { calculationsApi, versionsApi, reportsApi } from '@/lib/api';
 import { Topbar } from '@/components/layout/Topbar';
@@ -67,6 +67,8 @@ export default function ResultsClient() {
     queryFn: () => versionsApi.get(versionId),
   });
 
+  const queryClient = useQueryClient();
+
   const { data: results, isLoading, refetch } = useQuery({
     queryKey: ['results', versionId],
     queryFn: () => calculationsApi.results(versionId),
@@ -74,7 +76,13 @@ export default function ResultsClient() {
 
   const recalcMutation = useMutation({
     mutationFn: () => calculationsApi.recalculate(versionId),
-    onSuccess: () => refetch(),
+    onSuccess: () => {
+      refetch();
+      queryClient.invalidateQueries({ queryKey: ['dashboard-unit', versionId] });
+      queryClient.invalidateQueries({ queryKey: ['dre', versionId] });
+      queryClient.invalidateQueries({ queryKey: ['dre-consolidated'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-consolidated'] });
+    },
   });
 
   const handleExport = async () => {

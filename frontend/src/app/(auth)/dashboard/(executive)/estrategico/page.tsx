@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { dashboardApi, scenariosApi, unitsApi } from '@/lib/api';
+import { dashboardApi, scenariosApi, unitsApi, versionsApi, calculationsApi } from '@/lib/api';
 import { useDashboardFilters } from '@/store/dashboard';
 import { MetricCard, ProgressCard } from '@/components/dashboard/MetricCard';
 import { BulletChartItem, ScenarioBarChart } from '@/components/charts/UnitsBarChart';
@@ -73,10 +73,21 @@ export default function EstrategicoPage() {
   const [editDateValue, setEditDateValue] = useState('');
 
   const updateDateMutation = useMutation({
-    mutationFn: ({ id, opening_date }: { id: string; opening_date: string | undefined }) =>
-      unitsApi.update(id, { opening_date }),
+    mutationFn: async ({ id, opening_date }: { id: string; opening_date: string | undefined }) => {
+      await unitsApi.update(id, { opening_date });
+      // Recalcula todas as versões ativas para refletir a nova data de abertura no motor financeiro
+      const versions = await versionsApi.list(id);
+      const active = versions.filter((v) => v.status !== 'archived');
+      await Promise.allSettled(active.map((v) => calculationsApi.recalculate(v.id)));
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['units', businessId] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-consolidated'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+      queryClient.invalidateQueries({ queryKey: ['units-comparison'] });
+      queryClient.invalidateQueries({ queryKey: ['multi-scenario-estrategico'] });
+      queryClient.invalidateQueries({ queryKey: ['dre'] });
+      queryClient.invalidateQueries({ queryKey: ['dre-consolidated'] });
       setEditingUnit(null);
     },
   });
