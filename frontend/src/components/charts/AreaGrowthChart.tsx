@@ -21,6 +21,7 @@ interface AreaGrowthChartProps {
   title?: string;
   showBreakeven?: boolean;
   breakevenValue?: number;
+  onPeriodClick?: (period: string) => void;
 }
 
 export function AreaGrowthChart({
@@ -28,19 +29,28 @@ export function AreaGrowthChart({
   title = 'Evolução da Receita',
   showBreakeven = false,
   breakevenValue,
+  onPeriodClick,
 }: AreaGrowthChartProps) {
   const chartData = data.map((d) => ({
     period: formatPeriod(d.period),
+    _raw: d.period,
     receita: Math.round(getRevenue(d)),
     lucro: Math.round(d.net_result),
     ebitda: Math.round(d.ebitda),
     custoFixo: Math.round(d.total_fixed_costs ?? 0),
   }));
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function handleClick(payload: any) {
+    if (onPeriodClick && payload?.activePayload?.[0]?.payload?._raw) {
+      onPeriodClick(payload.activePayload[0].payload._raw);
+    }
+  }
+
   return (
     <Card title={title}>
       <ResponsiveContainer width="100%" height={300}>
-        <ReAreaChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+        <ReAreaChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }} onClick={onPeriodClick ? handleClick : undefined} style={onPeriodClick ? { cursor: 'pointer' } : undefined}>
           <defs>
             <linearGradient id="gradReceita" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />

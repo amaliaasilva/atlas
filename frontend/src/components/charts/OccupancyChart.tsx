@@ -10,21 +10,30 @@ import { Card } from '@/components/ui/Card';
 
 interface Props {
   data: TimeSeries[];
-  breakEvenOccupancy?: number;  // 0.0–1.0
+  breakEvenOccupancy?: number;
+  onPeriodClick?: (period: string) => void;
 }
 
-export function OccupancyChart({ data, breakEvenOccupancy }: Props) {
+export function OccupancyChart({ data, breakEvenOccupancy, onPeriodClick }: Props) {
   const chartData = data.map((d) => ({
     period: formatPeriod(d.period),
+    _raw: d.period,
     horasVendidas: Math.round(d.active_hours_month ?? 0),
     capacidade: Math.round(d.capacity_hours_month ?? 0),
     ocupacao: Math.round((d.occupancy_rate ?? 0) * 100),
   }));
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function handleClick(payload: any) {
+    if (onPeriodClick && payload?.activePayload?.[0]?.payload?._raw) {
+      onPeriodClick(payload.activePayload[0].payload._raw);
+    }
+  }
+
   return (
     <Card title="Ocupação do Espaço">
       <ResponsiveContainer width="100%" height={280}>
-        <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+        <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }} onClick={onPeriodClick ? handleClick : undefined} style={onPeriodClick ? { cursor: 'pointer' } : undefined}>
           <defs>
             <linearGradient id="gradHoras" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15} />

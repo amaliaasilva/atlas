@@ -14,6 +14,8 @@ import type { AuditReport } from '@/types/api';
 import { DollarSign, TrendingUp, Target, Building2, TrendingDown, Calendar, Shield, ShieldAlert, BarChart2, Clock, Activity, Percent } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UnitDateChip } from '@/components/ui/UnitLifecycleBadge';
+import { KpiDrilldownPanel } from '@/components/dashboard/KpiDrilldownPanel';
+import type { KpiDrilldownConfig } from '@/components/dashboard/KpiDrilldownPanel';
 import { UnitRoadmap } from '@/components/charts/UnitRoadmap';
 
 const STATUS_PRIORITY: Record<string, number> = { published: 0, draft: 1, planning: 2 };
@@ -51,6 +53,8 @@ export default function VisaoGeralPage() {
   const [activeTab, setActiveTab] = useState<TabId>('financeira');
   const [auditReport, setAuditReport] = useState<AuditReport | null>(null);
   const [showAudit, setShowAudit] = useState(false);
+  const [kpiDrill, setKpiDrill] = useState<{ config: KpiDrilldownConfig; period?: string } | null>(null);
+  const [chartHighlight, setChartHighlight] = useState<string | undefined>();
   // single-unit: quando exatamente 1 unidade selecionada
   const unitId = selectedUnitIds.length === 1 ? selectedUnitIds[0] : null;
   // multi-unit: passa filtro ao consolidado; se vazio = rede inteira
@@ -340,9 +344,10 @@ export default function VisaoGeralPage() {
                   trend={revenueTrend > 0 ? 'up' : revenueTrend < 0 ? 'down' : 'neutral'}
                   icon={<DollarSign className="h-4 w-4" />}
                   accentColor="indigo"
-                  tooltip="Receita bruta acumulada no período selecionado"
+                  tooltip="Clique para ver evolução mensal"
                   dataType="projected"
                   size="lg"
+                  onClick={() => setKpiDrill({ config: { key: 'revenue', label: 'Receita Total', isCurrency: true, description: 'Receita bruta acumulada por mês' } })}
                 />
                 <MetricCard
                   label={unitId ? 'Lucro Total' : 'Lucro Total da Rede'}
@@ -351,9 +356,10 @@ export default function VisaoGeralPage() {
                   icon={<TrendingUp className="h-4 w-4" />}
                   accentColor={totalProfit >= 0 ? 'emerald' : 'rose'}
                   sub={`EBITDA: ${formatCurrency(totalEbitda)}`}
-                  tooltip="Resultado líquido acumulado do período selecionado"
+                  tooltip="Clique para ver evolução mensal"
                   dataType="projected"
                   size="lg"
+                  onClick={() => setKpiDrill({ config: { key: 'net_result', label: 'Resultado Líquido', isCurrency: true, description: 'Lucro líquido por mês' } })}
                 />
                 <MetricCard
                   label="Margem Líquida"
@@ -362,9 +368,10 @@ export default function VisaoGeralPage() {
                   icon={<Target className="h-4 w-4" />}
                   accentColor={margin > 0.15 ? 'emerald' : margin > 0 ? 'amber' : 'rose'}
                   sub={`EBITDA Margin: ${formatPercent(ebitdaMargin)}`}
-                  tooltip="Lucro líquido dividido pela receita bruta total"
+                  tooltip="Clique para ver evolução mensal"
                   dataType="projected"
                   size="lg"
+                  onClick={() => setKpiDrill({ config: { key: 'margin', label: 'Margem Líquida', isPercent: true, description: 'Resultado líquido ÷ receita por mês' } })}
                 />
                 {unitId ? (
                   <MetricCard
@@ -458,6 +465,10 @@ export default function VisaoGeralPage() {
               <AreaGrowthChart
                 data={filteredTs}
                 title="Receita vs Lucro — Evolução"
+                onPeriodClick={(period) => {
+                  setChartHighlight(period);
+                  setKpiDrill({ config: { key: 'revenue', label: 'Receita Total', isCurrency: true, description: 'Clique num mês para destacar' }, period });
+                }}
               />
               {/* Métricas secundárias */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
@@ -539,6 +550,7 @@ export default function VisaoGeralPage() {
                     icon={<Clock className="h-4 w-4" />}
                     accentColor="sky"
                     sub={`Média: ${formatNumber(totalCapacityHours / Math.max(filteredTs.length, 1), 0)} h/mês`}
+                    onClick={() => setKpiDrill({ config: { key: 'capacity_hours', label: 'Capacidade Total (h)', description: 'Horas de capacidade instalada por mês' } })}
                   />
                   <MetricCard
                     label="Horas Vendidas (h)"
@@ -547,6 +559,7 @@ export default function VisaoGeralPage() {
                     icon={<Activity className="h-4 w-4" />}
                     accentColor="violet"
                     sub={`Média: ${formatNumber(totalActiveHours / Math.max(filteredTs.length, 1), 0)} h/mês`}
+                    onClick={() => setKpiDrill({ config: { key: 'active_hours', label: 'Horas Vendidas (h)', description: 'Horas efetivamente ocupadas por clientes por mês' } })}
                   />
                   <MetricCard
                     label="Taxa de Ocupação Média"
@@ -555,6 +568,7 @@ export default function VisaoGeralPage() {
                     icon={<Percent className="h-4 w-4" />}
                     accentColor={avgOccupancy > 0.5 ? 'emerald' : avgOccupancy > 0.25 ? 'amber' : 'rose'}
                     sub={`Breakeven: ${formatPercent(breakEvenOccupancy)}`}
+                    onClick={() => setKpiDrill({ config: { key: 'occupancy_rate', label: 'Taxa de Ocupação', isPercent: true, description: 'Horas vendidas ÷ capacidade instalada por mês' } })}
                   />
                   <MetricCard
                     label="Margem de Contribuição"
@@ -563,6 +577,7 @@ export default function VisaoGeralPage() {
                     icon={<BarChart2 className="h-4 w-4" />}
                     accentColor={contributionMargin > 0.4 ? 'emerald' : contributionMargin > 0.2 ? 'amber' : 'rose'}
                     sub="Receita − Custos Variáveis"
+                    onClick={() => setKpiDrill({ config: { key: 'contribution_margin', label: 'Margem de Contribuição', isPercent: true, description: '(Receita - Custos Variáveis) ÷ Receita por mês' } })}
                   />
                 </>
               )}
@@ -666,6 +681,16 @@ export default function VisaoGeralPage() {
           </section>
         )}
       </div>
+
+      {/* KPI Drill-down panel */}
+      {kpiDrill && filteredTs.length > 0 && (
+        <KpiDrilldownPanel
+          config={kpiDrill.config}
+          series={filteredTs}
+          highlightPeriod={kpiDrill.period ?? chartHighlight}
+          onClose={() => { setKpiDrill(null); setChartHighlight(undefined); }}
+        />
+      )}
     </>
   );
 }

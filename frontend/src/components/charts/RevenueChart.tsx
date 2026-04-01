@@ -12,20 +12,29 @@ import { Card } from '@/components/ui/Card';
 interface Props {
   data: TimeSeries[];
   title?: string;
+  onPeriodClick?: (period: string) => void;
 }
 
-export function RevenueChart({ data, title = 'Receita vs Resultado' }: Props) {
+export function RevenueChart({ data, title = 'Receita vs Resultado', onPeriodClick }: Props) {
   const chartData = data.map((d) => ({
     period: formatPeriod(d.period),
+    _raw: d.period,
     receita: Math.round(getRevenue(d)),
     resultado: Math.round(d.net_result),
     ebitda: Math.round(d.ebitda),
   }));
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function handleClick(payload: any) {
+    if (onPeriodClick && payload?.activePayload?.[0]?.payload?._raw) {
+      onPeriodClick(payload.activePayload[0].payload._raw);
+    }
+  }
+
   return (
     <Card title={title}>
       <ResponsiveContainer width="100%" height={280}>
-        <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+        <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }} onClick={onPeriodClick ? handleClick : undefined} style={onPeriodClick ? { cursor: 'pointer' } : undefined}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
           <XAxis
             dataKey="period"

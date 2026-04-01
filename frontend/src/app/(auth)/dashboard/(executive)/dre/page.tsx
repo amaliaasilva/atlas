@@ -237,7 +237,12 @@ export default function DREPage() {
         ) : displayData ? (
           <DRETable
             data={displayData}
-            versionId={granularity === 'monthly' ? activeVersion?.id : undefined}
+            versionId={granularity === 'monthly' && unitId ? activeVersion?.id : undefined}
+            consolidatedCtx={
+              granularity === 'monthly' && !unitId && businessId && scenarioId
+                ? { businessId, scenarioId, unitIds: selectedUnitIds }
+                : undefined
+            }
             onExportCsv={unitId ? handleExport : undefined}
             isExporting={isExporting}
           />

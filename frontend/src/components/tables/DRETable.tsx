@@ -5,7 +5,7 @@ import type { DREResponse, DRECategory } from '@/types/api';
 import { formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { DrilldownPanel } from './DREDrilldown';
-import type { DrilldownState } from './DREDrilldown';
+import type { DrilldownState, ConsolidatedCtx } from './DREDrilldown';
 
 const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -41,8 +41,10 @@ const CATEGORY_HEADER: Record<DRECategory, string | null> = {
 
 interface Props {
   data: DREResponse;
-  /** Se passado e a granularidade for mensal, habilita o drill-down por célula */
+  /** Single-unit: drill-down detalhado pelo cálculo interno (period-trace) */
   versionId?: string;
+  /** Multi-unit: drill-down mostra contribuição de cada unidade (period-code-breakdown) */
+  consolidatedCtx?: ConsolidatedCtx;
   /** Callback opcional para exportar CSV via backend */
   onExportCsv?: () => void;
   isExporting?: boolean;
@@ -52,7 +54,7 @@ interface Props {
  * DRETable — tabela DRE com primeira coluna congelada, scroll horizontal,
  * cores por categoria, botão de exportação CSV e drill-down de células.
  */
-export function DRETable({ data, versionId, onExportCsv, isExporting }: Props) {
+export function DRETable({ data, versionId, consolidatedCtx, onExportCsv, isExporting }: Props) {
   const tableRef = useRef<HTMLDivElement>(null);
   const [drilldown, setDrilldown] = useState<DrilldownState | null>(null);
 
@@ -117,7 +119,7 @@ export function DRETable({ data, versionId, onExportCsv, isExporting }: Props) {
     return sections;
   }, [rows]);
 
-  const canDrilldown = isMonthly && !!versionId;
+  const canDrilldown = isMonthly && (!!versionId || !!consolidatedCtx);
 
   return (
     <>
@@ -267,9 +269,10 @@ export function DRETable({ data, versionId, onExportCsv, isExporting }: Props) {
       </div>
 
       {/* Drill-down panel */}
-      {drilldown && versionId && (
+      {drilldown && (versionId || consolidatedCtx) && (
         <DrilldownPanel
           versionId={versionId}
+          consolidatedCtx={consolidatedCtx}
           drilldown={drilldown}
           onClose={() => setDrilldown(null)}
         />

@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { dashboardApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
-import type { PeriodTraceResponse } from '@/types/api';
+import type { PeriodTraceResponse, PeriodCodeBreakdownResponse } from '@/types/api';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -586,21 +586,83 @@ export interface DrilldownState {
   name: string;
 }
 
-interface DrilldownPanelProps {
-  versionId: string;
-  drilldown: DrilldownState;
-  onClose: () => void;
+export interface ConsolidatedCtx {
+  businessId: string;
+  scenarioId: string;
+  unitIds: string[];
 }
 
-export function DrilldownPanel({ versionId, drilldown, onClose }: DrilldownPanelProps) {
-  const { data, isLoading } = useQuery<PeriodTraceResponse>({
-    queryKey: ['period-trace', versionId, drilldown.period],
-    queryFn: () => dashboardApi.periodTrace(versionId, drilldown.period),
-    staleTime: 5 * 60 * 1000,
-  });
+// ── UnitBreakdownPanel — modo multi-unidade ───────────────────────────────────
 
+function UnitBreakdownSection({ data }: { data: PeriodCodeBreakdownResponse }) {
+  const total = data.total;
+  const isExpense = total < 0;
+
+  return (
+    <div className="space-y-2">
+      {data.units.length === 0 ? (
+        <p className="text-xs text-slate-400 py-2 text-center">
+          Nenhuma unidade com cálculo para este período.
+        </p>
+      ) : (
+        <>
+          {data.units.map((u) => {
+            const pct = Math.abs(u.pct_of_total);
+            const barColor = isExpense ? 'bg-rose-400' : 'bg-emerald-400';
+            return (
+              <div key={u.unit_id} className="space-y-1">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-600 font-medium truncate max-w-[60%]">{u.unit_name}</span>
+                  <div className="text-right shrink-0">
+                    <span className={`font-semibold ${isExpense ? 'text-rose-700' : 'text-emerald-700'}`}>
+                      {formatCurrency(Math.abs(u.value))}
+                    </span>
+                    <span className="text-slate-400 ml-1.5 text-[10px]">({(pct * 100).toFixed(0)}%)</span>
+                  </div>
+                </div>
+                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${barColor} transition-all`}
+                    style={{ width: `${Math.min(pct * 100, 100)}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+          <Divider />
+          <div className="flex justify-between items-center text-xs font-bold">
+            <span className="text-slate-700">Total Consolidado</span>
+            <span className={isExpense ? 'text-rose-700' : 'text-emerald-700'}>
+              {formatCurrency(Math.abs(total))}
+            </span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+interface DrilldownPanelProps {
+  drilldown: DrilldownState;
+  onClose: () => void;
+  /** Modo single-unit: usa period-trace */
+  versionId?: string;
+  /** Modo multi-unit: usa period-code-breakdown */
+  consolidatedCtx?: ConsolidatedCtx;
+}
+
+function PanelShell({
+  drilldown,
+  onClose,
+  children,
+  subtitle,
+}: {
+  drilldown: DrilldownState;
+  onClose: () => void;
+  children: React.ReactNode;
+  subtitle?: string;
+}) {
   const periodLabel = formatPeriodHeader(drilldown.period);
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
@@ -610,10 +672,11 @@ export function DrilldownPanel({ versionId, drilldown, onClose }: DrilldownPanel
         className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 bg-slate-50 border-b border-slate-200 shrink-0">
           <div>
-            <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">{periodLabel}</p>
+            <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">
+              {periodLabel}{subtitle ? ` · ${subtitle}` : ''}
+            </p>
             <h3 className="text-sm font-semibold text-slate-800 mt-0.5">{drilldown.name}</h3>
           </div>
           <button
@@ -625,21 +688,67 @@ export function DrilldownPanel({ versionId, drilldown, onClose }: DrilldownPanel
             </svg>
           </button>
         </div>
-
-        {/* Content — scrollável */}
-        <div className="px-5 py-4 overflow-y-auto">
-          {isLoading ? (
-            <div className="flex items-center gap-2 text-slate-400 text-sm py-4">
-              <div className="w-4 h-4 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
-              Carregando cálculo...
-            </div>
-          ) : data ? (
-            <DrilldownContent rowCode={drilldown.code} rowName={drilldown.name} data={data} />
-          ) : (
-            <p className="text-sm text-slate-400 py-4 text-center">Erro ao carregar dados.</p>
-          )}
-        </div>
+        <div className="px-5 py-4 overflow-y-auto">{children}</div>
       </div>
     </div>
+  );
+}
+
+export function DrilldownPanel({ versionId, consolidatedCtx, drilldown, onClose }: DrilldownPanelProps) {
+  // Modo single-unit
+  const { data: traceData, isLoading: traceLoading } = useQuery<PeriodTraceResponse>({
+    queryKey: ['period-trace', versionId, drilldown.period],
+    queryFn: () => dashboardApi.periodTrace(versionId!, drilldown.period),
+    staleTime: 5 * 60 * 1000,
+    enabled: !!versionId,
+  });
+
+  // Modo multi-unit
+  const { data: breakdownData, isLoading: breakdownLoading } = useQuery<PeriodCodeBreakdownResponse>({
+    queryKey: ['period-code-breakdown', consolidatedCtx?.businessId, consolidatedCtx?.scenarioId, drilldown.period, drilldown.code, consolidatedCtx?.unitIds],
+    queryFn: () =>
+      dashboardApi.periodCodeBreakdown(
+        consolidatedCtx!.businessId,
+        consolidatedCtx!.scenarioId,
+        drilldown.period,
+        drilldown.code,
+        consolidatedCtx!.unitIds,
+      ),
+    staleTime: 5 * 60 * 1000,
+    enabled: !!consolidatedCtx && !versionId,
+  });
+
+  const isLoading = traceLoading || breakdownLoading;
+
+  if (consolidatedCtx && !versionId) {
+    return (
+      <PanelShell drilldown={drilldown} onClose={onClose} subtitle="consolidado por unidade">
+        {isLoading ? (
+          <div className="flex items-center gap-2 text-slate-400 text-sm py-4">
+            <div className="w-4 h-4 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
+            Carregando breakdown...
+          </div>
+        ) : breakdownData ? (
+          <UnitBreakdownSection data={breakdownData} />
+        ) : (
+          <p className="text-sm text-slate-400 py-4 text-center">Erro ao carregar dados.</p>
+        )}
+      </PanelShell>
+    );
+  }
+
+  return (
+    <PanelShell drilldown={drilldown} onClose={onClose}>
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-slate-400 text-sm py-4">
+          <div className="w-4 h-4 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
+          Carregando cálculo...
+        </div>
+      ) : traceData ? (
+        <DrilldownContent rowCode={drilldown.code} rowName={drilldown.name} data={traceData} />
+      ) : (
+        <p className="text-sm text-slate-400 py-4 text-center">Erro ao carregar dados.</p>
+      )}
+    </PanelShell>
   );
 }

@@ -685,3 +685,15 @@ export interface PeriodTraceResponse {
     contribution_margin_pct: number;
   };
 }
+
+export interface PeriodCodeBreakdownResponse {
+  period: string;
+  code: string;
+  total: number;
+  units: Array<{
+    unit_id: string;
+    unit_name: string;
+    value: number;
+    pct_of_total: number;
+  }>;
+}

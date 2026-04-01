@@ -307,6 +307,94 @@ def business_consolidated_dashboard(
     }
 
 
+@router.get("/business/{business_id}/period-code-breakdown")
+def business_period_code_breakdown(
+    business_id: str,
+    scenario_id: str = Query(...),
+    period: str = Query(...),
+    code: str = Query(...),
+    unit_ids: list[str] = Query(default=[]),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Para cada unidade do negócio, retorna o valor de uma linha DRE em um período.
+
+    Usado para drill-down consolidado (múltiplas unidades): mostra quanto cada
+    unidade contribuiu para o valor agregado exibido na DRE consolidada.
+    """
+    verify_business_access(business_id, current_user, db)
+
+    units_query = db.query(Unit).filter(Unit.business_id == business_id)
+    if unit_ids:
+        units_query = units_query.filter(Unit.id.in_(unit_ids))
+    units_list = units_query.all()
+    unit_map = {u.id: u.name for u in units_list}
+
+    if not units_list:
+        return {"period": period, "code": code, "total": 0.0, "units": []}
+
+    all_versions = (
+        db.query(BudgetVersion)
+        .filter(
+            BudgetVersion.unit_id.in_([u.id for u in units_list]),
+            BudgetVersion.scenario_id == scenario_id,
+            BudgetVersion.is_active.is_(True),
+        )
+        .all()
+    )
+    status_priority = {"published": 0, "draft": 1, "planning": 2}
+    best_by_unit: dict[str, BudgetVersion] = {}
+    for v in all_versions:
+        existing = best_by_unit.get(v.unit_id)
+        if existing is None or status_priority.get(v.status, 9) < status_priority.get(
+            existing.status, 9
+        ):
+            best_by_unit[v.unit_id] = v
+
+    version_ids = [v.id for v in best_by_unit.values()]
+    if not version_ids:
+        return {"period": period, "code": code, "total": 0.0, "units": []}
+
+    line_item = (
+        db.query(LineItemDefinition).filter(LineItemDefinition.code == code).first()
+    )
+    if not line_item:
+        return {"period": period, "code": code, "total": 0.0, "units": []}
+
+    results = (
+        db.query(CalculatedResult, BudgetVersion)
+        .join(BudgetVersion, CalculatedResult.budget_version_id == BudgetVersion.id)
+        .filter(
+            CalculatedResult.budget_version_id.in_(version_ids),
+            CalculatedResult.period_date == period,
+            CalculatedResult.line_item_id == line_item.id,
+        )
+        .all()
+    )
+
+    total = sum(r[0].value for r in results)
+    units_data = sorted(
+        [
+            {
+                "unit_id": r[1].unit_id,
+                "unit_name": unit_map.get(r[1].unit_id, "Unidade"),
+                "value": round(r[0].value, 2),
+                "pct_of_total": round(r[0].value / total, 4) if total else 0.0,
+            }
+            for r in results
+        ],
+        key=lambda x: abs(x["value"]),
+        reverse=True,
+    )
+
+    return {
+        "period": period,
+        "code": code,
+        "total": round(total, 2),
+        "units": units_data,
+    }
+
+
 @router.get("/business/{business_id}/units-comparison")
 def units_comparison(
     business_id: str,

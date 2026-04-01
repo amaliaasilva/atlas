@@ -10,6 +10,7 @@ import type {
   ServicePlan, ServicePlanInput,
   DREResponse, AuditTraceResponse, AnnualSummaryResponse, PortfolioResponse,
   PeriodTraceResponse,
+  PeriodCodeBreakdownResponse,
 } from '@/types/api';
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -194,9 +195,23 @@ export const dashboardApi = {
         params: { scenario_id, ...(unit_ids.length > 0 ? { unit_ids } : {}) },
       })
       .then((r) => r.data),
-  // Drill-down: cálculo detalhado de um período (utilidades, pessoal)
+  // Drill-down: cálculo detalhado de um período (single unit)
   periodTrace: (version_id: string, period: string): Promise<PeriodTraceResponse> =>
     api.get<PeriodTraceResponse>(`/dashboard/unit/${version_id}/period-trace/${period}`).then((r) => r.data),
+
+  // Drill-down: contribuição de cada unidade para um código DRE num período (multi-unit)
+  periodCodeBreakdown: (
+    business_id: string,
+    scenario_id: string,
+    period: string,
+    code: string,
+    unit_ids: string[],
+  ): Promise<PeriodCodeBreakdownResponse> =>
+    api
+      .get<PeriodCodeBreakdownResponse>(`/dashboard/business/${business_id}/period-code-breakdown`, {
+        params: { scenario_id, period, code, unit_ids },
+      })
+      .then((r) => r.data),
 };
 
 // ── Reports ───────────────────────────────────────────────────────────────────
