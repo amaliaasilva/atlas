@@ -603,3 +603,35 @@ export interface CalendarExceptionOut {
   notes?: string;
   created_at: string;
 }
+
+// ── Drill-down de período (DRE) ───────────────────────────────────────────────
+export interface PeriodTraceResponse {
+  period: string;
+  has_trace: boolean;
+  utilities?: {
+    total: number;
+    electricity: number;
+    water: number;
+    internet_phone: number;
+    electricity_fixed: number;
+    electricity_variable: number;
+    water_fixed: number;
+    water_variable: number;
+    occupancy_rate_used: number;
+  };
+  staff?: {
+    total: number;
+    gross_payroll: number;
+    clt_base: number;
+    pro_labore: number;
+    social_charges: number;
+    benefits: number;
+  };
+  revenue?: {
+    occupancy_rate: number;
+    capacity_hours_month: number;
+    active_hours_month: number;
+  };
+  admin?: { total: number };
+  marketing?: { total: number };
+}

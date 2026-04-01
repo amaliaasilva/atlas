@@ -9,6 +9,7 @@ import type {
   FinancingContract, FinancingContractInput,
   ServicePlan, ServicePlanInput,
   DREResponse, AuditTraceResponse, AnnualSummaryResponse, PortfolioResponse,
+  PeriodTraceResponse,
 } from '@/types/api';
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -177,6 +178,9 @@ export const dashboardApi = {
         params: { scenario_id, ...(unit_ids.length > 0 ? { unit_ids } : {}) },
       })
       .then((r) => r.data),
+  // Drill-down: cálculo detalhado de um período (utilidades, pessoal)
+  periodTrace: (version_id: string, period: string): Promise<PeriodTraceResponse> =>
+    api.get<PeriodTraceResponse>(`/dashboard/unit/${version_id}/period-trace/${period}`).then((r) => r.data),
 };
 
 // ── Reports ───────────────────────────────────────────────────────────────────

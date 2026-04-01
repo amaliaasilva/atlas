@@ -422,6 +422,76 @@ def _build_annual_from_time_series(time_series: list, summable_codes: list) -> l
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+@router.get("/unit/{version_id}/period-trace/{period}")
+def unit_period_trace(
+    version_id: str,
+    period: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Retorna o cálculo detalhado (drill-down) para um período específico.
+    Extrai do calculation_trace salvo junto ao net_result.
+    Usado para o popover de drill-down na DRETable.
+    """
+    result = (
+        db.query(CalculatedResult)
+        .join(LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id)
+        .filter(
+            CalculatedResult.budget_version_id == version_id,
+            CalculatedResult.period_date == period,
+            LineItemDefinition.code == "net_result",
+        )
+        .first()
+    )
+
+    if not result or not result.calculation_trace:
+        return {"period": period, "has_trace": False}
+
+    trace = result.calculation_trace
+    util = trace.get("fixed_costs", {}).get("detail", {}).get("utilities", {})
+    util_detail = util.get("detail", {})
+    staff = trace.get("fixed_costs", {}).get("detail", {}).get("staff", {})
+    revenue_trace = trace.get("revenue", {})
+    admin = trace.get("fixed_costs", {}).get("detail", {}).get("admin", {})
+    marketing = trace.get("fixed_costs", {}).get("detail", {}).get("marketing", {})
+
+    return {
+        "period": period,
+        "has_trace": True,
+        "utilities": {
+            "total": round(util.get("total_utilities", 0.0), 2),
+            "electricity": round(util.get("electricity", 0.0), 2),
+            "water": round(util.get("water", 0.0), 2),
+            "internet_phone": round(util.get("internet_phone", 0.0), 2),
+            "electricity_fixed": round(util_detail.get("electricity_fixed", 0.0), 2),
+            "electricity_variable": round(util_detail.get("electricity_variable", 0.0), 2),
+            "water_fixed": round(util_detail.get("water_fixed", 0.0), 2),
+            "water_variable": round(util_detail.get("water_variable", 0.0), 2),
+            "occupancy_rate_used": round(util_detail.get("occupancy_rate_used", 0.0), 4),
+        },
+        "staff": {
+            "total": round(staff.get("total_staff", 0.0), 2),
+            "gross_payroll": round(staff.get("gross_payroll", 0.0), 2),
+            "clt_base": round(staff.get("clt_base", 0.0), 2),
+            "pro_labore": round(staff.get("pro_labore", 0.0), 2),
+            "social_charges": round(staff.get("social_charges", 0.0), 2),
+            "benefits": round(staff.get("benefits", 0.0), 2),
+        },
+        "revenue": {
+            "occupancy_rate": round(revenue_trace.get("occupancy_rate", 0.0), 4),
+            "capacity_hours_month": round(revenue_trace.get("capacity_hours_month", 0.0), 1),
+            "active_hours_month": round(revenue_trace.get("active_hours_month", 0.0), 1),
+        },
+        "admin": {
+            "total": round(admin.get("total_admin", 0.0) if isinstance(admin, dict) else 0.0, 2),
+        },
+        "marketing": {
+            "total": round(marketing.get("total_marketing", 0.0) if isinstance(marketing, dict) else 0.0, 2),
+        },
+    }
+
+
 @router.get("/unit/{version_id}/dre")
 def unit_dre(
     version_id: str,

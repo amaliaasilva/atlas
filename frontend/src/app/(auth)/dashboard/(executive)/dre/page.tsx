@@ -235,7 +235,12 @@ export default function DREPage() {
         {isLoading ? (
           <ChartSkeleton />
         ) : displayData ? (
-          <DRETable data={displayData} onExportCsv={unitId ? handleExport : undefined} isExporting={isExporting} />
+          <DRETable
+            data={displayData}
+            versionId={granularity === 'monthly' ? activeVersion?.id : undefined}
+            onExportCsv={unitId ? handleExport : undefined}
+            isExporting={isExporting}
+          />
         ) : (
           <NoFiltersState message="Nenhuma versão publicada encontrada. Execute o cálculo nas unidades primeiro." />
         )}
