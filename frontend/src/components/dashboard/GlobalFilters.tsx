@@ -210,6 +210,19 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
     enabled: !!filters.businessId && showUnit,
   });
 
+  // Auto-seleciona o cenário "base" (ou o primeiro disponível) quando o negócio
+  // é selecionado mas nenhum cenário está ativo — comum em novo dispositivo.
+  useEffect(() => {
+    if (!filters.businessId) return;
+    if (filters.scenarioId) return;
+    if (scenarios.length === 0) return;
+    const preferred =
+      scenarios.find((s) => s.scenario_type === 'base') ?? scenarios[0];
+    filters.setScenarioId(preferred.id);
+    nav.setScenario(preferred.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scenarios.length, filters.businessId, filters.scenarioId]);
+
   const selectedUnitsKey = useMemo(
     () => [...filters.selectedUnitIds].sort().join(','),
     [filters.selectedUnitIds],

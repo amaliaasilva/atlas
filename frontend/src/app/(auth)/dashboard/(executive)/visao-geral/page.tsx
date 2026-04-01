@@ -13,7 +13,7 @@ import { getRevenue } from '@/types/api';
 import type { AuditReport } from '@/types/api';
 import { DollarSign, TrendingUp, Target, Building2, TrendingDown, Calendar, Shield, ShieldAlert, BarChart2, Clock, Activity, Percent } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { UnitLifecycleBadge } from '@/components/ui/UnitLifecycleBadge';
+import { UnitDateChip } from '@/components/ui/UnitLifecycleBadge';
 
 const STATUS_PRIORITY: Record<string, number> = { published: 0, draft: 1, planning: 2 };
 
@@ -173,7 +173,14 @@ export default function VisaoGeralPage() {
 
   const totalUnits = units.length;
   const nonClosedUnits = units.filter((u) => u.status !== 'closed').length;
-  const futureUnits = units.filter((u) => u.opening_phase === 'future').sort((a, b) => (a.days_to_opening ?? 9999) - (b.days_to_opening ?? 9999));
+  // Respeita o filtro de unidades: se há seleção ativa, só mostra unidades selecionadas
+  const futureUnits = units
+    .filter((u) => {
+      if (u.opening_phase !== 'future') return false;
+      if (selectedUnitIds.length > 0 && !selectedUnitIds.includes(u.id)) return false;
+      return true;
+    })
+    .sort((a, b) => (a.days_to_opening ?? 9999) - (b.days_to_opening ?? 9999));
 
   // Auditoria AI
   const auditMutation = useMutation({
@@ -394,37 +401,39 @@ export default function VisaoGeralPage() {
                 {futureUnits.length}
               </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {futureUnits.map((unit) => (
-                <div key={unit.id} className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col gap-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-bold text-gray-800 leading-tight">{unit.name}</span>
-                    {unit.days_to_opening != null && (
-                      <span className="shrink-0 text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">
-                        {unit.days_to_opening}d
-                      </span>
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {futureUnits.map((unit) => {
+                const days = unit.days_to_opening ?? 0;
+                const urgency = days <= 30 ? 'rose' : days <= 90 ? 'amber' : 'indigo';
+                const colors = {
+                  rose:   { card: 'border-rose-200 bg-rose-50',     dot: 'bg-rose-500 animate-pulse',    label: 'text-rose-800',     days: 'text-rose-700' },
+                  amber:  { card: 'border-amber-200 bg-amber-50',   dot: 'bg-amber-500 animate-pulse',   label: 'text-amber-800',    days: 'text-amber-700' },
+                  indigo: { card: 'border-indigo-100 bg-indigo-50', dot: 'bg-indigo-400',                label: 'text-indigo-800',   days: 'text-indigo-700' },
+                }[urgency];
+                const openingFmt = unit.opening_date
+                  ? new Date(unit.opening_date + 'T00:00:00').toLocaleDateString('pt-BR', {
+                      day: '2-digit', month: 'short', year: 'numeric',
+                    })
+                  : '';
+                return (
+                  <div key={unit.id} className={`shrink-0 rounded-2xl border p-4 min-w-[180px] max-w-[210px] flex flex-col gap-1.5 ${colors.card}`}>
+                    <p className={`text-xs font-bold leading-tight ${colors.label}`}>{unit.name}</p>
+                    {unit.city && (
+                      <p className={`text-[10px] opacity-60 ${colors.label}`}>
+                        {unit.city}{unit.state ? `, ${unit.state}` : ''}
+                      </p>
+                    )}
+                    <div className="flex items-baseline gap-1 mt-1">
+                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${colors.dot}`} />
+                      <span className={`text-2xl font-black tabular-nums leading-none ${colors.days}`}>{days}</span>
+                      <span className={`text-xs opacity-70 ${colors.label}`}>dias</span>
+                    </div>
+                    {openingFmt && (
+                      <p className={`text-[10px] opacity-50 ${colors.label}`}>{openingFmt}</p>
                     )}
                   </div>
-                  {unit.city && (
-                    <p className="text-xs text-gray-400">{unit.city}{unit.state ? `, ${unit.state}` : ''}</p>
-                  )}
-                  <UnitLifecycleBadge unit={unit} size="sm" />
-                  {unit.days_to_opening != null && (
-                    <div className="mt-1">
-                      <div className="flex justify-between text-[10px] text-amber-600 mb-1">
-                        <span>Hoje</span>
-                        <span>Abertura</span>
-                      </div>
-                      <div className="h-1.5 bg-amber-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-amber-500 rounded-full transition-all"
-                          style={{ width: `${Math.max(4, Math.min(96, 100 - (unit.days_to_opening / 365) * 100))}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}
