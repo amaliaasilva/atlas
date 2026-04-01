@@ -68,7 +68,8 @@ export default function DREPage() {
   const { businessId, scenarioId, selectedUnitIds } = useDashboardFilters();
   const queryClient = useQueryClient();
   const [isExporting, setIsExporting] = useState(false);
-  const [granularity, setGranularity] = useState<DREGranularity>('monthly');
+  const [granularity, setGranularity] = useState<DREGranularity>('annual');
+  const [selectedYear, setSelectedYear] = useState<string | null>(null);
 
   const unitId = selectedUnitIds.length === 1 ? selectedUnitIds[0] : null;
 
@@ -112,11 +113,21 @@ export default function DREPage() {
       ? dreConsolidatedToResponse(dreConsolidated)
       : null;
 
-  // Deriva a visão anual quando necessário
+  // Anos disponíveis no dado mensal (para seletor de ano)
+  const availableYears = useMemo(() => {
+    if (!rawData) return [];
+    return Array.from(new Set(rawData.dre.map((p) => p.period.slice(0, 4)))).sort();
+  }, [rawData]);
+
+  // Deriva a visão anual quando necessário; no modo mensal filtra por ano selecionado
   const displayData = useMemo(() => {
     if (!rawData) return null;
-    return granularity === 'annual' ? aggregateDREToAnnual(rawData) : rawData;
-  }, [rawData, granularity]);
+    if (granularity === 'annual') return aggregateDREToAnnual(rawData);
+    if (selectedYear) {
+      return { ...rawData, dre: rawData.dre.filter((p) => p.period.startsWith(selectedYear)) };
+    }
+    return rawData;
+  }, [rawData, granularity, selectedYear]);
 
   async function handleExport() {
     if (!activeVersion) return;
@@ -177,7 +188,7 @@ export default function DREPage() {
                 {(['monthly', 'annual'] as DREGranularity[]).map((g) => (
                   <button
                     key={g}
-                    onClick={() => setGranularity(g)}
+                    onClick={() => { setGranularity(g); if (g === 'annual') setSelectedYear(null); }}
                   className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
                     granularity === g
                       ? 'bg-white shadow text-slate-800'
@@ -189,6 +200,37 @@ export default function DREPage() {
               ))}              </div>            </div>
           )}
         </div>
+
+        {/* Seletor de ano — visível apenas no modo mensal */}
+        {granularity === 'monthly' && availableYears.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap bg-white border border-gray-200 rounded-xl px-4 py-2.5">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Ano</span>
+            <div className="h-4 w-px bg-gray-200" />
+            <div className="flex items-center gap-1 flex-wrap">
+              {availableYears.map((y) => (
+                <button
+                  key={y}
+                  onClick={() => setSelectedYear(selectedYear === y ? null : y)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                    selectedYear === y
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-600 hover:bg-indigo-50 hover:text-indigo-700'
+                  }`}
+                >
+                  {y}
+                </button>
+              ))}
+              {selectedYear && (
+                <button
+                  onClick={() => setSelectedYear(null)}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 text-gray-500 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                >
+                  Todos
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {isLoading ? (
           <ChartSkeleton />

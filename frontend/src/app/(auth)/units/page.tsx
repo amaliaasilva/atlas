@@ -198,9 +198,20 @@ export default function UnitsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Unit> }) => unitsApi.update(id, data),
-    onSuccess: () => {
+    mutationFn: async ({ id, data, recalc }: { id: string; data: Partial<Unit>; recalc: boolean }) => {
+      await unitsApi.update(id, data);
+      if (recalc) {
+        const versions = await versionsApi.list(id);
+        const active = versions.filter((v) => v.status !== 'archived');
+        await Promise.allSettled(active.map((v) => calculationsApi.recalculate(v.id)));
+      }
+    },
+    onSuccess: (_, { recalc }) => {
       queryClient.invalidateQueries({ queryKey: ['units', effectiveBusinessId] });
+      if (recalc) {
+        queryClient.invalidateQueries({ queryKey: ['dre'] });
+        queryClient.invalidateQueries({ queryKey: ['dre-consolidated'] });
+      }
       setEditUnit(null);
     },
   });
@@ -230,7 +241,8 @@ export default function UnitsPage() {
   const handleUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editUnit || !form.name || !form.code) return;
-    updateMutation.mutate({ id: editUnit.id, data: form as unknown as Partial<Unit> });
+    const recalc = (form.opening_date || null) !== (editUnit.opening_date || null);
+    updateMutation.mutate({ id: editUnit.id, data: form as unknown as Partial<Unit>, recalc });
   };
 
   const openEdit = (unit: Unit) => {
