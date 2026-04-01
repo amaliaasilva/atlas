@@ -122,13 +122,16 @@ def _build_inputs_for_version(
     # Período de abertura real (YYYY-MM), usado para suprimir receita antes dele
     actual_opening_period = (
         f"{actual_opening_date.year}-{actual_opening_date.month:02d}"
-        if actual_opening_date else None
+        if actual_opening_date
+        else None
     )
 
     # Fração do mês de abertura: aplicada ao PRIMEIRO MÊS REAL de operação.
     # Ex.: abertura dia 2 de agosto → (31 - 2 + 1) / 31 ≈ 0,968
     if actual_opening_date and actual_opening_date.day > 1:
-        days_in_month = _cal.monthrange(actual_opening_date.year, actual_opening_date.month)[1]
+        days_in_month = _cal.monthrange(
+            actual_opening_date.year, actual_opening_date.month
+        )[1]
         _first_month_fraction = round(
             (days_in_month - actual_opening_date.day + 1) / days_in_month, 4
         )
@@ -149,7 +152,9 @@ def _build_inputs_for_version(
             .all()
         )
         base_year = (
-            horizon_opening.year if horizon_opening else (int(periods[0][:4]) if periods else 2026)
+            horizon_opening.year
+            if horizon_opening
+            else (int(periods[0][:4]) if periods else 2026)
         )
         for defn in all_defns:
             # Base value: estático (period=None) > primeiro período > default_value
@@ -377,8 +382,12 @@ def _build_inputs_for_version(
             # GAP-02: mix real de planos (Bronze/Prata/Ouro/Diamante) do banco
             service_plans=service_plan_mix,
             # ── Legado (mantido para compat. de versões antigas) ──────────────
-            max_students=0 if _is_pre_opening else int(_get(values, "alunos_capacidade_maxima", p, default=0)),
-            occupancy_rate=0.0 if _is_pre_opening else _get(values, "taxa_ocupacao", p, default=0.0),
+            max_students=0
+            if _is_pre_opening
+            else int(_get(values, "alunos_capacidade_maxima", p, default=0)),
+            occupancy_rate=0.0
+            if _is_pre_opening
+            else _get(values, "taxa_ocupacao", p, default=0.0),
             avg_ticket_monthly=_get(
                 values, "ticket_medio_plano_mensal", p, default=0.0
             ),
@@ -389,13 +398,15 @@ def _build_inputs_for_version(
             mix_monthly_pct=_get(values, "mix_plano_mensal_pct", p, default=1.0),
             mix_quarterly_pct=_get(values, "mix_plano_trimestral_pct", p, default=0.0),
             mix_annual_pct=_get(values, "mix_plano_anual_pct", p, default=0.0),
-            num_personal_trainers=0 if _is_pre_opening else int(
-                _get(values, "num_personal_trainers", p, default=0)
-            ),
-            avg_personal_revenue_month=0.0 if _is_pre_opening else _get(
-                values, "receita_media_personal_mes", p, default=0.0
-            ),
-            other_revenue=0.0 if _is_pre_opening else _get(values, "outras_receitas", p, default=0.0),
+            num_personal_trainers=0
+            if _is_pre_opening
+            else int(_get(values, "num_personal_trainers", p, default=0)),
+            avg_personal_revenue_month=0.0
+            if _is_pre_opening
+            else _get(values, "receita_media_personal_mes", p, default=0.0),
+            other_revenue=0.0
+            if _is_pre_opening
+            else _get(values, "outras_receitas", p, default=0.0),
         )
 
         fixed = FixedCostInputs(
