@@ -14,6 +14,7 @@ import type { AuditReport } from '@/types/api';
 import { DollarSign, TrendingUp, Target, Building2, TrendingDown, Calendar, Shield, ShieldAlert, BarChart2, Clock, Activity, Percent } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UnitDateChip } from '@/components/ui/UnitLifecycleBadge';
+import { UnitRoadmap } from '@/components/charts/UnitRoadmap';
 
 const STATUS_PRIORITY: Record<string, number> = { published: 0, draft: 1, planning: 2 };
 
@@ -391,7 +392,14 @@ export default function VisaoGeralPage() {
           </div>
         </section>
 
-        {/* Próximas Aberturas */}
+        {/* Roadmap de Expansão — todas as unidades com datas editáveis */}
+        {!unitId && businessId && (
+          <section>
+            <UnitRoadmap businessId={businessId} editable />
+          </section>
+        )}
+
+        {/* Próximas Aberturas (chips de urgência, mantido como complemento ao roadmap) */}
         {!unitId && futureUnits.length > 0 && (
           <section>
             <div className="mb-3 flex items-center gap-2">

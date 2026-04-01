@@ -13,6 +13,7 @@ import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils';
 import { getRevenue } from '@/types/api';
 import { aggregateByYear, resolveAnnualData } from '@/lib/utils/dashboard';
 import { TrendingUp, Building2, BarChart2 } from 'lucide-react';
+import { StackedContributionChart } from '@/components/charts/StackedContributionChart';
 
 export default function CrescimentoPage() {
   const { businessId, scenarioId, selectedUnitIds, year, periodStart, periodEnd } = useDashboardFilters();
@@ -22,6 +23,21 @@ export default function CrescimentoPage() {
   const { data: dashboard, isLoading } = useQuery({
     queryKey: ['dashboard-consolidated', businessId, scenarioId, unitScopeKey],
     queryFn: () => dashboardApi.consolidated(businessId!, scenarioId!, unitScope),
+    enabled: !!businessId && !!scenarioId,
+  });
+
+  // FE-C-03: consome endpoint /annual do backend (agora utilizado)
+  const { data: annualResponse } = useQuery({
+    queryKey: ['dashboard-annual', businessId, scenarioId, unitScopeKey],
+    queryFn: () => dashboardApi.annual(businessId!, scenarioId!, unitScope),
+    enabled: !!businessId && !!scenarioId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // FE-B-02: dados por unidade para Stacked Bar (revenue por unidade por ano)
+  const { data: unitsComparison } = useQuery({
+    queryKey: ['units-comparison-revenue', businessId, scenarioId, 'revenue_total'],
+    queryFn: () => dashboardApi.unitsComparison(businessId!, scenarioId!, 'revenue_total'),
     enabled: !!businessId && !!scenarioId,
   });
 
@@ -67,6 +83,20 @@ export default function CrescimentoPage() {
   const yoyGrowth = prevYear && prevYear.revenue > 0
     ? (lastYear.revenue - prevYear.revenue) / prevYear.revenue
     : 0;
+
+  // Monta dados para o StackedContributionChart: por unidade, receita anual
+  const stackedUnits = (unitsComparison?.units ?? []).map((u) => {
+    // series é Record<period, value> onde period = "YYYY-MM" e value = receita mensal
+    const byYear = new Map<string, number>();
+    for (const [period, value] of Object.entries(u.series)) {
+      const yr = String(period).slice(0, 4);
+      byYear.set(yr, (byYear.get(yr) ?? 0) + (value as number));
+    }
+    return {
+      unit_name: u.unit_name,
+      annual: Array.from(byYear.entries()).map(([year, revenue]) => ({ year, revenue })),
+    };
+  });
 
   const unitsByStatus = {
     active: units.filter((u) => u.status === 'active').length,
@@ -174,6 +204,16 @@ export default function CrescimentoPage() {
             </>
           )}
         </section>
+
+        {/* FE-B-02: Stacked bar de receita por unidade */}
+        {!isLoading && stackedUnits.length > 1 && (
+          <section>
+            <StackedContributionChart
+              units={stackedUnits}
+              title="Expansão da Receita por Unidade — Evolução Anual"
+            />
+          </section>
+        )}
 
         {/* Tabela de evolução anual */}
         {!isLoading && annualData.length > 0 && (

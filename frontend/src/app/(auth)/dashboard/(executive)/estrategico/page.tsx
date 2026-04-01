@@ -21,6 +21,7 @@ import { aggregateByYear, resolveAnnualData } from '@/lib/utils/dashboard';
 import { PortfolioTable } from '@/components/tables/PortfolioTable';
 import { UnitRevSparkline } from '@/components/charts/UnitRevSparkline';
 import { UnitDateChip, UnitOpeningProgress } from '@/components/ui/UnitLifecycleBadge';
+import { UnitRoadmap } from '@/components/charts/UnitRoadmap';
 import type { Unit } from '@/types/api';
 
 const SCENARIO_LABELS: Record<string, string> = {
@@ -332,6 +333,13 @@ export default function EstrategicoPage() {
             <StatusPill status={overallStatus} />
           </div>
         </div>
+
+        {/* Timeline de Expansão — roadmap editável de todas as unidades */}
+        {businessId && (
+          <section>
+            <UnitRoadmap businessId={businessId} editable />
+          </section>
+        )}
 
         {/* Hero KPIs estratégicos */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
