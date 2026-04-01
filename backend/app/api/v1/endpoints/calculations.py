@@ -93,32 +93,47 @@ def _build_inputs_for_version(
         db.query(Unit).filter(Unit.id == version.unit_id).first() if version else None
     )
 
-    opening = None
+    # ── Determina horizonte temporal ────────────────────────────────────────
+    # `horizon_opening` = início da projeção (pode ser antes da abertura real,
+    #   para capturar custos pré-operacionais). Usa effective_start_date se
+    #   existir, caso contrário unit.opening_date.
+    # `actual_opening_date` = data real de abertura da unidade (unit.opening_date).
+    #   Meses ANTES desta data: receita = 0, custos mantidos.
+    horizon_opening = None
     if version and version.effective_start_date:
-        opening = version.effective_start_date
+        horizon_opening = version.effective_start_date
     elif unit and unit.opening_date:
-        opening = unit.opening_date
+        horizon_opening = unit.opening_date
+
+    # Data real de abertura — sempre do modelo Unit, independente do horizonte
+    actual_opening_date = unit.opening_date if unit else None
 
     horizon_years = (version.projection_horizon_years or 10) if version else 10
 
-    if opening:
-        periods = generate_horizon_periods(opening, horizon_years)
+    if horizon_opening:
+        periods = generate_horizon_periods(horizon_opening, horizon_years)
     else:
         # Fallback: usa períodos já gravados nos assumption_values
         periods = sorted(set(p for (_, p) in values.keys() if p is not None))
 
-    # Fração do mês de abertura: se a unidade abre no dia 15 de abril, apenas os
-    # dias 15–30 são contabilizados (aprox. 16/30 ≈ 0,53 do mês).
-    # Meses anteriores à abertura NÃO entram na lista de períodos.
-    if opening and opening.day > 1:
-        days_in_month = _cal.monthrange(opening.year, opening.month)[1]
+    if not periods:
+        periods = ["2026-11"]
+
+    # Período de abertura real (YYYY-MM), usado para suprimir receita antes dele
+    actual_opening_period = (
+        f"{actual_opening_date.year}-{actual_opening_date.month:02d}"
+        if actual_opening_date else None
+    )
+
+    # Fração do mês de abertura: aplicada ao PRIMEIRO MÊS REAL de operação.
+    # Ex.: abertura dia 2 de agosto → (31 - 2 + 1) / 31 ≈ 0,968
+    if actual_opening_date and actual_opening_date.day > 1:
+        days_in_month = _cal.monthrange(actual_opening_date.year, actual_opening_date.month)[1]
         _first_month_fraction = round(
-            (days_in_month - opening.day + 1) / days_in_month, 4
+            (days_in_month - actual_opening_date.day + 1) / days_in_month, 4
         )
     else:
         _first_month_fraction = 1.0
-        if not periods:
-            periods = ["2026-11"]
 
     # ── ETAPA-2: Expande premissas via growth_rule ─────────────────────────
     # ETAPA-2: Expande TODAS as definições para todos os períodos.
@@ -134,7 +149,7 @@ def _build_inputs_for_version(
             .all()
         )
         base_year = (
-            opening.year if opening else (int(periods[0][:4]) if periods else 2026)
+            horizon_opening.year if horizon_opening else (int(periods[0][:4]) if periods else 2026)
         )
         for defn in all_defns:
             # Base value: estático (period=None) > primeiro período > default_value
@@ -317,6 +332,16 @@ def _build_inputs_for_version(
     for idx, period in enumerate(periods):
         p = period  # alias
 
+        # ── Pré-abertura: meses antes de unit.opening_date têm receita = 0 ────
+        # A projeção pode começar antes da abertura (CAPEX, pré-operacional).
+        # A receita só conta a partir do mês em que a unidade realmente abre.
+        _is_pre_opening = (
+            actual_opening_period is not None and period < actual_opening_period
+        )
+        _is_opening_month = (
+            actual_opening_period is not None and period == actual_opening_period
+        )
+
         # ── BE-A-05: CalendarService — dias úteis e sábados reais ─────────────
         # Se o usuário não cadastrou um valor explícito de "dias_uteis_mes" para
         # este período, usa o CalendarService que considera feriados nacionais.
@@ -352,8 +377,8 @@ def _build_inputs_for_version(
             # GAP-02: mix real de planos (Bronze/Prata/Ouro/Diamante) do banco
             service_plans=service_plan_mix,
             # ── Legado (mantido para compat. de versões antigas) ──────────────
-            max_students=int(_get(values, "alunos_capacidade_maxima", p, default=0)),
-            occupancy_rate=_get(values, "taxa_ocupacao", p, default=0.0),
+            max_students=0 if _is_pre_opening else int(_get(values, "alunos_capacidade_maxima", p, default=0)),
+            occupancy_rate=0.0 if _is_pre_opening else _get(values, "taxa_ocupacao", p, default=0.0),
             avg_ticket_monthly=_get(
                 values, "ticket_medio_plano_mensal", p, default=0.0
             ),
@@ -364,13 +389,13 @@ def _build_inputs_for_version(
             mix_monthly_pct=_get(values, "mix_plano_mensal_pct", p, default=1.0),
             mix_quarterly_pct=_get(values, "mix_plano_trimestral_pct", p, default=0.0),
             mix_annual_pct=_get(values, "mix_plano_anual_pct", p, default=0.0),
-            num_personal_trainers=int(
+            num_personal_trainers=0 if _is_pre_opening else int(
                 _get(values, "num_personal_trainers", p, default=0)
             ),
-            avg_personal_revenue_month=_get(
+            avg_personal_revenue_month=0.0 if _is_pre_opening else _get(
                 values, "receita_media_personal_mes", p, default=0.0
             ),
-            other_revenue=_get(values, "outras_receitas", p, default=0.0),
+            other_revenue=0.0 if _is_pre_opening else _get(values, "outras_receitas", p, default=0.0),
         )
 
         fixed = FixedCostInputs(
@@ -450,8 +475,8 @@ def _build_inputs_for_version(
                 financing_contracts=contract_inputs,
                 financing=financing,
                 taxes=TaxInputs(tax_rate_on_revenue=tax_rate),
-                # Fração do mês: só < 1.0 no primeiro período quando opening.day > 1
-                month_fraction=_first_month_fraction if idx == 0 else 1.0,
+                # Fração do primeiro mês real de operação (abertura no meio do mês)
+                month_fraction=_first_month_fraction if _is_opening_month else 1.0,
             )
         )
 
