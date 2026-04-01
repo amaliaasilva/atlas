@@ -219,7 +219,7 @@ export default function UnitsPage() {
   // Mutation específica para abertura: salva + recalcula todas as versões ativas
   const updateOpeningDateMutation = useMutation({
     mutationFn: async ({ id, date }: { id: string; date: string | null }) => {
-      await unitsApi.update(id, { opening_date: date || null });
+      await unitsApi.update(id, { opening_date: date ?? undefined });
       const versions = await versionsApi.list(id);
       const active = versions.filter((v) => v.status !== 'archived');
       await Promise.allSettled(active.map((v) => calculationsApi.recalculate(v.id)));
