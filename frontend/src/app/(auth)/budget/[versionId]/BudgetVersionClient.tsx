@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
 import { LoadingScreen } from '@/components/ui/Spinner';
 import { cn, formatPeriod, getErrorMessage } from '@/lib/utils';
-import { Save, PlayCircle, ChevronDown, ChevronRight, Plus, Trash2, TrendingUp, Zap, History, SlidersHorizontal, X } from 'lucide-react';
+import { Save, PlayCircle, ChevronDown, ChevronRight, Plus, Trash2, TrendingUp, Zap, History, SlidersHorizontal, X, Edit3 } from 'lucide-react';
 
 // ── Gera lista de períodos entre dois meses ────────────────────────────────────
 function generatePeriods(start: string, end: string): string[] {
@@ -124,6 +124,13 @@ export default function BudgetVersionClient() {
     ratePct: 0,
     curveValues: '',
   });
+  const [bulkEditDef, setBulkEditDef] = useState<AssumptionDefinition | null>(null);
+  const [bulkMode, setBulkMode] = useState<'zero' | 'range_months' | 'range_years'>('zero');
+  const [bulkValue, setBulkValue] = useState(0);
+  const [bulkFromPeriod, setBulkFromPeriod] = useState('');
+  const [bulkToPeriod, setBulkToPeriod] = useState('');
+  const [bulkFromYear, setBulkFromYear] = useState('');
+  const [bulkToYear, setBulkToYear] = useState('');
 
   const { businessId } = useNavStore();
 
@@ -364,6 +371,32 @@ export default function BudgetVersionClient() {
     }
 
     updateRuleMutation.mutate({ definitionId: editingRuleDef.id, growthRule });
+  };
+
+  const applyBulkEdit = () => {
+    if (!bulkEditDef) return;
+    const code = bulkEditDef.code;
+    if (bulkEditDef.periodicity === 'static') {
+      setPendingChanges((prev) => ({ ...prev, [`${code}::static`]: bulkMode === 'zero' ? 0 : bulkValue }));
+      setBulkEditDef(null);
+      return;
+    }
+    let periodsToUpdate: string[] = [];
+    if (bulkMode === 'zero') {
+      periodsToUpdate = allPeriods;
+    } else if (bulkMode === 'range_months') {
+      if (!bulkFromPeriod || !bulkToPeriod) return;
+      periodsToUpdate = generatePeriods(bulkFromPeriod, bulkToPeriod);
+    } else {
+      if (!bulkFromYear || !bulkToYear) return;
+      periodsToUpdate = generatePeriods(`${bulkFromYear}-01`, `${bulkToYear}-12`);
+    }
+    const entries: Record<string, number> = {};
+    periodsToUpdate.filter((p) => allPeriods.includes(p)).forEach((p) => {
+      entries[`${code}::${p}`] = bulkMode === 'zero' ? 0 : bulkValue;
+    });
+    setPendingChanges((prev) => ({ ...prev, ...entries }));
+    setBulkEditDef(null);
   };
 
   // Bulk upsert — salva apenas mudanças pendentes
@@ -814,6 +847,127 @@ export default function BudgetVersionClient() {
           </div>
         )}
 
+        {/* Modal de edição em bloco */}
+        {bulkEditDef && (
+          <div className="fixed inset-0 z-40 bg-black/30 flex items-center justify-center p-4">
+            <div className="w-full max-w-md rounded-xl bg-white border border-gray-200 shadow-xl">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Editar linha em bloco</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{bulkEditDef.name}</p>
+                </div>
+                <button type="button" onClick={() => setBulkEditDef(null)} className="text-gray-400 hover:text-gray-700">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="px-4 py-4 space-y-4">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBulkMode('zero')}
+                    className={cn('flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors', bulkMode === 'zero' ? 'bg-rose-50 border-rose-400 text-rose-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50')}
+                  >
+                    Zerar toda a linha
+                  </button>
+                  {bulkEditDef.periodicity !== 'static' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setBulkMode('range_months')}
+                        className={cn('flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors', bulkMode === 'range_months' ? 'bg-indigo-50 border-indigo-400 text-indigo-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50')}
+                      >
+                        Por meses
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBulkMode('range_years')}
+                        className={cn('flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors', bulkMode === 'range_years' ? 'bg-sky-50 border-sky-400 text-sky-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50')}
+                      >
+                        Por anos
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {bulkMode === 'zero' && (
+                  <p className="text-xs text-gray-500">
+                    {bulkEditDef.periodicity === 'static'
+                      ? 'O valor estático será zerado.'
+                      : `Todos os ${allPeriods.length} períodos serão zerados.`}
+                  </p>
+                )}
+
+                {bulkMode !== 'zero' && (
+                  <label className="text-xs text-gray-600 block">
+                    Valor
+                    <input
+                      type="number"
+                      step="any"
+                      value={bulkValue}
+                      onChange={(e) => setBulkValue(parseFloat(e.target.value) || 0)}
+                      className="mt-1 w-full rounded border border-gray-300 px-2 py-2 text-sm"
+                    />
+                  </label>
+                )}
+
+                {bulkMode === 'range_months' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="text-xs text-gray-600 block">
+                      De (mês)
+                      <select
+                        value={bulkFromPeriod}
+                        onChange={(e) => setBulkFromPeriod(e.target.value)}
+                        className="mt-1 w-full rounded border border-gray-300 px-2 py-2 text-sm bg-white"
+                      >
+                        {allPeriods.map((p) => <option key={p} value={p}>{formatPeriod(p)}</option>)}
+                      </select>
+                    </label>
+                    <label className="text-xs text-gray-600 block">
+                      Até (mês)
+                      <select
+                        value={bulkToPeriod}
+                        onChange={(e) => setBulkToPeriod(e.target.value)}
+                        className="mt-1 w-full rounded border border-gray-300 px-2 py-2 text-sm bg-white"
+                      >
+                        {allPeriods.map((p) => <option key={p} value={p}>{formatPeriod(p)}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                )}
+
+                {bulkMode === 'range_years' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="text-xs text-gray-600 block">
+                      De (ano)
+                      <select
+                        value={bulkFromYear}
+                        onChange={(e) => setBulkFromYear(e.target.value)}
+                        className="mt-1 w-full rounded border border-gray-300 px-2 py-2 text-sm bg-white"
+                      >
+                        {availableYears.map((yr) => <option key={yr} value={yr}>{yr}</option>)}
+                      </select>
+                    </label>
+                    <label className="text-xs text-gray-600 block">
+                      Até (ano)
+                      <select
+                        value={bulkToYear}
+                        onChange={(e) => setBulkToYear(e.target.value)}
+                        className="mt-1 w-full rounded border border-gray-300 px-2 py-2 text-sm bg-white"
+                      >
+                        {availableYears.map((yr) => <option key={yr} value={yr}>{yr}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                )}
+              </div>
+              <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setBulkEditDef(null)}>Cancelar</Button>
+                <Button size="sm" onClick={applyBulkEdit}>Aplicar</Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Tabela de premissas para o ano selecionado */}
         <div className="flex-1 overflow-auto rounded-xl border border-gray-200 bg-white">
           <table className="w-full text-sm border-collapse">
@@ -871,6 +1025,22 @@ export default function BudgetVersionClient() {
                             {def.periodicity === 'static' && (
                               <span className="text-xs bg-gray-100 text-gray-500 px-1 rounded">fixo</span>
                             )}
+                            <button
+                              type="button"
+                              className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-indigo-600 rounded px-1 py-0.5 shrink-0"
+                              title="Editar linha em bloco"
+                              onClick={() => {
+                                setBulkEditDef(def);
+                                setBulkMode('zero');
+                                setBulkValue(0);
+                                setBulkFromPeriod(allPeriods[0] ?? '');
+                                setBulkToPeriod(allPeriods[allPeriods.length - 1] ?? '');
+                                setBulkFromYear(availableYears[0] ?? '');
+                                setBulkToYear(availableYears[availableYears.length - 1] ?? '');
+                              }}
+                            >
+                              <Edit3 className="h-3 w-3" />
+                            </button>
                           </div>
                         </td>
                         <td className="px-1 py-1 text-center">
