@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import String, Text, ForeignKey, Enum as SAEnum, UniqueConstraint
+from sqlalchemy import String, Text, ForeignKey, Enum as SAEnum, UniqueConstraint, Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 from app.core.database import Base
@@ -31,6 +31,8 @@ class Scenario(Base, TimestampMixin):
     )
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
+    # Multiplicador aplicado sobre taxa_ocupacao do cenário base (1.0 = sem ajuste)
+    occupancy_multiplier: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
 
     __table_args__ = (
         UniqueConstraint("business_id", "name", name="uq_scenario_business_name"),

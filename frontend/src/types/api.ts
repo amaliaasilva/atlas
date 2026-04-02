@@ -44,6 +44,7 @@ export interface Scenario {
   name: string;
   scenario_type: 'base' | 'conservative' | 'aggressive' | 'custom';
   description?: string;
+  occupancy_multiplier: number;
 }
 
 export interface BudgetVersion {

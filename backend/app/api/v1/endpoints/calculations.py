@@ -14,6 +14,7 @@ from app.api.v1.deps import get_current_user
 from app.models.user import User
 from app.models.unit import Unit
 from app.models.budget_version import BudgetVersion
+from app.models.scenario import Scenario
 from app.models.assumption import (
     AssumptionValue,
     AssumptionDefinition,
@@ -92,6 +93,41 @@ def _build_inputs_for_version(
     unit = (
         db.query(Unit).filter(Unit.id == version.unit_id).first() if version else None
     )
+
+    # ── Multiplicador de Ocupação: herda taxa_ocupacao do cenário base ──────
+    # Se o scenario desta versão tem occupancy_multiplier != 1.0, substitui os
+    # valores de taxa_ocupacao pelos do cenário base × multiplier.
+    if version and unit:
+        scenario = db.query(Scenario).filter(Scenario.id == version.scenario_id).first()
+        if scenario and abs((scenario.occupancy_multiplier or 1.0) - 1.0) > 1e-9 and scenario.scenario_type != "base":
+            # Busca cenário base do mesmo business
+            base_scenario = (
+                db.query(Scenario)
+                .filter(
+                    Scenario.business_id == scenario.business_id,
+                    Scenario.scenario_type == "base",
+                    Scenario.is_active == True,
+                )
+                .first()
+            )
+            if base_scenario:
+                # Busca versão base para a mesma unidade
+                base_version = (
+                    db.query(BudgetVersion)
+                    .filter(
+                        BudgetVersion.unit_id == unit.id,
+                        BudgetVersion.scenario_id == base_scenario.id,
+                        BudgetVersion.is_active == True,
+                    )
+                    .first()
+                )
+                if base_version:
+                    base_values = _load_assumption_values(base_version.id, db)
+                    mult = scenario.occupancy_multiplier
+                    # Substitui todos os valores de taxa_ocupacao pela versão base × mult
+                    for (code, period), val in base_values.items():
+                        if code == "taxa_ocupacao":
+                            values[(code, period)] = min(val * mult, 1.0)
 
     # ── Determina horizonte temporal ────────────────────────────────────────
     # `horizon_opening` = início da projeção (pode ser antes da abertura real,

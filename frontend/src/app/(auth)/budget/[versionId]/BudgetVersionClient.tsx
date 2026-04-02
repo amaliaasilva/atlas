@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { assumptionsApi, versionsApi, calculationsApi, financingContractsApi, aiApi, auditApi } from '@/lib/api';
+import { assumptionsApi, versionsApi, calculationsApi, financingContractsApi, aiApi, auditApi, scenariosApi } from '@/lib/api';
 import { useNavStore } from '@/store/auth';
 import type {
   AssumptionValue,
@@ -164,6 +164,26 @@ export default function BudgetVersionClient() {
     queryKey: ['audit-version', versionId],
     queryFn: () => auditApi.byEntity('assumption_value', versionId),
     enabled: showHistory,
+  });
+
+  // Cenário desta versão — carregado para exibir/editar multiplicador de ocupação
+  const { data: scenario } = useQuery({
+    queryKey: ['scenario', version?.scenario_id],
+    queryFn: () => scenariosApi.get(version!.scenario_id),
+    enabled: !!version?.scenario_id,
+  });
+
+  const [occMultiplierInput, setOccMultiplierInput] = useState<string>('');
+
+  const saveMultiplierMutation = useMutation({
+    mutationFn: (pct: number) =>
+      scenariosApi.update(scenario!.id, { occupancy_multiplier: pct / 100 }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scenario', version?.scenario_id] });
+      setToast('Multiplicador de ocupação salvo! Recalcule para aplicar.');
+      setTimeout(() => setToast(''), 4000);
+    },
+    onError: (err) => setToast(`Erro: ${getErrorMessage(err)}`),
   });
 
   const addContractMutation = useMutation({
@@ -494,6 +514,63 @@ export default function BudgetVersionClient() {
         {toast && (
           <div className="mb-4 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-2 text-sm text-emerald-700">
             {toast}
+          </div>
+        )}
+
+        {/* Multiplicador de Ocupação — visível apenas para cenários não-base */}
+        {scenario && scenario.scenario_type !== 'base' && (
+          <div className="mb-5 rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-indigo-900">
+                  Multiplicador de Ocupação — Cenário {scenario.name}
+                </p>
+                <p className="text-xs text-indigo-600 mt-0.5">
+                  Define quanto deste cenário usa da <span className="font-medium">taxa de ocupação do cenário base</span>.
+                  Ex: 115% = agressivo, 80% = conservador. O valor salvo aqui é aplicado automaticamente no próximo Recalcular.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    step="1"
+                    min="1"
+                    max="300"
+                    className="w-20 rounded border border-indigo-300 bg-white px-2 py-1.5 text-sm text-center font-semibold text-indigo-900 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                    value={occMultiplierInput !== '' ? occMultiplierInput : String(Math.round((scenario.occupancy_multiplier ?? 1) * 100))}
+                    onChange={(e) => setOccMultiplierInput(e.target.value)}
+                    onFocus={() => setOccMultiplierInput(String(Math.round((scenario.occupancy_multiplier ?? 1) * 100)))}
+                  />
+                  <span className="text-sm font-semibold text-indigo-700">%</span>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const pct = parseFloat(occMultiplierInput);
+                    if (!isNaN(pct) && pct > 0) {
+                      saveMultiplierMutation.mutate(pct);
+                      setOccMultiplierInput('');
+                    }
+                  }}
+                  loading={saveMultiplierMutation.isPending}
+                  disabled={occMultiplierInput === ''}
+                >
+                  Salvar
+                </Button>
+              </div>
+            </div>
+            <div className="mt-2 flex items-center gap-4 text-xs text-indigo-500">
+              <span>
+                Atual: <span className="font-semibold text-indigo-700">{Math.round((scenario.occupancy_multiplier ?? 1) * 100)}%</span> da taxa do cenário base
+              </span>
+              {scenario.scenario_type === 'aggressive' && (
+                <span className="text-emerald-600 font-medium">↑ Cenário Agressivo</span>
+              )}
+              {scenario.scenario_type === 'conservative' && (
+                <span className="text-amber-600 font-medium">↓ Cenário Conservador</span>
+              )}
+            </div>
           </div>
         )}
 
