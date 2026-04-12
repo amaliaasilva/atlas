@@ -97,12 +97,14 @@ def upgrade() -> None:
             sa.text(
                 "INSERT INTO line_item_definitions "
                 "(id, business_id, code, name, category, subcategory, "
-                " calculation_type, display_order, is_kpi, is_subtotal, "
+                " calculation_type, display_order, indent_level, "
+                " is_kpi, is_subtotal, is_visible, "
                 " created_at, updated_at) "
                 "VALUES "
                 "(:id, :bid, 'other_variable_costs', 'Outros Custos Variáveis', "
                 " 'variable_cost', 'other_variable', "
-                " 'formula', 24, false, false, "
+                " 'formula', 24, 0, "
+                " false, false, true, "
                 " NOW(), NOW())"
             ),
             {"id": new_id, "bid": business_id},
