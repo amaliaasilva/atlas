@@ -19,7 +19,6 @@ Duas correções:
 
 from alembic import op
 import sqlalchemy as sa
-import uuid
 
 revision = "g4c1a7e9b2d5"
 down_revision = "f3b12c4d5e6f"
@@ -46,7 +45,10 @@ DERIVED_DISPLAY_CODES = (
 def upgrade() -> None:
     conn = op.get_bind()
 
-    # 1. Marca derived/display codes como include_in_dre=False
+    # Marca os codes derivados/preview como include_in_dre=False.
+    # Esses valores são calculados client-side apenas para exibição e
+    # não devem entrar no motor de cálculo como inputs (seriam somados 2x).
+    # A operação é idempotente (safe para rodar N vezes).
     codes_list = ", ".join(f"'{c}'" for c in DERIVED_DISPLAY_CODES)
     conn.execute(
         sa.text(
@@ -55,67 +57,14 @@ def upgrade() -> None:
             f"WHERE code IN ({codes_list})"
         )
     )
-
-    # 2. Insere other_variable_costs em todos os negócios que ainda não têm
-    # Busca business_ids que já têm line items (evita criar em DBs sem seed)
-    existing_businesses = conn.execute(
-        sa.text(
-            "SELECT DISTINCT business_id FROM line_item_definitions "
-            "WHERE business_id IS NOT NULL"
-        )
-    ).fetchall()
-
-    for row in existing_businesses:
-        business_id = row[0]
-
-        # Verifica se já existe
-        exists = conn.execute(
-            sa.text(
-                "SELECT id FROM line_item_definitions "
-                "WHERE code = 'other_variable_costs' AND business_id = :bid"
-            ),
-            {"bid": business_id},
-        ).fetchone()
-
-        if exists:
-            # Garante que display_order e category estejam corretos
-            conn.execute(
-                sa.text(
-                    "UPDATE line_item_definitions "
-                    "SET display_order = 24, "
-                    "    category = 'variable_cost', "
-                    "    subcategory = 'other_variable', "
-                    "    name = 'Outros Custos Variáveis' "
-                    "WHERE code = 'other_variable_costs' AND business_id = :bid"
-                ),
-                {"bid": business_id},
-            )
-            continue
-
-        new_id = str(uuid.uuid4())
-        conn.execute(
-            sa.text(
-                "INSERT INTO line_item_definitions "
-                "(id, business_id, code, name, category, subcategory, "
-                " calculation_type, display_order, indent_level, "
-                " is_kpi, is_subtotal, is_visible, "
-                " created_at, updated_at) "
-                "VALUES "
-                "(:id, :bid, 'other_variable_costs', 'Outros Custos Variáveis', "
-                " 'variable_cost', 'other_variable', "
-                " 'formula', 24, 0, "
-                " false, false, true, "
-                " NOW(), NOW())"
-            ),
-            {"id": new_id, "bid": business_id},
-        )
+    # Nota: a criação do line item 'other_variable_costs' é feita pelo seed
+    # run_seeds() que roda logo após este upgrade (ver job atlas-migrate).
 
 
 def downgrade() -> None:
     conn = op.get_bind()
 
     # Reverte include_in_dre para True nos derived codes
-    # (retorna ao estado anterior — podem causar double-count se ativados)
     codes_list = ", ".join(f"'{c}'" for c in DERIVED_DISPLAY_CODES)
     conn.execute(
         sa.text(
@@ -125,7 +74,7 @@ def downgrade() -> None:
         )
     )
 
-    # Remove o line item criado (apenas os sem CalculatedResult associado)
+    # Remove o line item criado apenas se não houver CalculatedResult referenciando
     conn.execute(
         sa.text(
             "DELETE FROM line_item_definitions "

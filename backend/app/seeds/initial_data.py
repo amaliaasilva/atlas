@@ -1156,7 +1156,7 @@ LINE_ITEM_DEFINITIONS = [
         "Outros Custos Variáveis",
         "variable_cost",
         "other_variable",
-        24,
+        27,
         False,
         False,
         False,
