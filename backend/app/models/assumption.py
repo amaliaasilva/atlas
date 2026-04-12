@@ -107,6 +107,10 @@ class AssumptionDefinition(Base, TimestampMixin):
     )
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    include_in_dre: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
+    ui_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # ARCH-01: granularidade explícita (monthly / yearly / one_time)
     granularity: Mapped[str] = mapped_column(
         String(20), nullable=False, default="monthly"

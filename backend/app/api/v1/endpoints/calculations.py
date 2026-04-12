@@ -4,6 +4,7 @@ Dispara o motor financeiro para recalcular uma versão de orçamento.
 """
 
 import calendar as _cal
+import unicodedata
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -38,8 +39,23 @@ from app.services.financial_engine.consolidator import consolidate_business
 from app.services.financial_engine.utils import generate_horizon_periods
 from app.services.financial_engine.expander import expand_assumption
 from app.services.calendar_service import calendar_service
+from app.models.calculated_result import CalculatedResult
+from app.models.line_item import LineItemDefinition
 
 router = APIRouter()
+
+DEFAULT_TAX_GROWTH_RULE = {
+    "type": "curve",
+    "values": [0.06, 0.1633, 0.1633, 0.1633, 0.1633, 0.1633, 0.1633],
+}
+
+WORKING_CAPITAL_CODE = "capital_giro_inicial"
+WORKING_CAPITAL_BURN_NO_REVENUE_MONTHS_CODE = "caixa_meses_burn_sem_receita"
+WORKING_CAPITAL_BURN_WITH_REVENUE_MONTHS_CODE = "caixa_meses_com_receita"
+WORKING_CAPITAL_BURN_NO_REVENUE_MONTHS_CODE_LEGACY = "meses_de_burn_sem_receita_caixa"
+WORKING_CAPITAL_BURN_WITH_REVENUE_MONTHS_CODE_LEGACY = "meses_considerando_receita_caixa"
+DEFAULT_BURN_NO_REVENUE_MONTHS = 3.0
+DEFAULT_BURN_WITH_REVENUE_MONTHS = 9.0
 
 
 def _load_assumption_values(version_id: str, db: Session) -> dict:
@@ -58,6 +74,14 @@ def _load_assumption_values(version_id: str, db: Session) -> dict:
     )
     result = {}
     for val, defn in rows:
+        if (
+            val.period_date is not None
+            and val.source_type == "calculated"
+            and defn.growth_rule
+        ):
+            # Valores autoexpandidos não devem bloquear uma nova growth_rule.
+            continue
+
         key = (defn.code, val.period_date)
         result[key] = (
             val.value_numeric
@@ -75,6 +99,169 @@ def _get(
     return float(v) if v is not None else default
 
 
+def _upsert_assumption_value(
+    *,
+    db: Session,
+    version_id: str,
+    assumption_definition_id: str,
+    numeric_value: float,
+    updated_by: str,
+    period_date: str | None = None,
+    source_type: str = "derived",
+) -> None:
+    row = (
+        db.query(AssumptionValue)
+        .filter(
+            AssumptionValue.budget_version_id == version_id,
+            AssumptionValue.assumption_definition_id == assumption_definition_id,
+            AssumptionValue.period_date == period_date,
+        )
+        .first()
+    )
+    if row:
+        row.value_numeric = numeric_value
+        row.source_type = source_type
+        row.updated_by = updated_by
+        return
+
+    db.add(
+        AssumptionValue(
+            budget_version_id=version_id,
+            assumption_definition_id=assumption_definition_id,
+            period_date=period_date,
+            value_numeric=numeric_value,
+            source_type=source_type,
+            updated_by=updated_by,
+        )
+    )
+
+
+def _auto_update_working_capital_from_results(
+    *,
+    db: Session,
+    version: BudgetVersion,
+    updated_by: str,
+) -> None:
+    unit = db.query(Unit).filter(Unit.id == version.unit_id).first()
+    if not unit:
+        return
+
+    definitions = (
+        db.query(AssumptionDefinition)
+        .filter(
+            AssumptionDefinition.business_id == unit.business_id,
+            AssumptionDefinition.code.in_(
+                [
+                    WORKING_CAPITAL_CODE,
+                    WORKING_CAPITAL_BURN_NO_REVENUE_MONTHS_CODE,
+                    WORKING_CAPITAL_BURN_WITH_REVENUE_MONTHS_CODE,
+                ]
+            ),
+            AssumptionDefinition.is_active == True,
+        )
+        .all()
+    )
+    def_by_code = {d.code: d for d in definitions}
+    working_cap_def = def_by_code.get(WORKING_CAPITAL_CODE)
+    if not working_cap_def:
+        return
+    if working_cap_def.include_in_dre:
+        working_cap_def.include_in_dre = False
+
+    assump_values = _load_assumption_values(version.id, db)
+
+    def _get_first_available(codes: list[str], default: float) -> float:
+        for code in codes:
+            if (code, None) in assump_values:
+                return _get(assump_values, code, default=default)
+        return default
+
+    burn_no_revenue_months = _get_first_available(
+        [
+            WORKING_CAPITAL_BURN_NO_REVENUE_MONTHS_CODE,
+            WORKING_CAPITAL_BURN_NO_REVENUE_MONTHS_CODE_LEGACY,
+        ],
+        DEFAULT_BURN_NO_REVENUE_MONTHS,
+    )
+    burn_with_revenue_months = _get_first_available(
+        [
+            WORKING_CAPITAL_BURN_WITH_REVENUE_MONTHS_CODE,
+            WORKING_CAPITAL_BURN_WITH_REVENUE_MONTHS_CODE_LEGACY,
+        ],
+        DEFAULT_BURN_WITH_REVENUE_MONTHS,
+    )
+
+    rows = (
+        db.query(
+            CalculatedResult.period_date,
+            LineItemDefinition.code,
+            CalculatedResult.value,
+        )
+        .join(LineItemDefinition, CalculatedResult.line_item_id == LineItemDefinition.id)
+        .filter(
+            CalculatedResult.budget_version_id == version.id,
+            LineItemDefinition.code.in_(
+                ["revenue_total", "total_variable_costs", "total_fixed_costs"]
+            ),
+        )
+        .all()
+    )
+
+    if not rows:
+        return
+
+    period_metrics: dict[str, dict[str, float]] = {}
+    for period, code, value in rows:
+        period_metrics.setdefault(period, {})[code] = float(value or 0.0)
+
+    periods = sorted(period_metrics.keys())[:12]
+    if not periods:
+        return
+
+    burn_no_revenue_values: list[float] = []
+    burn_with_revenue_values: list[float] = []
+    for period in periods:
+        metrics = period_metrics.get(period, {})
+        revenue = abs(float(metrics.get("revenue_total", 0.0)))
+        variable_costs = abs(float(metrics.get("total_variable_costs", 0.0)))
+        fixed_costs = abs(float(metrics.get("total_fixed_costs", 0.0)))
+        total_costs = variable_costs + fixed_costs
+        monthly_result = revenue - total_costs
+
+        burn_no_revenue_values.append(total_costs)
+        burn_with_revenue_values.append(max(0.0, -monthly_result))
+
+    avg_burn_no_revenue = sum(burn_no_revenue_values) / len(burn_no_revenue_values)
+    avg_burn_with_revenue = sum(burn_with_revenue_values) / len(burn_with_revenue_values)
+
+    required_by_no_revenue = avg_burn_no_revenue * max(0.0, burn_no_revenue_months)
+    required_by_with_revenue = avg_burn_with_revenue * max(0.0, burn_with_revenue_months)
+    working_capital_value = round(
+        max(required_by_no_revenue, required_by_with_revenue),
+        2,
+    )
+
+    first_period = periods[0]
+    _upsert_assumption_value(
+        db=db,
+        version_id=version.id,
+        assumption_definition_id=working_cap_def.id,
+        numeric_value=working_capital_value,
+        updated_by=updated_by,
+        period_date=None,
+        source_type="derived",
+    )
+    _upsert_assumption_value(
+        db=db,
+        version_id=version.id,
+        assumption_definition_id=working_cap_def.id,
+        numeric_value=working_capital_value,
+        updated_by=updated_by,
+        period_date=first_period,
+        source_type="derived",
+    )
+
+
 def _build_inputs_for_version(
     version_id: str, db: Session
 ) -> tuple[list[FinancialInputs], CapexInputs, list[str]]:
@@ -82,9 +269,9 @@ def _build_inputs_for_version(
     Constrói a lista de FinancialInputs por período e o CapexInputs
     a partir dos assumption_values de uma versão.
 
-    ETAPA-1: Usa opening_date + projection_horizon_years para gerar o
-    horizonte de 120 meses, independentemente de quantos AssumptionValues
-    com period_date existirem.
+    ETAPA-1: Usa a janela configurada na BudgetVersion (início + fim explícito
+    ou projection_horizon_years) para gerar todo o horizonte temporal,
+    independentemente de quantos AssumptionValues com period_date existirem.
     """
     values = _load_assumption_values(version_id, db)
 
@@ -141,13 +328,24 @@ def _build_inputs_for_version(
     elif unit and unit.opening_date:
         horizon_opening = unit.opening_date
 
-    # Data real de abertura — sempre do modelo Unit, independente do horizonte
-    actual_opening_date = unit.opening_date if unit else None
+    # Início operacional usado no recálculo:
+    # se a versão definiu um horizonte inicial explícito, ele tem prioridade;
+    # caso contrário, usa a opening_date da unidade.
+    actual_opening_date = (
+        version.effective_start_date
+        if version and version.effective_start_date
+        else (unit.opening_date if unit else None)
+    )
 
-    horizon_years = (version.projection_horizon_years or 10) if version else 10
+    horizon_years = (version.projection_horizon_years or 9) if version else 9
+    horizon_ending = version.effective_end_date if version else None
 
     if horizon_opening:
-        periods = generate_horizon_periods(horizon_opening, horizon_years)
+        periods = generate_horizon_periods(
+            horizon_opening,
+            horizon_years,
+            ending_date=horizon_ending,
+        )
     else:
         # Fallback: usa períodos já gravados nos assumption_values
         periods = sorted(set(p for (_, p) in values.keys() if p is not None))
@@ -184,7 +382,10 @@ def _build_inputs_for_version(
     if unit:
         all_defns = (
             db.query(AssumptionDefinition)
-            .filter(AssumptionDefinition.business_id == unit.business_id)
+            .filter(
+                AssumptionDefinition.business_id == unit.business_id,
+                AssumptionDefinition.is_active == True,
+            )
             .all()
         )
         base_year = (
@@ -203,7 +404,12 @@ def _build_inputs_for_version(
                         break
             if base is None:
                 base = defn.default_value or 0.0
-            rule = defn.growth_rule or {"type": "flat"}
+            rule = defn.growth_rule
+            if defn.code == "aliquota_imposto_receita" and (
+                not rule or rule.get("type") == "flat"
+            ):
+                rule = DEFAULT_TAX_GROWTH_RULE
+            rule = rule or {"type": "flat"}
             expanded = expand_assumption(rule, float(base), periods, base_year)
             for period, val in expanded.items():
                 # Só preenche se NÃO houver valor explícito para esse período
@@ -213,19 +419,96 @@ def _build_inputs_for_version(
     # ── ARCH-04: Mapeamento code → category_code para soma dinâmica ───────
     # Carrega todas as definições do negócio para identificar categorias
     code_category_map: dict[str, str] = {}
+    code_data_type_map: dict[str, str] = {}
+    code_include_in_dre_map: dict[str, bool] = {}
     if unit:
         all_defns_with_cat = (
-            db.query(AssumptionDefinition.code, AssumptionCategory.code)
+            db.query(
+                AssumptionDefinition.code,
+                AssumptionCategory.code,
+                AssumptionDefinition.data_type,
+                AssumptionDefinition.include_in_dre,
+            )
             .join(
                 AssumptionCategory,
                 AssumptionDefinition.category_id == AssumptionCategory.id,
             )
-            .filter(AssumptionDefinition.business_id == unit.business_id)
+            .filter(
+                AssumptionDefinition.business_id == unit.business_id,
+                AssumptionDefinition.is_active == True,
+            )
             .all()
         )
         code_category_map = {
-            defn_code: cat_code for defn_code, cat_code in all_defns_with_cat
+            defn_code: cat_code
+            for defn_code, cat_code, _, _ in all_defns_with_cat
         }
+        code_data_type_map = {
+            defn_code: data_type
+            for defn_code, _, data_type, _ in all_defns_with_cat
+        }
+        code_include_in_dre_map = {
+            defn_code: include_in_dre
+            for defn_code, _, _, include_in_dre in all_defns_with_cat
+        }
+
+    def _is_salary_like_fixed_code(code: str) -> bool:
+        normalized = (
+            unicodedata.normalize("NFKD", code)
+            .encode("ascii", "ignore")
+            .decode("ascii")
+            .lower()
+        )
+        return normalized.startswith("salario_")
+
+    DRE_DRIVER_ONLY_CODES = {
+        "slots_por_hora",
+        "horas_dia_util",
+        "horas_dia_sabado",
+        "dias_uteis_mes",
+        "sabados_mes",
+        "taxa_ocupacao",
+        "preco_medio_hora",
+        "ticket_medio_plano_mensal",
+        "ticket_medio_plano_trimestral",
+        "ticket_medio_plano_anual",
+        "mix_plano_mensal_pct",
+        "mix_plano_trimestral_pct",
+        "mix_plano_anual_pct",
+        "mix_diamante_pct",
+        "mix_ouro_pct",
+        "mix_prata_pct",
+        "mix_bronze_pct",
+        "custo_energia_fixo",
+        "custo_energia_variavel_max",
+        "automacao_reducao_pct",
+        "custo_agua_fixo",
+        "custo_agua_variavel_max",
+        "kwh_consumo_mensal",
+        "tarifa_kwh",
+        "consumo_agua_m3_mensal",
+        "tarifa_agua_m3",
+        "encargos_folha_pct",
+        "beneficios_por_funcionario",
+        "num_funcionarios",
+        "kit_higiene_por_aluno",
+        "comissao_vendas_pct",
+        "taxa_cartao_pct",
+        "aliquota_imposto_receita",
+    }
+
+    def _dre_enabled(code: str) -> bool:
+        return code_include_in_dre_map.get(code, True)
+
+    def _get_dre_value(code: str, period: str | None = None, default: float = 0.0) -> float:
+        if not _dre_enabled(code):
+            return 0.0
+        return _get(values, code, period, default=default)
+
+    def _get_input_value(code: str, period: str | None = None, default: float = 0.0) -> float:
+        if code in DRE_DRIVER_ONLY_CODES or code.startswith("salario_"):
+            return _get(values, code, period, default=default)
+        return _get_dre_value(code, period, default=default)
 
     # Codes já mapeados em inputs estruturados — não devem ser somados duas vezes
     KNOWN_FIXED_CODES = {
@@ -274,18 +557,32 @@ def _build_inputs_for_version(
         "taxa_cartao_pct",
         "outros_custos_variaveis",
     }
+    KNOWN_TAX_CODES = {
+        "aliquota_imposto_receita",
+        "taxa_cartao_pct",  # handled via variable_costs.card_fee_rate — must not be added to tax_rate
+    }
 
     # Identifica codes desconhecidos por categoria (conjuntos reutilizados no loop)
     extra_fixed_codes = {
         code
         for (code, _) in values.keys()
-        if code not in KNOWN_FIXED_CODES and code_category_map.get(code) == "CUSTO_FIXO"
+        if code not in KNOWN_FIXED_CODES
+        and code_category_map.get(code) in {"CUSTO_FIXO", "SALARIO"}
+        and code_include_in_dre_map.get(code, True)
     }
     extra_var_codes = {
         code
         for (code, _) in values.keys()
         if code not in KNOWN_VARIABLE_CODES
         and code_category_map.get(code) == "CUSTO_VARIAVEL"
+        and code_include_in_dre_map.get(code, True)
+    }
+    extra_tax_codes = {
+        code
+        for (code, _) in values.keys()
+        if code not in KNOWN_TAX_CODES
+        and code_category_map.get(code) == "FISCAL"
+        and code_include_in_dre_map.get(code, True)
     }
 
     # ── ARCH-02: Carrega múltiplos contratos de financiamento ──────────────
@@ -367,8 +664,6 @@ def _build_inputs_for_version(
         grace_period_months=int(_get(values, "carencia_meses")),
     )
 
-    tax_rate = _get(values, "aliquota_imposto_receita", default=0.06)
-
     inputs_list = []
     for idx, period in enumerate(periods):
         p = period  # alias
@@ -388,20 +683,24 @@ def _build_inputs_for_version(
         # este período, usa o CalendarService que considera feriados nacionais.
         # Fallback final é 22 dias (mantido como constante transitória D-08).
         _unit_id_for_cal = unit.id if unit else None
-        _explicit_working_days = p in {
-            pp for (cc, pp) in values if cc == "dias_uteis_mes"
-        }
-        _explicit_saturdays = p in {pp for (cc, pp) in values if cc == "sabados_mes"}
+        _explicit_working_days = (
+            ("dias_uteis_mes", p) in values or ("dias_uteis_mes", None) in values
+        )
+        _explicit_saturdays = (
+            ("sabados_mes", p) in values or ("sabados_mes", None) in values
+        )
 
         if _explicit_working_days:
-            _working_days = int(_get(values, "dias_uteis_mes", p, default=22))
+            _working_days = float(_get(values, "dias_uteis_mes", p, default=22.0))
         else:
-            _working_days = calendar_service.get_working_days(db, _unit_id_for_cal, p)
+            _working_days = float(
+                calendar_service.get_working_days(db, _unit_id_for_cal, p)
+            )
 
         if _explicit_saturdays:
-            _saturdays = int(_get(values, "sabados_mes", p, default=4))
+            _saturdays = float(_get(values, "sabados_mes", p, default=4.0))
         else:
-            _saturdays = calendar_service.get_saturdays(db, _unit_id_for_cal, p)
+            _saturdays = float(calendar_service.get_saturdays(db, _unit_id_for_cal, p))
 
         revenue = RevenueInputs(
             # ── B2B Coworking (slot/hora) ──────────────────────────────────────
@@ -442,74 +741,94 @@ def _build_inputs_for_version(
             else _get(values, "receita_media_personal_mes", p, default=0.0),
             other_revenue=0.0
             if _is_pre_opening
-            else _get(values, "outras_receitas", p, default=0.0),
+            else _get_input_value("outras_receitas", p, default=0.0),
         )
 
         fixed = FixedCostInputs(
-            rent=_get(values, "aluguel_mensal", p),
-            condo_fee=_get(values, "condominio_mensal", p),
-            iptu=_get(values, "iptu_mensal", p),
-            cleaning_staff_salary=_get(values, "salario_limpeza", p),
-            receptionist_salary=_get(values, "salario_recepcao", p),
-            marketing_staff_salary=_get(values, "salario_marketing", p),
-            commercial_staff_salary=_get(values, "salario_comercial", p),
-            manager_salary=_get(values, "salario_gerente", p),
-            fitness_teacher_salary=_get(values, "salario_educador_fisico", p),
-            pro_labore=_get(values, "pro_labore", p),
-            social_charges_rate=_get(values, "encargos_folha_pct", p, default=0.80),
-            benefits_per_employee=_get(values, "beneficios_por_funcionario", p),
-            num_employees=int(_get(values, "num_funcionarios", p)),
+            rent=_get_input_value("aluguel_mensal", p),
+            condo_fee=_get_input_value("condominio_mensal", p),
+            iptu=_get_input_value("iptu_mensal", p),
+            cleaning_staff_salary=_get_input_value("salario_limpeza", p),
+            receptionist_salary=_get_input_value("salario_recepcao", p),
+            marketing_staff_salary=_get_input_value("salario_marketing", p),
+            commercial_staff_salary=_get_input_value("salario_comercial", p),
+            manager_salary=_get_input_value("salario_gerente", p),
+            fitness_teacher_salary=_get_input_value("salario_educador_fisico", p),
+            pro_labore=_get_input_value("pro_labore", p),
+            social_charges_rate=_get_input_value("encargos_folha_pct", p, default=0.80),
+            benefits_per_employee=_get_input_value("beneficios_por_funcionario", p),
+            num_employees=int(_get_input_value("num_funcionarios", p)),
             # ── Energia: modelo misto (fixo + variável × ocupação) ─────────────
-            fixed_energy_cost=_get(values, "custo_energia_fixo", p, default=0.0),
-            max_variable_energy_cost=_get(
-                values, "custo_energia_variavel_max", p, default=0.0
+            fixed_energy_cost=_get_input_value("custo_energia_fixo", p, default=0.0),
+            max_variable_energy_cost=_get_input_value(
+                "custo_energia_variavel_max", p, default=0.0
             ),
-            automation_reduction=_get(values, "automacao_reducao_pct", p, default=0.0),
+            automation_reduction=_get_input_value("automacao_reducao_pct", p, default=0.0),
             # ── Água: modelo misto (fixo + variável × ocupação) ────────────────
-            fixed_water_cost=_get(values, "custo_agua_fixo", p, default=0.0),
-            max_variable_water_cost=_get(
-                values, "custo_agua_variavel_max", p, default=0.0
+            fixed_water_cost=_get_input_value("custo_agua_fixo", p, default=0.0),
+            max_variable_water_cost=_get_input_value(
+                "custo_agua_variavel_max", p, default=0.0
             ),
             # ── Legado (kWh × tarifa) — usado se fixo/variável = 0 ────────────
-            electricity_kwh=_get(values, "kwh_consumo_mensal", p, default=0.0),
-            electricity_rate=_get(values, "tarifa_kwh", p, default=0.0),
-            water_m3=_get(values, "consumo_agua_m3_mensal", p, default=0.0),
-            water_rate=_get(values, "tarifa_agua_m3", p, default=0.0),
-            internet_phone=_get(values, "internet_telefonia_mensal", p),
-            office_supplies=_get(values, "material_escritorio", p),
-            hygiene_cleaning=_get(values, "higiene_limpeza_mensal", p),
-            management_software=_get(values, "sistema_gestao_mensal", p),
-            legal_fees=_get(values, "juridico_mensal", p),
-            accounting_fees=_get(values, "contabilidade_mensal", p),
-            administrative_services=_get(values, "servicos_administrativos", p),
-            property_insurance=_get(values, "seguro_imovel", p),
-            equipment_insurance=_get(values, "seguro_equipamentos", p),
-            digital_marketing=_get(values, "marketing_digital_mensal", p),
-            brand_materials=_get(values, "material_identidade_visual", p),
-            promotional_materials=_get(values, "material_publicitario", p),
-            depreciation_equipment=_get(values, "depreciacao_equipamentos", p),
-            maintenance_equipment=_get(values, "manutencao_equipamentos", p),
-            security_systems=_get(values, "sistemas_seguranca", p),
-            financial_fees=_get(values, "despesas_financeiras_taxas", p),
+            electricity_kwh=_get_input_value("kwh_consumo_mensal", p, default=0.0),
+            electricity_rate=_get_input_value("tarifa_kwh", p, default=0.0),
+            water_m3=_get_input_value("consumo_agua_m3_mensal", p, default=0.0),
+            water_rate=_get_input_value("tarifa_agua_m3", p, default=0.0),
+            internet_phone=_get_input_value("internet_telefonia_mensal", p),
+            office_supplies=_get_input_value("material_escritorio", p),
+            hygiene_cleaning=_get_input_value("higiene_limpeza_mensal", p),
+            management_software=_get_input_value("sistema_gestao_mensal", p),
+            legal_fees=_get_input_value("juridico_mensal", p),
+            accounting_fees=_get_input_value("contabilidade_mensal", p),
+            administrative_services=_get_input_value("servicos_administrativos", p),
+            property_insurance=_get_input_value("seguro_imovel", p),
+            equipment_insurance=_get_input_value("seguro_equipamentos", p),
+            digital_marketing=_get_input_value("marketing_digital_mensal", p),
+            brand_materials=_get_input_value("material_identidade_visual", p),
+            promotional_materials=_get_input_value("material_publicitario", p),
+            depreciation_equipment=_get_input_value("depreciacao_equipamentos", p),
+            maintenance_equipment=_get_input_value("manutencao_equipamentos", p),
+            security_systems=_get_input_value("sistemas_seguranca", p),
+            financial_fees=_get_input_value("despesas_financeiras_taxas", p),
         )
 
         variable = VariableCostInputs(
-            hygiene_kit_per_student=_get(values, "kit_higiene_por_aluno", p),
-            sales_commission_rate=_get(values, "comissao_vendas_pct", p),
-            card_fee_rate=_get(values, "taxa_cartao_pct", p, default=0.0),
-            other_variable_costs=_get(values, "outros_custos_variaveis", p),
+            hygiene_kit_per_student=_get_input_value("kit_higiene_por_aluno", p),
+            sales_commission_rate=_get_input_value("comissao_vendas_pct", p),
+            card_fee_rate=_get_input_value("taxa_cartao_pct", p, default=0.0),
+            other_variable_costs=_get_input_value("outros_custos_variaveis", p),
         )
+        tax_rate = _get_input_value("aliquota_imposto_receita", p, default=0.06)
 
         # ── ARCH-04: Acumula premissas desconhecidas por categoria ─────────
         for code in extra_fixed_codes:
             extra_val = _get(values, code, p, default=0.0)
-            fixed.other_fixed_costs = round(fixed.other_fixed_costs + extra_val, 2)
+            if _is_salary_like_fixed_code(code):
+                fixed.additional_clt_salary_base = round(
+                    fixed.additional_clt_salary_base + extra_val, 2
+                )
+            else:
+                fixed.other_fixed_costs = round(fixed.other_fixed_costs + extra_val, 2)
 
         for code in extra_var_codes:
             extra_val = _get(values, code, p, default=0.0)
-            variable.other_variable_costs = round(
-                variable.other_variable_costs + extra_val, 2
-            )
+            if code_data_type_map.get(code) == "percentage":
+                variable.other_variable_cost_rate = round(
+                    variable.other_variable_cost_rate + extra_val, 6
+                )
+            else:
+                variable.other_variable_costs = round(
+                    variable.other_variable_costs + extra_val, 2
+                )
+
+        for code in extra_tax_codes:
+            extra_val = _get(values, code, p, default=0.0)
+            if code_data_type_map.get(code) == "percentage":
+                tax_rate = round(tax_rate + extra_val, 6)
+            else:
+                variable.other_variable_costs = round(
+                    variable.other_variable_costs + extra_val, 2
+                )
 
         inputs_list.append(
             FinancialInputs(
@@ -570,6 +889,12 @@ def recalculate_version(
     )
 
     engine.persist(outputs, db)
+    _auto_update_working_capital_from_results(
+        db=db,
+        version=version,
+        updated_by=current_user.id,
+    )
+    db.commit()
 
     return RecalculateResponse(
         budget_version_id=version_id,

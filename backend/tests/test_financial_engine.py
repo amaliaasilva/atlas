@@ -186,7 +186,7 @@ class TestFixedCostsCalculator:
         assert result["rent_total"] == 19_700.0
 
     def test_pro_labore_excluded_from_social_charges(self):
-        """Pro-labore NÃO incide encargos (GAP-04)."""
+        """Pro-labore NÃO incide encargos e benefícios não entram mais no total."""
         inputs = FixedCostInputs(
             cleaning_staff_salary=1_980.0,
             receptionist_salary=2_200.0,
@@ -198,11 +198,11 @@ class TestFixedCostsCalculator:
         staff = calculate_staff_costs(inputs)
         clt_base = 1_980.0 + 2_200.0
         expected_charges = clt_base * 0.80
-        expected_benefits = 2 * 400.0
         assert staff["clt_base"] == pytest.approx(clt_base)
         assert staff["social_charges"] == pytest.approx(expected_charges)
         assert staff["pro_labore"] == pytest.approx(5_000.0)
-        total = clt_base + 5_000.0 + expected_charges + expected_benefits
+        assert staff["benefits"] == pytest.approx(0.0)
+        total = clt_base + 5_000.0 + expected_charges
         assert staff["total_staff"] == pytest.approx(total)
 
     def test_social_charges_not_on_pro_labore(self):
@@ -215,8 +215,20 @@ class TestFixedCostsCalculator:
         assert staff["social_charges"] == pytest.approx(4_180.0 * 0.80)
         assert staff["social_charges"] != pytest.approx((4_180.0 + 5_000.0) * 0.80)
 
+    def test_extra_salary_base_also_receives_social_charges(self):
+        """Salários adicionais em custo fixo entram na base CLT e recebem encargos."""
+        inputs = FixedCostInputs(
+            cleaning_staff_salary=2_000.0,
+            additional_clt_salary_base=3_000.0,
+            social_charges_rate=0.80,
+        )
+        staff = calculate_staff_costs(inputs)
+        assert staff["clt_base"] == pytest.approx(5_000.0)
+        assert staff["social_charges"] == pytest.approx(4_000.0)
+        assert staff["total_staff"] == pytest.approx(9_000.0)
+
     def test_utility_mixed_model_zero_occupancy(self):
-        """0% occ: energia = 4200 * 0.80 = 3360 (automação reduz o total, GAP-01)"""
+        """0% occ: energia = (4200 + 0) × 0.80 = 3360."""
         inputs = FixedCostInputs(
             fixed_energy_cost=4_200.0,
             max_variable_energy_cost=3_000.0,
@@ -231,7 +243,7 @@ class TestFixedCostsCalculator:
         assert result["total_utilities"] == pytest.approx(3_810.0)
 
     def test_utility_mixed_model_full_occupancy(self):
-        """100% occ: energia = (4200 + 3000) * 0.80 = 5760 (GAP-01 corrigido)"""
+        """100% occ: energia = (4200 + 3000) × 0.80 = 5760."""
         inputs = FixedCostInputs(
             fixed_energy_cost=4_200.0,
             max_variable_energy_cost=3_000.0,
@@ -244,7 +256,7 @@ class TestFixedCostsCalculator:
         assert result["water"] == pytest.approx(1_600.0)
 
     def test_utility_mixed_model_25pct(self):
-        """25% occ: energia = (4200 + 3000*0.25) * 0.80 = 3960; água = 300 + 325 = 625 (GAP-01)"""
+        """25% occ: energia = (4200 + 3000 × 0.25) × 0.80 = 3960; água = 300 + 325 = 625."""
         inputs = FixedCostInputs(
             fixed_energy_cost=4_200.0,
             max_variable_energy_cost=3_000.0,
@@ -257,8 +269,7 @@ class TestFixedCostsCalculator:
         assert result["water"] == pytest.approx(625.0)
 
     def test_energy_formula_with_automation(self):
-        """Caso de referência da planilha (GAP-01): occ=12%, automation=20%
-        Energia = (4200 + 3000 * 0.12) * (1 - 0.20) = 4560 * 0.80 = R$ 3.648"""
+        """Energia = (fixo + variável × ocupação) × (1 - automação)."""
         inputs = FixedCostInputs(
             fixed_energy_cost=4_200.0,
             max_variable_energy_cost=3_000.0,
@@ -300,6 +311,13 @@ class TestVariableCostsCalculator:
             inputs, active_students=121, gross_revenue=7_236.0
         )
         assert result["sales_commission_cost"] == pytest.approx(7_236.0 * 0.035)
+
+    def test_other_rate_based_variable_costs_also_scale_with_revenue(self):
+        inputs = VariableCostInputs(other_variable_cost_rate=0.06, other_variable_costs=120.0)
+        result = calculate_total_variable_costs(
+            inputs, active_students=121, gross_revenue=7_236.0
+        )
+        assert result["other_variable_costs"] == pytest.approx(120.0 + 7_236.0 * 0.06)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -21,6 +21,11 @@ Prioridade de resolução do valor por período (maior → menor):
 from __future__ import annotations
 
 
+def _normalize_float(value: float, decimals: int = 10) -> float:
+    """Remove artefatos de ponto flutuante sem perder precisão útil."""
+    return round(float(value), decimals)
+
+
 def expand_compound_growth(
     base_value: float,
     annual_rate: float,
@@ -36,7 +41,9 @@ def expand_compound_growth(
       "2028-03" → 19000 * 1.10^2 = 22.990
     """
     return {
-        p: base_value * (1.0 + annual_rate) ** max(0, int(p[:4]) - base_year)
+        p: _normalize_float(
+            base_value * (1.0 + annual_rate) ** max(0, int(p[:4]) - base_year)
+        )
         for p in periods
     }
 
@@ -45,20 +52,27 @@ def expand_curve(
     annual_values: list[float],
     periods: list[str],
     opening_year: int | None = None,
+    opening_period: str | None = None,
 ) -> dict[str, float]:
     """
-    Cada elemento de annual_values corresponde a um ano de projeção.
-    Se opening_year for fornecido, o índice é calculado como (ano_do_período - opening_year),
-    garantindo que unidades abertas em anos futuros recebam Ano 0 da curva no seu primeiro mês.
-    Sem opening_year, usa posição sequencial (comportamento legado).
+    Cada elemento de annual_values corresponde ao valor do ANO civil da projeção.
+
+    Ex.: se a projeção começa em 2026-08, o primeiro valor vale de ago/2026 até dez/2026.
+    Na virada para 2027-01, passa a usar o próximo item da curva.
     """
-    base_year = opening_year if opening_year is not None else None
+    base_year = opening_year
+    if base_year is None and opening_period:
+        base_year = int(opening_period[:4])
+    if base_year is None and periods:
+        base_year = int(periods[0][:4])
+
     result: dict[str, float] = {}
     for i, p in enumerate(periods):
         if base_year is not None:
             year_idx = max(0, int(p[:4]) - base_year)
         else:
             year_idx = i // 12
+
         if year_idx < len(annual_values):
             result[p] = annual_values[year_idx]
         else:
@@ -132,7 +146,17 @@ def expand_assumption(
             if base_year is not None
             else (int(periods[0][:4]) if periods else None)
         )
-        return expand_curve(annual_values, periods, opening_year=opening_year)
+        opening_period = (
+            growth_rule.get("start_month")
+            or growth_rule.get("base_period")
+            or (periods[0] if periods else None)
+        )
+        return expand_curve(
+            annual_values,
+            periods,
+            opening_year=opening_year,
+            opening_period=opening_period,
+        )
 
     elif rule_type == "annual_step":
         return expand_annual_step(

@@ -81,7 +81,9 @@ def update_unit(
         )
         for version in active_versions:
             version.effective_start_date = unit.opening_date
-            horizon_years = version.projection_horizon_years or 10
+            if version.effective_end_date and version.effective_end_date >= unit.opening_date:
+                continue
+            horizon_years = version.projection_horizon_years or 9
             version.effective_end_date = (
                 unit.opening_date
                 + relativedelta(months=horizon_years * 12)

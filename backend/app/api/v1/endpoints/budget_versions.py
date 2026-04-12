@@ -19,6 +19,13 @@ from app.schemas.budget_version import (
 router = APIRouter()
 
 
+def _projection_years_from_dates(start, end, fallback: int = 9) -> int:
+    if not start or not end:
+        return fallback
+    total_months = (end.year - start.year) * 12 + (end.month - start.month) + 1
+    return max(1, (total_months + 11) // 12)
+
+
 @router.get("", response_model=list[BudgetVersionOut])
 def list_budget_versions(
     unit_id: str | None = Query(None),
@@ -63,11 +70,17 @@ def create_budget_version(
 
     # Calcula effective_end_date a partir do horizonte se não fornecido
     if data.effective_start_date and not data.effective_end_date:
-        horizon_years = data.projection_horizon_years or 10
+        horizon_years = data.projection_horizon_years or 9
         data.effective_end_date = (
             data.effective_start_date
             + relativedelta(months=horizon_years * 12)
             - relativedelta(days=1)
+        )
+    elif data.effective_start_date and data.effective_end_date:
+        data.projection_horizon_years = _projection_years_from_dates(
+            data.effective_start_date,
+            data.effective_end_date,
+            data.projection_horizon_years or 9,
         )
 
     version = BudgetVersion(**data.to_db(), created_by=current_user.id)
@@ -99,8 +112,27 @@ def update_budget_version(
     v = db.query(BudgetVersion).filter(BudgetVersion.id == version_id).first()
     if not v:
         raise HTTPException(status_code=404, detail="Versão não encontrada")
-    for k, val in data.model_dump(exclude_none=True).items():
+    payload = data.model_dump(
+        exclude_none=True,
+        exclude={"name", "horizon_start", "horizon_end"},
+    )
+    for k, val in payload.items():
         setattr(v, k, val)
+
+    if v.effective_start_date and v.effective_end_date:
+        v.projection_horizon_years = _projection_years_from_dates(
+            v.effective_start_date,
+            v.effective_end_date,
+            v.projection_horizon_years or 9,
+        )
+    elif v.effective_start_date and payload.get("projection_horizon_years"):
+        horizon_years = v.projection_horizon_years or 9
+        v.effective_end_date = (
+            v.effective_start_date
+            + relativedelta(months=horizon_years * 12)
+            - relativedelta(days=1)
+        )
+
     db.commit()
     db.refresh(v)
     return v

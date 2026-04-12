@@ -32,6 +32,8 @@ class AssumptionDefinitionBase(BaseModel):
     periodicity: str = "monthly"
     applies_to: str = "version"
     sort_order: int = 0
+    include_in_dre: bool = True
+    ui_config: dict | None = None
 
 
 class AssumptionDefinitionCreate(AssumptionDefinitionBase):
@@ -41,6 +43,7 @@ class AssumptionDefinitionCreate(AssumptionDefinitionBase):
 
 class AssumptionDefinitionUpdate(BaseModel):
     name: str | None = Field(None, min_length=2, max_length=200)
+    category_id: str | None = None
     description: str | None = None
     data_type: str | None = None
     unit_of_measure: str | None = None
@@ -48,6 +51,8 @@ class AssumptionDefinitionUpdate(BaseModel):
     editable: bool | None = None
     periodicity: str | None = None
     sort_order: int | None = None
+    include_in_dre: bool | None = None
+    ui_config: dict | None = None
     growth_rule: dict | None = None
 
 

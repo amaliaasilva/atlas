@@ -289,14 +289,15 @@ export function GlobalFilters({ className, showUnit = false }: GlobalFiltersProp
     }
   }, [filters.periodEnd, filters.periodStart, monthYearOptions, setPeriodRange, setYear]);
 
-  // FE-A-17: Auto-inicializa o ano para o último ano completo disponível
+  // Auto-inicializa a visão completa do cenário quando não há filtro temporal ativo.
   useEffect(() => {
-    if (projectionYears.length === 0) return;
-    if (filters.year || filters.periodStart) return; // já tem filtro ativo
-    const lastYear = projectionYears[projectionYears.length - 1];
-    applyYearPreset(lastYear);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectionYears.length]); // executa uma vez quando a lista carrega
+    if (monthYearOptions.length === 0) return;
+    if (filters.year || filters.periodStart || filters.periodEnd) return;
+    const start = monthYearOptions[0].value;
+    const end = monthYearOptions[monthYearOptions.length - 1].value;
+    setYear(null);
+    setPeriodRange(start, end);
+  }, [filters.periodEnd, filters.periodStart, filters.year, monthYearOptions, setPeriodRange, setYear]);
 
   return (
     <div

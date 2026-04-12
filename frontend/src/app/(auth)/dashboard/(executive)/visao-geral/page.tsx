@@ -49,7 +49,7 @@ function PeriodContextBadge({ label, isDefault }: { label: string; isDefault: bo
 }
 
 export default function VisaoGeralPage() {
-  const { businessId, scenarioId, selectedUnitIds, periodStart, periodEnd, year, applyYearPreset } = useDashboardFilters();
+  const { businessId, scenarioId, selectedUnitIds, periodStart, periodEnd, year, setPeriodRange, setYear } = useDashboardFilters();
   const [activeTab, setActiveTab] = useState<TabId>('financeira');
   const [auditReport, setAuditReport] = useState<AuditReport | null>(null);
   const [showAudit, setShowAudit] = useState(false);
@@ -93,20 +93,16 @@ export default function VisaoGeralPage() {
     enabled: !!businessId,
   });
 
-  // Auto-init: quando há anos disponíveis mas nenhum filtro de período está ativo,
-  // seleciona automaticamente o último ano completo da projeção (D-05)
+  // Auto-init: quando o cenário abre sem filtro temporal, usa o período completo.
   useEffect(() => {
-    // só inicializa uma vez (quando o cenário é carregado e não há filtro ativo)
     if (!scenarioId) return;
-    if (year || periodStart) return;
+    if (year || periodStart || periodEnd) return;
     const allPeriods = (dashboard?.time_series ?? []).map((d) => d.period);
     if (allPeriods.length === 0) return;
-    const years = Array.from(new Set(allPeriods.map((p) => p.slice(0, 4)))).sort();
-    // D-05: último ano completo = penúltimo da lista (o último pode estar incompleto)
-    const defaultYear = years.length >= 2 ? years[years.length - 2] : years[years.length - 1];
-    if (defaultYear) applyYearPreset(defaultYear);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scenarioId, dashboard?.time_series?.length]);
+    const ordered = Array.from(new Set(allPeriods)).sort();
+    setYear(null);
+    setPeriodRange(ordered[0], ordered[ordered.length - 1]);
+  }, [dashboard?.time_series, periodEnd, periodStart, scenarioId, setPeriodRange, setYear, year]);
 
   // Dashboard ativo (unidade específica ou consolidado)
   const effectiveDashboard = unitId ? unitDashboard : dashboard;

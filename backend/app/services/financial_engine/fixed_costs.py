@@ -3,7 +3,7 @@ Atlas Finance — Fixed Costs Calculator
 
 Correções: (GAP-03, GAP-04)
   - Folha: pro_labore NÃO incide encargos. Base CLT × social_charges_rate (80% real).
-  - Utilities: modelo misto — custo_fixo + custo_variável_max × ocupação × (1 − automação).
+  - Utilities: modelo misto — (custo_fixo + custo_variável_max × ocupação) × (1 − automação).
 """
 
 from app.services.financial_engine.models import FixedCostInputs
@@ -11,11 +11,11 @@ from app.services.financial_engine.models import FixedCostInputs
 
 def calculate_staff_costs(inputs: FixedCostInputs) -> dict:
     """
-    Folha de pagamento + encargos (80%) + benefícios.
+    Folha fixa = base salarial CLT + encargos + pró-labore.
 
-    Pro-labore NÃO incide encargos (pró-labore é remuneração de sócio,
-    não de CLT). Os encargos incidem apenas sobre os salários CLT.
-    social_charges_rate ≈ 0.80  inclui INSS patronal + FGTS + outros (13°, férias etc.)
+    - Pro-labore NÃO incide encargos.
+    - Toda premissa salarial CLT entra na base e recebe `social_charges_rate`.
+    - Benefícios deixaram de compor o cálculo automático da folha.
     """
     clt_base = round(
         inputs.cleaning_staff_salary
@@ -23,16 +23,19 @@ def calculate_staff_costs(inputs: FixedCostInputs) -> dict:
         + inputs.marketing_staff_salary
         + inputs.commercial_staff_salary
         + inputs.manager_salary
-        + inputs.fitness_teacher_salary,
+        + inputs.fitness_teacher_salary
+        + inputs.additional_clt_salary_base,
         2,
     )
     social_charges = round(clt_base * inputs.social_charges_rate, 2)
-    benefits = round(inputs.num_employees * inputs.benefits_per_employee, 2)
-    gross_payroll = round(clt_base + inputs.pro_labore, 2)
-    total = round(gross_payroll + social_charges + benefits, 2)
+    benefits = 0.0
+    clt_total = round(clt_base + social_charges, 2)
+    gross_payroll = round(clt_total + inputs.pro_labore, 2)
+    total = gross_payroll
     return {
         "gross_payroll": gross_payroll,
         "clt_base": clt_base,
+        "clt_total": clt_total,
         "pro_labore": round(inputs.pro_labore, 2),
         "social_charges": social_charges,
         "benefits": benefits,
@@ -46,11 +49,11 @@ def calculate_utility_costs(
     """
     Energia e Água: modelo misto (fixo + variável proporcional à ocupação).
 
-    Energia (GAP-01 — fórmula corrigida vs planilha):
+    Energia:
       custo = (fixed_energy_cost + max_variable_energy_cost × occ) × (1 − automation_reduction)
-      A automação reduz o consumo total (fixo + variável), não apenas a parcela variável.
+      A automação reduz o custo total de energia (fixo + variável), conforme a planilha.
     Água:
-      custo = fixed_water_cost  + max_variable_water_cost  × occ
+      custo = fixed_water_cost + max_variable_water_cost × occ
 
     Fallback legado (kWh × tarifa / m³ × tarifa) se os campos novos forem zero.
     """
@@ -58,12 +61,9 @@ def calculate_utility_costs(
 
     # Energia
     if inputs.fixed_energy_cost > 0 or inputs.max_variable_energy_cost > 0:
-        automation_factor = 1.0 - inputs.automation_reduction
-        electricity = round(
-            (inputs.fixed_energy_cost + inputs.max_variable_energy_cost * occ)
-            * automation_factor,
-            2,
-        )
+        automation_factor = max(0.0, 1.0 - inputs.automation_reduction)
+        base_energy = inputs.fixed_energy_cost + inputs.max_variable_energy_cost * occ
+        electricity = round(base_energy * automation_factor, 2)
         elec_fixed = round(inputs.fixed_energy_cost * automation_factor, 2)
         elec_variable = round(
             inputs.max_variable_energy_cost * occ * automation_factor, 2

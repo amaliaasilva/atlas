@@ -56,8 +56,8 @@ class RevenueInputs:
     slots_per_hour: int = 10  # vagas simultâneas por hora
     hours_per_day_weekday: float = 17.0  # horário seg–sex (ex: 05h–22h = 17h)
     hours_per_day_saturday: float = 7.0  # horário sábado (ex: 08h–15h = 7h)
-    working_days_month: int = 22  # dias úteis no mês (seg–sex, sem feriados)
-    saturdays_month: int = 4  # sábados no mês
+    working_days_month: float = 22.0  # dias úteis no mês (aceita média/decimal)
+    saturdays_month: float = 4.0  # sábados no mês (aceita média/decimal)
     occupancy_rate: float = 0.0  # taxa de ocupação 0.0–1.0
 
     # Mix de planos de serviço (Bronze/Prata/Ouro/Diamante).
@@ -87,7 +87,7 @@ class FixedCostInputs:
     Premissas de custos fixos mensais.
 
     Utilities (GAP-03): modelo misto fixo + variável por ocupação.
-      custo_energia = fixed_energy_cost + max_variable_energy_cost × occ_rate × (1 - automation_reduction)
+      custo_energia = (fixed_energy_cost + max_variable_energy_cost × occ_rate) × (1 - automation_reduction)
       custo_agua    = fixed_water_cost  + max_variable_water_cost  × occ_rate
 
     Folha (GAP-04): social_charges_rate corrigido para ~0.80 (80% sobre salário,
@@ -106,8 +106,11 @@ class FixedCostInputs:
     commercial_staff_salary: float = 0.0
     manager_salary: float = 0.0
     fitness_teacher_salary: float = 0.0
+    additional_clt_salary_base: float = (
+        0.0  # salários CLT adicionais criados como premissa dinâmica (ex.: salário_supervisor)
+    )
     pro_labore: float = 0.0  # NÃO incide encargos sociais
-    # GAP-04: encargos totais reais (~80% sobre salário bruto, ex: INSS+FGTS+benefícios)
+    # GAP-04: encargos totais reais (~80% sobre a base salarial CLT)
     social_charges_rate: float = 0.80
     benefits_per_employee: float = 0.0
     num_employees: int = 0
@@ -166,6 +169,9 @@ class VariableCostInputs:
     sales_commission_rate: float = 0.0  # % sobre receita
     card_fee_rate: float = (
         0.0  # % sobre receita (taxa adquirente cartão, ex: 0.035 = 3,5%)
+    )
+    other_variable_cost_rate: float = (
+        0.0  # % adicional sobre receita para premissas dinâmicas da categoria CUSTO_VARIAVEL
     )
     other_variable_costs: float = 0.0
 

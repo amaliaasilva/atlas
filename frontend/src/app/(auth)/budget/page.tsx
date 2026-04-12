@@ -37,9 +37,25 @@ function toDateInputValue(dateStr?: string | null): string {
   return m ? `${m[1]}-${m[2]}-${m[3]}` : '';
 }
 
+const DEFAULT_PROJECTION_END = '2034-12';
+
 function getCurrentYearMonth(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function addMonthsToYearMonth(value: string, months: number): string {
+  const [year, month] = value.split('-').map(Number);
+  if (!year || !month) return DEFAULT_PROJECTION_END;
+  const total = year * 12 + (month - 1) + months;
+  const nextYear = Math.floor(total / 12);
+  const nextMonth = (total % 12) + 1;
+  return `${nextYear}-${String(nextMonth).padStart(2, '0')}`;
+}
+
+function getDefaultProjectionEnd(start?: string): string {
+  if (!start) return DEFAULT_PROJECTION_END;
+  return start <= DEFAULT_PROJECTION_END ? DEFAULT_PROJECTION_END : addMonthsToYearMonth(start, 9 * 12 - 1);
 }
 
 // ── Modal: Criar Nova Versão ──────────────────────────────────────────────────
@@ -59,6 +75,7 @@ function CreateVersionModal({ units, scenarios, onClose, onCreated }: CreateVers
   const [scenId, setScenId] = useState(scenarios[0]?.id ?? '');
   const [versionName, setVersionName] = useState('');
   const [horizonStart, setHorizonStart] = useState('');
+  const [horizonEnd, setHorizonEnd] = useState(DEFAULT_PROJECTION_END);
 
   // Auto-populate opening date and name when unit/scenario changes
   useEffect(() => {
@@ -66,7 +83,9 @@ function CreateVersionModal({ units, scenarios, onClose, onCreated }: CreateVers
     const scen = scenarios.find((s) => s.id === scenId);
     if (unit?.opening_date) {
       const d = new Date(unit.opening_date);
-      setHorizonStart(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      setHorizonStart(start);
+      setHorizonEnd(getDefaultProjectionEnd(start));
     }
     if (unit && scen && !versionName) {
       setVersionName(`Orçamento ${scen.name} — ${unit.name}`);
@@ -81,8 +100,9 @@ function CreateVersionModal({ units, scenarios, onClose, onCreated }: CreateVers
         scenario_id: scenId,
         name: versionName || `Orçamento — ${new Date().toLocaleDateString('pt-BR')}`,
         horizon_start: horizonStart || getCurrentYearMonth(),
+        horizon_end: horizonEnd || getDefaultProjectionEnd(horizonStart || getCurrentYearMonth()),
         status: 'draft',
-        projection_horizon_years: 10,
+        projection_horizon_years: 9,
       } as Partial<BudgetVersion>),
     onSuccess: (newVersion) => {
       queryClient.invalidateQueries({ queryKey: ['versions'] });
@@ -119,11 +139,24 @@ function CreateVersionModal({ units, scenarios, onClose, onCreated }: CreateVers
             placeholder="Ex: Orçamento Agressivo — Laboratório"
           />
           <Input
-            label="Início do horizonte (YYYY-MM)"
+            label="Início da projeção"
+            type="month"
             value={horizonStart}
-            onChange={(e) => setHorizonStart(e.target.value)}
+            onChange={(e) => {
+              const nextStart = e.target.value;
+              setHorizonStart(nextStart);
+              if (!horizonEnd) setHorizonEnd(getDefaultProjectionEnd(nextStart));
+            }}
             placeholder="Ex: 2026-01"
             hint="Padrão: data de abertura da unidade"
+          />
+          <Input
+            label="Fim da projeção"
+            type="month"
+            value={horizonEnd}
+            onChange={(e) => setHorizonEnd(e.target.value)}
+            placeholder="Ex: 2034-12"
+            hint="Use 12/2034 para a visão completa dos cenários"
           />
         </div>
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
@@ -155,6 +188,7 @@ export default function BudgetPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('all');
   const [openingDrafts, setOpeningDrafts] = useState<Record<string, string>>({});
+  const [projectionDrafts, setProjectionDrafts] = useState<Record<string, string>>({});
   const [deletingVersion, setDeletingVersion] = useState<BudgetVersion | null>(null);
 
   const { data: units = [], isLoading: loadingUnits } = useQuery({
@@ -207,6 +241,24 @@ export default function BudgetPage() {
       queryClient.invalidateQueries({ queryKey: ['versions'] });
       queryClient.invalidateQueries({ queryKey: ['dre'] });
       queryClient.invalidateQueries({ queryKey: ['dre-consolidated'] });
+    },
+  });
+
+  const updateProjectionEndMutation = useMutation({
+    mutationFn: async ({ versionId, horizonEnd }: { versionId: string; horizonEnd: string }) => {
+      await versionsApi.update(versionId, { horizon_end: horizonEnd });
+      await calculationsApi.recalculate(versionId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['versions'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-consolidated'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-unit'] });
+      queryClient.invalidateQueries({ queryKey: ['dre'] });
+      queryClient.invalidateQueries({ queryKey: ['dre-consolidated'] });
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      alert(msg ?? 'Erro ao atualizar a data final da projeção.');
     },
   });
 
@@ -458,7 +510,7 @@ export default function BudgetPage() {
                               <p className="text-sm font-medium text-gray-800 group-hover:text-brand-600 truncate">
                                 {version.name}
                               </p>
-                              <div className="flex items-center gap-3 mt-0.5">
+                              <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                                 {scenario && (
                                   <span className="text-xs text-gray-400">
                                     {scenario.name}
@@ -467,6 +519,39 @@ export default function BudgetPage() {
                                 <span className="flex items-center gap-1 text-xs text-gray-400">
                                   <Calendar className="h-3 w-3" />
                                   {version.horizon_start} → {version.horizon_end}
+                                </span>
+                                <span
+                                  className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-500 bg-white border border-gray-200 px-2 py-1 rounded-full"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <span>Projeção até</span>
+                                  <input
+                                    type="month"
+                                    value={projectionDrafts[version.id] ?? version.horizon_end ?? DEFAULT_PROJECTION_END}
+                                    onChange={(e) =>
+                                      setProjectionDrafts((prev) => ({
+                                        ...prev,
+                                        [version.id]: e.target.value,
+                                      }))
+                                    }
+                                    className="h-6 rounded border border-gray-200 px-1.5 text-[11px] text-gray-600"
+                                  />
+                                  <button
+                                    type="button"
+                                    className="text-brand-600 hover:text-brand-700 disabled:opacity-40"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const nextEnd = projectionDrafts[version.id] ?? version.horizon_end ?? '';
+                                      if (!nextEnd || nextEnd === version.horizon_end) return;
+                                      updateProjectionEndMutation.mutate({ versionId: version.id, horizonEnd: nextEnd });
+                                    }}
+                                    disabled={updateProjectionEndMutation.isPending}
+                                    title={updateProjectionEndMutation.isPending ? 'Atualizando projeção...' : 'Salvar data final da projeção'}
+                                  >
+                                    {updateProjectionEndMutation.isPending
+                                      ? <span className="h-3 w-3 border-2 border-brand-400 border-t-transparent rounded-full animate-spin inline-block" />
+                                      : <Save className="h-3 w-3" />}
+                                  </button>
                                 </span>
                               </div>
                             </div>

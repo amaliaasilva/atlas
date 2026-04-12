@@ -114,12 +114,14 @@ export const versionsApi = {
 // ── Assumptions ──────────────────────────────────────────────────────────────
 
 export const assumptionsApi = {
-  categories: (): Promise<AssumptionCategory[]> =>
-    api.get<AssumptionCategory[]>('/assumptions/categories').then((r) => r.data),
-  definitions: (category_id?: string): Promise<AssumptionDefinition[]> =>
-    api.get<AssumptionDefinition[]>('/assumptions/definitions', { params: { category_id } }).then((r) => r.data),
+  categories: (business_id?: string): Promise<AssumptionCategory[]> =>
+    api.get<AssumptionCategory[]>('/assumptions/categories', { params: { business_id } }).then((r) => r.data),
+  definitions: (category_id?: string, business_id?: string): Promise<AssumptionDefinition[]> =>
+    api.get<AssumptionDefinition[]>('/assumptions/definitions', { params: { category_id, business_id } }).then((r) => r.data),
   updateDefinition: (definition_id: string, data: AssumptionDefinitionUpdateInput): Promise<AssumptionDefinition> =>
     api.patch<AssumptionDefinition>(`/assumptions/definitions/${definition_id}`, data).then((r) => r.data),
+  deleteDefinition: (definition_id: string): Promise<void> =>
+    api.delete(`/assumptions/definitions/${definition_id}`).then(() => {}),
   values: (version_id: string): Promise<AssumptionValue[]> =>
     api.get<AssumptionValue[]>(`/assumptions/values/${version_id}`).then((r) => r.data),
   bulkUpsert: (version_id: string, values: Partial<AssumptionValue>[]): Promise<{ updated: number }> =>
@@ -132,6 +134,8 @@ export const assumptionsApi = {
     category_code: string;
     data_type?: string;
     growth_rule?: object | null;
+    include_in_dre?: boolean;
+    ui_config?: AssumptionDefinition['ui_config'];
   }): Promise<{ definition_id: string; code: string; value_id: string }> =>
     api.post('/assumptions/quick-add', data).then((r) => r.data),
 };

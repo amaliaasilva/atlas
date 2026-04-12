@@ -1,7 +1,25 @@
+import math
 from calendar import monthrange
 from datetime import date, datetime
 
 from pydantic import BaseModel, Field, computed_field, model_validator
+
+
+DEFAULT_PROJECTION_HORIZON_YEARS = 9
+
+
+def _projection_years_from_dates(
+    start: date | None,
+    end: date | None,
+    fallback: int | None = DEFAULT_PROJECTION_HORIZON_YEARS,
+) -> int:
+    if not start or not end:
+        return fallback or DEFAULT_PROJECTION_HORIZON_YEARS
+    if end < start:
+        raise ValueError("A data final da projeção deve ser maior ou igual ao início")
+
+    total_months = (end.year - start.year) * 12 + (end.month - start.month) + 1
+    return max(1, math.ceil(total_months / 12))
 
 
 class BudgetVersionCreate(BaseModel):
@@ -20,7 +38,7 @@ class BudgetVersionCreate(BaseModel):
     status: str = "draft"
     notes: str | None = None
     # ARCH-08: horizonte de projeção explícito
-    projection_horizon_years: int = 10
+    projection_horizon_years: int = DEFAULT_PROJECTION_HORIZON_YEARS
 
     @model_validator(mode="after")
     def normalise(self) -> "BudgetVersionCreate":
@@ -39,6 +57,12 @@ class BudgetVersionCreate(BaseModel):
             dt = datetime.strptime(self.horizon_end + "-01", "%Y-%m-%d")
             last_day = monthrange(dt.year, dt.month)[1]
             self.effective_end_date = date(dt.year, dt.month, last_day)
+
+        self.projection_horizon_years = _projection_years_from_dates(
+            self.effective_start_date,
+            self.effective_end_date,
+            self.projection_horizon_years,
+        )
         return self
 
     def to_db(self) -> dict:
@@ -63,6 +87,7 @@ class BudgetVersionUpdate(BaseModel):
     effective_end_date: date | None = None
     horizon_start: str | None = None
     horizon_end: str | None = None
+    projection_horizon_years: int | None = None
 
     @model_validator(mode="after")
     def normalise(self) -> "BudgetVersionUpdate":
@@ -76,6 +101,11 @@ class BudgetVersionUpdate(BaseModel):
             dt = datetime.strptime(self.horizon_end + "-01", "%Y-%m-%d")
             last_day = monthrange(dt.year, dt.month)[1]
             self.effective_end_date = date(dt.year, dt.month, last_day)
+        if self.projection_horizon_years is None and self.effective_start_date and self.effective_end_date:
+            self.projection_horizon_years = _projection_years_from_dates(
+                self.effective_start_date,
+                self.effective_end_date,
+            )
         return self
 
 
@@ -90,7 +120,7 @@ class BudgetVersionOut(BaseModel):
     notes: str | None = None
     created_by: str | None = None
     is_active: bool
-    projection_horizon_years: int = 10
+    projection_horizon_years: int = DEFAULT_PROJECTION_HORIZON_YEARS
     created_at: datetime
     updated_at: datetime
 
@@ -112,9 +142,9 @@ class BudgetVersionOut(BaseModel):
     @computed_field  # type: ignore[misc]
     @property
     def horizon_end(self) -> str | None:
-        """Retorna o último mês do horizonte = start + projection_horizon_years * 12 - 1.
-        Isso alinha com o que o motor financeiro realmente calcula.
-        """
+        """Retorna o último mês configurado para a projeção."""
+        if self.effective_end_date:
+            return self.effective_end_date.strftime("%Y-%m")
         if self.effective_start_date:
             total_months = self.projection_horizon_years * 12 - 1
             start = self.effective_start_date

@@ -11,7 +11,8 @@ def calculate_total_variable_costs(
     hygiene_kit = round(inputs.hygiene_kit_per_student * active_students, 2)
     sales_commission = round(inputs.sales_commission_rate * gross_revenue, 2)
     card_fee = round(inputs.card_fee_rate * gross_revenue, 2)
-    other = round(inputs.other_variable_costs, 2)
+    other_rate_based = round(inputs.other_variable_cost_rate * gross_revenue, 2)
+    other = round(inputs.other_variable_costs + other_rate_based, 2)
     total = round(hygiene_kit + sales_commission + card_fee + other, 2)
     return {
         "total_variable_costs": total,

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { calculationsApi, versionsApi, reportsApi } from '@/lib/api';
@@ -7,7 +8,8 @@ import { Topbar } from '@/components/layout/Topbar';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
 import { LoadingScreen } from '@/components/ui/Spinner';
-import { formatCurrency, formatPeriod, formatPercent, downloadBlob, getErrorMessage } from '@/lib/utils';
+import { DrilldownPanel, type DrilldownState } from '@/components/tables/DREDrilldown';
+import { formatCurrency, formatPeriod, formatPercent, downloadBlob } from '@/lib/utils';
 import { Download, RefreshCw, BarChart2 } from 'lucide-react';
 import { useNavStore } from '@/store/auth';
 
@@ -21,34 +23,67 @@ interface DRERow {
 }
 
 const DRE_STRUCTURE: DRERow[] = [
-  { code: 'revenue_total',          label: 'Receita Bruta',              indent: 0, bold: true },
-  { code: 'membership_revenue',     label: '  Receita de Horas (Coworking)',  indent: 1 },
-  { code: 'personal_training_revenue', label: '  Personal Training',     indent: 1 },
-  { code: 'other_revenue',          label: '  Outras Receitas',          indent: 1 },
-  { code: 'taxes_on_revenue',       label: '(-) Impostos (Simples)',     indent: 0 },
-  { code: 'total_fixed_costs',      label: '(-) Custos Fixos',          indent: 0, bold: true },
-  { code: 'rent_total',             label: '  Aluguel + Condomínio',     indent: 1 },
-  { code: 'staff_costs',            label: '  Pessoal (CLT + Pró-Lab.)', indent: 1 },
-  { code: 'utility_costs',          label: '  Utilities (Energia/Água)', indent: 1 },
-  { code: 'admin_costs',            label: '  Adm + Contabilidade',      indent: 1 },
-  { code: 'marketing_costs',        label: '  Marketing',                indent: 1 },
-  { code: 'equipment_costs',        label: '  Manutenção Equipamentos',  indent: 1 },
-  { code: 'insurance_costs',        label: '  Seguros',                  indent: 1 },
-  { code: 'total_variable_costs',   label: '(-) Custos Variáveis',      indent: 0, bold: true },
-  { code: 'hygiene_kit_cost',       label: '  Kit Higiene',              indent: 1 },
-  { code: 'sales_commission_cost',  label: '  Comissão de Vendas',       indent: 1 },
-  { code: 'ebitda',                 label: 'EBITDA',                     indent: 0, bold: true, isTotal: true },
-  { code: 'financing_payment',      label: '(-) Financiamento',         indent: 0 },
-  { code: 'net_result',             label: 'Resultado Líquido',          indent: 0, bold: true, isTotal: true },
+  { code: 'revenue_total',          label: 'Receita Bruta',                   indent: 0, bold: true },
+  { code: 'membership_revenue',     label: 'Receita de Horas (Coworking)',    indent: 1 },
+  { code: 'personal_training_revenue', label: 'Personal Training',            indent: 1 },
+  { code: 'other_revenue',          label: 'Outras Receitas',                 indent: 1 },
+  { code: 'taxes_on_revenue',       label: '(-) Impostos (Simples)',          indent: 0 },
+  { code: 'total_fixed_costs',      label: '(-) Custos Fixos',                indent: 0, bold: true },
+  { code: 'rent_total',             label: 'Aluguel + Condomínio',            indent: 1 },
+  { code: 'staff_costs',            label: 'Pessoal (CLT + Pró-Lab.)',        indent: 1 },
+  { code: 'fc_pro_labore',          label: 'Pró-labore',                      indent: 2 },
+  { code: 'fc_clt_base',            label: 'Folha CLT (base)',                indent: 2 },
+  { code: 'fc_social_charges',      label: 'Encargos sociais',                indent: 2 },
+  { code: 'utility_costs',          label: 'Utilities (Energia/Água)',        indent: 1 },
+  { code: 'fc_electricity',         label: 'Energia elétrica',                indent: 2 },
+  { code: 'fc_water',               label: 'Água e esgoto',                   indent: 2 },
+  { code: 'fc_internet',            label: 'Internet + telefonia',            indent: 2 },
+  { code: 'admin_costs',            label: 'Adm + Contabilidade',             indent: 1 },
+  { code: 'marketing_costs',        label: 'Marketing',                       indent: 1 },
+  { code: 'equipment_costs',        label: 'Manutenção Equipamentos',         indent: 1 },
+  { code: 'insurance_costs',        label: 'Seguros',                         indent: 1 },
+  { code: 'other_fixed_costs',      label: 'Outros custos fixos',             indent: 1 },
+  { code: 'total_variable_costs',   label: '(-) Custos Variáveis',            indent: 0, bold: true },
+  { code: 'hygiene_kit_cost',       label: 'Kit Higiene',                     indent: 1 },
+  { code: 'sales_commission_cost',  label: 'Comissão de Vendas',              indent: 1 },
+  { code: 'card_fee_cost',          label: 'Taxa de cartão',                  indent: 1 },
+  { code: 'operating_result',       label: 'Resultado Operacional',           indent: 0, bold: true },
+  { code: 'ebitda',                 label: 'EBITDA',                          indent: 0, bold: true, isTotal: true },
+  { code: 'financing_payment',      label: '(-) Financiamento',               indent: 0 },
+  { code: 'net_result',             label: 'Resultado Líquido',               indent: 0, bold: true, isTotal: true },
   // KPIs operacionais B2B Coworking
-  { code: 'active_hours_month',     label: 'Horas Vendidas/Mês',         indent: 0 },
-  { code: 'capacity_hours_month',   label: 'Capacidade Total (h/mês)',   indent: 0 },
-  { code: 'occupancy_rate',         label: 'Ocupação (%)',               indent: 0 },
-  { code: 'break_even_revenue',     label: 'Break-even Receita (R$)',    indent: 0 },
-  { code: 'break_even_occupancy_pct', label: 'Break-even Ocupação (%)', indent: 0 },
-  { code: 'contribution_margin_pct', label: 'Margem de Contribuição (%)', indent: 0 },
-  { code: 'net_margin',             label: 'Margem Líquida (%)',         indent: 0 },
+  { code: 'active_hours_month',     label: 'Horas Vendidas/Mês',              indent: 0 },
+  { code: 'capacity_hours_month',   label: 'Capacidade Total (h/mês)',        indent: 0 },
+  { code: 'occupancy_rate',         label: 'Ocupação (%)',                    indent: 0 },
+  { code: 'break_even_revenue',     label: 'Break-even Receita (R$)',         indent: 0 },
+  { code: 'break_even_occupancy_pct', label: 'Break-even Ocupação (%)',      indent: 0 },
+  { code: 'contribution_margin_pct', label: 'Margem de Contribuição (%)',    indent: 0 },
+  { code: 'net_margin',             label: 'Margem Líquida (%)',              indent: 0 },
 ];
+
+const NEGATIVE_ROWS = new Set([
+  'taxes_on_revenue',
+  'total_fixed_costs',
+  'rent_total',
+  'staff_costs',
+  'fc_pro_labore',
+  'fc_clt_base',
+  'fc_social_charges',
+  'utility_costs',
+  'fc_electricity',
+  'fc_water',
+  'fc_internet',
+  'admin_costs',
+  'marketing_costs',
+  'equipment_costs',
+  'insurance_costs',
+  'other_fixed_costs',
+  'total_variable_costs',
+  'hygiene_kit_cost',
+  'sales_commission_cost',
+  'card_fee_cost',
+  'financing_payment',
+]);
 
 const PERCENT_METRICS = new Set([
   'occupancy_rate',
@@ -61,6 +96,7 @@ export default function ResultsClient() {
   const { versionId } = useParams<{ versionId: string }>();
   const router = useRouter();
   const { businessId, scenarioId } = useNavStore();
+  const [drilldown, setDrilldown] = useState<DrilldownState | null>(null);
 
   const { data: version } = useQuery({
     queryKey: ['version', versionId],
@@ -179,7 +215,7 @@ export default function ResultsClient() {
                     ? values.reduce((a, b) => a + b, 0) / (values.length || 1)
                     : values.reduce((a, b) => a + b, 0);
 
-                  const isNegativeRow = row.code.startsWith('total_') || row.code === 'taxes' || row.code === 'financing_payment';
+                  const isNegativeRow = NEGATIVE_ROWS.has(row.code);
 
                   return (
                     <tr
@@ -196,23 +232,47 @@ export default function ResultsClient() {
                         `}
                         style={{ paddingLeft: `${(row.indent + 1) * 16}px` }}
                       >
-                        {row.label}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDrilldown({
+                              code: row.code,
+                              period: periods[0] ?? '',
+                              name: row.label,
+                            })
+                          }
+                          className="text-left hover:text-brand-700 transition-colors"
+                          disabled={!periods[0]}
+                          title={periods[0] ? 'Clique para ver o detalhamento do cálculo' : undefined}
+                        >
+                          {row.label}
+                        </button>
                       </td>
                       {periods.map((p) => {
                         const val = rowData[p];
                         const isNeg = val < 0;
+                        const tone = `${isNeg || (isNegativeRow && val > 0) ? 'text-red-600' : ''} ${row.code === 'net_result' && val > 0 ? 'text-emerald-600' : ''} ${row.code === 'ebitda' && val > 0 ? 'text-emerald-700' : ''}`;
                         return (
                           <td
                             key={p}
                             className={`
                               px-3 py-2 text-right tabular-nums
                               ${row.bold ? 'font-semibold' : ''}
-                              ${isNeg || (isNegativeRow && val > 0) ? 'text-red-600' : ''}
-                              ${row.code === 'net_result' && val > 0 ? 'text-emerald-600' : ''}
-                              ${row.code === 'ebitda' && val > 0 ? 'text-emerald-700' : ''}
+                              ${tone}
                             `}
                           >
-                            {val !== undefined ? formatCell(row.code, val) : '—'}
+                            {val !== undefined ? (
+                              <button
+                                type="button"
+                                onClick={() => setDrilldown({ code: row.code, period: p, name: row.label })}
+                                className="w-full text-right hover:underline underline-offset-2"
+                                title="Clique para ver o detalhamento deste mês"
+                              >
+                                {formatCell(row.code, val)}
+                              </button>
+                            ) : (
+                              '—'
+                            )}
                           </td>
                         );
                       })}
@@ -232,6 +292,13 @@ export default function ResultsClient() {
               </tbody>
             </table>
           </div>
+        )}
+        {drilldown && (
+          <DrilldownPanel
+            versionId={versionId}
+            drilldown={drilldown}
+            onClose={() => setDrilldown(null)}
+          />
         )}
       </div>
     </>

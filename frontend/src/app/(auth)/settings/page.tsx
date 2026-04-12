@@ -68,6 +68,20 @@ export default function SettingsPage() {
     },
   });
 
+  const rebalanceMixMutation = useMutation({
+    mutationFn: async () => {
+      if (!plans?.length) return;
+      await Promise.all(
+        plans.map((plan) =>
+          servicePlansApi.update(plan.id, { target_mix_pct: 0.25 }),
+        ),
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-plans', businessId] });
+    },
+  });
+
   const startEdit = (plan: ServicePlan) => {
     setEditingPlan(plan);
     setEditForm({
@@ -118,14 +132,24 @@ export default function SettingsPage() {
             title="Planos de Serviço (Bronze / Prata / Ouro / Diamante)"
             actions={
               user?.is_superuser ? (
-                <Button size="sm" onClick={() => setShowCreatePlan(true)}>
-                  <Plus className="h-4 w-4" /> Novo Plano
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => rebalanceMixMutation.mutate()}
+                    loading={rebalanceMixMutation.isPending}
+                  >
+                    Igualar mix 25%
+                  </Button>
+                  <Button size="sm" onClick={() => setShowCreatePlan(true)}>
+                    <Plus className="h-4 w-4" /> Novo Plano
+                  </Button>
+                </div>
               ) : undefined
             }
           >
             <div className="mb-4 rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">
-              Estes planos são os <strong>padrões globais do negócio</strong>. Qualquer alteração reflete em todos os cálculos futuros de todas as unidades. Versões de orçamento já calculadas <strong>não são afetadas automaticamente</strong> — recalcule cada versão para aplicar os novos valores.
+              Estes valores são os <strong>padrões globais do negócio</strong> e alimentam automaticamente o <strong>ticket médio do plano mensal</strong> usado no orçamento. Ao editar aqui, recalcule cada versão para aplicar o novo valor.
             </div>
             {plans && plans.length > 0 ? (
               <>
@@ -133,10 +157,10 @@ export default function SettingsPage() {
                   <thead>
                     <tr>
                       <th>Plano</th>
-                      <th className="text-right">R$/hora</th>
+                      <th className="text-right">Ticket médio</th>
                       <th className="text-right">Mix %</th>
-                      <th className="text-right">Aulas Mín</th>
-                      <th className="text-right">Aulas Máx</th>
+                      <th className="text-right">Mín</th>
+                      <th className="text-right">Máx</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -149,7 +173,7 @@ export default function SettingsPage() {
                             <td className="text-right">
                               <input
                                 type="number"
-                                className="atlas-input w-20 text-right"
+                                className="atlas-input w-24 text-right"
                                 step="0.5"
                                 value={editForm.price_per_hour ?? ''}
                                 onChange={e => setEditForm(f => ({ ...f, price_per_hour: +e.target.value }))}
@@ -205,9 +229,7 @@ export default function SettingsPage() {
                             <td className="text-right">
                               {plan.price_per_hour.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </td>
-                            <td className="text-right">
-                              {(plan.target_mix_pct * 100).toFixed(0)}%
-                            </td>
+                            <td className="text-right">{(plan.target_mix_pct * 100).toFixed(0)}%</td>
                             <td className="text-right">{plan.min_classes_month}</td>
                             <td className="text-right">{plan.max_classes_month ?? '—'}</td>
                             <td className="text-right">
@@ -302,9 +324,9 @@ export default function SettingsPage() {
                   placeholder="Ex: GOLD"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <Input
-                  label="R$/hora"
+                  label="Ticket médio"
                   type="number"
                   step="0.5"
                   value={String(createForm.price_per_hour ?? '')}
@@ -319,25 +341,25 @@ export default function SettingsPage() {
                   value={String(createForm.target_mix_pct ?? '')}
                   onChange={(e) => setCreateForm((f) => ({ ...f, target_mix_pct: +e.target.value }))}
                 />
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <Input
-                  label="Aulas mín/mês"
-                  type="number"
-                  value={String(createForm.min_classes_month ?? '')}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, min_classes_month: +e.target.value }))}
-                />
-                <Input
-                  label="Aulas máx/mês"
-                  type="number"
-                  value={String(createForm.max_classes_month ?? '')}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, max_classes_month: +e.target.value }))}
-                />
                 <Input
                   label="Ordem"
                   type="number"
                   value={String(createForm.sort_order ?? '')}
                   onChange={(e) => setCreateForm((f) => ({ ...f, sort_order: +e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Mín"
+                  type="number"
+                  value={String(createForm.min_classes_month ?? '')}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, min_classes_month: +e.target.value }))}
+                />
+                <Input
+                  label="Máx"
+                  type="number"
+                  value={String(createForm.max_classes_month ?? '')}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, max_classes_month: +e.target.value }))}
                 />
               </div>
             </div>

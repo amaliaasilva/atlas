@@ -55,10 +55,11 @@ export interface BudgetVersion {
   version_name?: string; // alias do backend (= name)
   status: 'draft' | 'published' | 'archived';
   is_active: boolean;
-  horizon_start: string;
-  horizon_end: string;
+  horizon_start?: string | null;
+  horizon_end?: string | null;
   projection_horizon_years?: number;
   effective_start_date?: string;
+  effective_end_date?: string;
   notes?: string;
   created_at?: string;
   updated_at?: string;
@@ -78,9 +79,20 @@ export interface AssumptionDefinition {
   category_id: string;
   name: string;
   code: string;
+  description?: string | null;
   data_type: 'float' | 'integer' | 'percentage' | 'boolean' | 'string' | 'currency' | 'numeric';
   unit_of_measure?: string;
   default_value?: number | string;
+  include_in_dre?: boolean;
+  ui_config?: {
+    is_separator?: boolean;
+    separator_style?: {
+      tone?: 'slate' | 'indigo' | 'blue' | 'emerald' | 'amber' | 'rose' | 'violet';
+      font_size?: 'xs' | 'sm' | 'base' | 'lg';
+      bold?: boolean;
+      italic?: boolean;
+    };
+  } | null;
   /** @deprecated use editable */
   is_required?: boolean;
   editable?: boolean;
@@ -100,6 +112,7 @@ export interface AssumptionDefinition {
 
 export interface AssumptionDefinitionUpdateInput {
   name?: string;
+  category_id?: string;
   description?: string;
   data_type?: AssumptionDefinition['data_type'];
   unit_of_measure?: string;
@@ -107,6 +120,8 @@ export interface AssumptionDefinitionUpdateInput {
   editable?: boolean;
   periodicity?: string;
   sort_order?: number;
+  include_in_dre?: boolean;
+  ui_config?: AssumptionDefinition['ui_config'];
   growth_rule?: {
     type: 'compound_growth' | 'curve' | 'flat';
     rate?: number;
@@ -122,7 +137,7 @@ export interface AssumptionValue {
   period_date?: string;
   numeric_value?: number;
   text_value?: string;
-  source_type: 'manual' | 'imported' | 'calculated';
+  source_type: 'manual' | 'imported' | 'derived';
 }
 
 export interface CalculatedResult {

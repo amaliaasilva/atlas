@@ -48,6 +48,35 @@ KPI_CODES = [
 ]
 
 
+def _as_period(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value[:7]
+    if hasattr(value, "strftime"):
+        return value.strftime("%Y-%m")
+    return str(value)[:7]
+
+
+def _period_in_version_range(
+    period: str,
+    start_period: str | None,
+    end_period: str | None,
+) -> bool:
+    current = _as_period(period)
+    if current is None:
+        return False
+    if start_period and current < start_period:
+        return False
+    if end_period and current > end_period:
+        return False
+    return True
+
+
+def _version_period_bounds(version: BudgetVersion) -> tuple[str | None, str | None]:
+    return _as_period(version.effective_start_date), _as_period(version.effective_end_date)
+
+
 @router.get("/unit/{version_id}")
 def unit_dashboard(
     version_id: str,
@@ -59,6 +88,7 @@ def unit_dashboard(
     if not version:
         return {"error": "Versão não encontrada"}
 
+    start_period, end_period = _version_period_bounds(version)
     results = (
         db.query(CalculatedResult, LineItemDefinition)
         .join(
@@ -68,6 +98,11 @@ def unit_dashboard(
         .order_by(CalculatedResult.period_date)
         .all()
     )
+    results = [
+        (r, li)
+        for r, li in results
+        if _period_in_version_range(r.period_date, start_period, end_period)
+    ]
 
     # Organiza por código e período
     by_code: dict[str, dict[str, float]] = defaultdict(dict)
@@ -186,6 +221,9 @@ def business_consolidated_dashboard(
             best_by_unit[v.unit_id] = v
 
     version_ids = [v.id for v in best_by_unit.values()]
+    version_period_bounds = {
+        v.id: _version_period_bounds(v) for v in best_by_unit.values()
+    }
     if not version_ids:
         return {
             "business_id": business_id,
@@ -214,6 +252,7 @@ def business_consolidated_dashboard(
     # Agregação live diretamente de CalculatedResult
     raw_results = (
         db.query(
+            CalculatedResult.budget_version_id,
             CalculatedResult.period_date,
             LineItemDefinition.code,
             CalculatedResult.value,
@@ -231,7 +270,10 @@ def business_consolidated_dashboard(
     # Agrega: soma de todas as unidades por (período, métrica)
     agg: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     all_periods_set: set[str] = set()
-    for period_date, code, value in raw_results:
+    for version_id, period_date, code, value in raw_results:
+        start_period, end_period = version_period_bounds.get(version_id, (None, None))
+        if not _period_in_version_range(period_date, start_period, end_period):
+            continue
         agg[code][period_date] += value
         all_periods_set.add(period_date)
 
@@ -431,6 +473,7 @@ def units_comparison(
 
     chart_data = []
     for version in versions:
+        start_period, end_period = _version_period_bounds(version)
         results = (
             db.query(CalculatedResult, LineItemDefinition)
             .join(
@@ -444,7 +487,11 @@ def units_comparison(
             .order_by(CalculatedResult.period_date)
             .all()
         )
-        series = {r.period_date: r.value for r, _ in results}
+        series = {
+            r.period_date: r.value
+            for r, _ in results
+            if _period_in_version_range(r.period_date, start_period, end_period)
+        }
         chart_data.append(
             {
                 "unit_id": version.unit_id,
@@ -951,6 +998,9 @@ def business_annual_summary(
             best_by_unit[v.unit_id] = v
 
     version_ids = [v.id for v in best_by_unit.values()]
+    version_period_bounds = {
+        v.id: _version_period_bounds(v) for v in best_by_unit.values()
+    }
     if not version_ids:
         return {"business_id": business_id, "scenario_id": scenario_id, "annual": []}
 
@@ -968,6 +1018,7 @@ def business_annual_summary(
     ]
     raw = (
         db.query(
+            CalculatedResult.budget_version_id,
             CalculatedResult.period_date,
             LineItemDefinition.code,
             CalculatedResult.value,
@@ -983,7 +1034,10 @@ def business_annual_summary(
     )
 
     agg: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
-    for period_date, code, value in raw:
+    for version_id, period_date, code, value in raw:
+        start_period, end_period = version_period_bounds.get(version_id, (None, None))
+        if not _period_in_version_range(period_date, start_period, end_period):
+            continue
         agg[code][period_date] += value
 
     # Constrói time_series mensal temporário e reutiliza helper

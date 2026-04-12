@@ -34,6 +34,52 @@ from app.models.budget_version import BudgetVersion
 from app.models.user import User, Role
 
 
+DRE_DEFAULT_OUTSIDE_CODES = {
+    "slots_por_hora",
+    "horas_dia_util",
+    "horas_dia_sabado",
+    "dias_uteis_mes",
+    "sabados_mes",
+    "taxa_ocupacao",
+    "preco_medio_hora",
+    "ticket_medio_plano_mensal",
+    "ticket_medio_plano_trimestral",
+    "ticket_medio_plano_anual",
+    "mix_plano_mensal_pct",
+    "mix_plano_trimestral_pct",
+    "mix_plano_anual_pct",
+    "mix_diamante_pct",
+    "mix_ouro_pct",
+    "mix_prata_pct",
+    "mix_bronze_pct",
+    "beneficios_por_funcionario",
+    "num_funcionarios",
+    "num_personal_trainers",
+    "receita_media_personal_mes",
+    "custo_energia_fixo",
+    "custo_energia_variavel_max",
+    "automacao_reducao_pct",
+    "custo_agua_fixo",
+    "custo_agua_variavel_max",
+    "kwh_consumo_mensal",
+    "tarifa_kwh",
+    "consumo_agua_m3_mensal",
+    "tarifa_agua_m3",
+    "encargos_folha_pct",
+    "taxa_cartao_pct",
+    "aliquota_imposto_receita",
+    "capacidade_maxima_mes",
+    "capacidade_estimada_aulas_mes",
+    "taxa_ocupacao_referencia_utilidades",
+    "folha_clt_base_calculada",
+    "encargos_clt_calculados",
+}
+
+
+def _default_include_in_dre(code: str) -> bool:
+    return not (code.startswith("salario_") or code in DRE_DEFAULT_OUTSIDE_CODES)
+
+
 UNITS_DATA = [
     {
         "name": "Laboratório",
@@ -177,6 +223,7 @@ ASSUMPTION_DEFINITIONS = {
             10,
             True,
             "static",
+            "Quantidade máxima de atendimentos simultâneos que cabem em cada hora de operação.",
         ),
         (
             "horas_dia_util",
@@ -186,6 +233,7 @@ ASSUMPTION_DEFINITIONS = {
             17.0,
             True,
             "static",
+            "Janela operacional de segunda a sexta usada no cálculo da capacidade mensal.",
         ),
         (
             "horas_dia_sabado",
@@ -195,6 +243,7 @@ ASSUMPTION_DEFINITIONS = {
             7.0,
             True,
             "static",
+            "Janela operacional de sábado usada no cálculo da capacidade mensal.",
         ),
         (
             "dias_uteis_mes",
@@ -204,6 +253,7 @@ ASSUMPTION_DEFINITIONS = {
             22,
             True,
             "static",
+            "Base de dias úteis considerada para pré-calcular a capacidade máxima do mês.",
         ),
         (
             "sabados_mes",
@@ -213,6 +263,17 @@ ASSUMPTION_DEFINITIONS = {
             4,
             True,
             "static",
+            "Quantidade de sábados operados no mês usada na fórmula da capacidade.",
+        ),
+        (
+            "capacidade_maxima_mes",
+            "Capacidade máxima de aulas por mês",
+            "numeric",
+            "h/mês",
+            4020.0,
+            False,
+            "monthly",
+            "Capacidade máxima de aulas por mês = (dias úteis × horas/dia útil + sábados × horas/dia sábado) × slots por hora. O valor é informativo e é recalculado automaticamente a partir das premissas operacionais.",
         ),
         (
             "preco_medio_hora",
@@ -258,16 +319,6 @@ ASSUMPTION_DEFINITIONS = {
             "%",
             0.25,
             True,
-            "static",
-        ),
-        # ── Legado (mantido para compatibilidade) ────────────────────────────
-        (
-            "alunos_capacidade_maxima",
-            "Capacidade máxima de alunos (legado)",
-            "integer",
-            "alunos",
-            200,
-            False,
             "static",
         ),
         (
@@ -509,12 +560,22 @@ ASSUMPTION_DEFINITIONS = {
         ),
         (
             "automacao_reducao_pct",
-            "Redução por automação de A/C (% do variável)",
+            "Redução por automação de A/C (% do total)",
             "percentage",
             "%",
             0.20,
             True,
             "static",
+        ),
+        (
+            "custo_energia_calculado_mes",
+            "Energia elétrica — total estimado (pré-calculado)",
+            "currency",
+            "R$/mês",
+            0.0,
+            False,
+            "monthly",
+            "Energia estimada = (parcela fixa + máximo variável a 100% ocupação × taxa de ocupação) × (1 − redução por automação de A/C). Valor informativo e recalculado automaticamente.",
         ),
         # ── Água: modelo misto (fixo + variável × ocupação) ──────────────────
         (
@@ -534,6 +595,16 @@ ASSUMPTION_DEFINITIONS = {
             1300.0,
             True,
             "static",
+        ),
+        (
+            "custo_agua_calculado_mes",
+            "Água — total estimado (pré-calculado)",
+            "currency",
+            "R$/mês",
+            0.0,
+            False,
+            "monthly",
+            "Água estimada = parcela fixa + (máximo variável a 100% ocupação × taxa de ocupação). Valor informativo e recalculado automaticamente.",
         ),
         # ── Legado (mantido para compatibilidade) ────────────────────────────
         (
@@ -785,7 +856,7 @@ ASSUMPTION_DEFINITIONS = {
             "currency",
             "R$",
             342004.95,
-            True,
+            False,
             "one_time",
         ),
         (
@@ -885,6 +956,8 @@ ASSUMPTION_DEFINITIONS = {
             0.06,
             True,
             "static",
+            {"type": "curve", "values": [0.06, 0.1633, 0.1633, 0.1633, 0.1633, 0.1633, 0.1633]},
+            "Imposto aplicado sobre a receita. Ano 1 = 6%; do ano 2 em diante = 16,33% por padrão.",
         ),
         (
             "taxa_cartao_pct",
@@ -894,11 +967,31 @@ ASSUMPTION_DEFINITIONS = {
             0.035,
             True,
             "static",
+            "Percentual aplicado sobre a receita total estimada. O valor em R$/mês aparece na linha pré-calculada logo abaixo.",
+        ),
+        (
+            "custo_taxa_cartao_calculado_mes",
+            "Taxa de cartão — custo estimado (pré-calculado)",
+            "currency",
+            "R$/mês",
+            0.0,
+            False,
+            "monthly",
+            "Taxa de cartão estimada = receita total estimada × taxa de cartão (% da receita). Valor informativo e recalculado automaticamente.",
+        ),
+        (
+            "impostos_calculados_mes",
+            "Impostos — total estimado (pré-calculado)",
+            "currency",
+            "R$/mês",
+            0.0,
+            False,
+            "monthly",
+            "Impostos estimados = receita total estimada × alíquota de imposto sobre receita. Valor informativo e recalculado automaticamente.",
         ),
     ],
     "OCUPACAO": [
-        # Placeholder — a taxa de ocupação mensal já está em RECEITA,
-        # aqui ficam premissas derivadas de ocupação se necessário
+        # Placeholder — a taxa de ocupação mensal continua em RECEITA.
     ],
 }
 
@@ -1449,7 +1542,13 @@ def run_seeds(db: Session):
             continue
         for idx, defn_tuple in enumerate(definitions):
             code, name, dtype, uom, default, editable, periodicity = defn_tuple[:7]
-            growth_rule = defn_tuple[7] if len(defn_tuple) > 7 else None
+            description = None
+            growth_rule = None
+            for extra in defn_tuple[7:]:
+                if isinstance(extra, dict):
+                    growth_rule = extra
+                elif isinstance(extra, str):
+                    description = extra
             existing = (
                 db.query(AssumptionDefinition)
                 .filter(
@@ -1465,6 +1564,7 @@ def run_seeds(db: Session):
                     category_id=cat.id,
                     code=code,
                     name=name,
+                    description=description,
                     data_type=dtype,
                     unit_of_measure=uom,
                     default_value=default,
@@ -1473,14 +1573,51 @@ def run_seeds(db: Session):
                     applies_to="version",
                     sort_order=idx,
                     growth_rule=growth_rule,
+                    include_in_dre=_default_include_in_dre(code),
+                    is_active=True,
                 )
                 db.add(defn)
                 defn_count += 1
-            elif growth_rule is not None and existing.growth_rule is None:
-                # ETAPA-2: upsert growth_rule em definições já existentes
-                existing.growth_rule = growth_rule
-                db.add(existing)
-                defn_updated += 1
+            else:
+                changed = False
+                desired_fields = {
+                    "category_id": cat.id,
+                    "name": name,
+                    "description": description,
+                    "data_type": dtype,
+                    "unit_of_measure": uom,
+                    "default_value": default,
+                    "editable": editable,
+                    "periodicity": periodicity,
+                    "sort_order": idx,
+                    "include_in_dre": _default_include_in_dre(code),
+                    "is_active": True,
+                }
+                for field_name, desired_value in desired_fields.items():
+                    if getattr(existing, field_name) != desired_value:
+                        setattr(existing, field_name, desired_value)
+                        changed = True
+                if growth_rule != existing.growth_rule:
+                    existing.growth_rule = growth_rule
+                    changed = True
+                if changed:
+                    db.add(existing)
+                    defn_updated += 1
+
+    for legacy_code in {"alunos_capacidade_maxima"}:
+        legacy_def = (
+            db.query(AssumptionDefinition)
+            .filter(
+                AssumptionDefinition.business_id == business.id,
+                AssumptionDefinition.code == legacy_code,
+            )
+            .first()
+        )
+        if legacy_def and legacy_def.is_active:
+            legacy_def.is_active = False
+            db.add(legacy_def)
+            defn_updated += 1
+
     db.commit()
     print(
         f"  ✓ {defn_count} definições de premissas criadas, {defn_updated} atualizadas com growth_rule"
@@ -1577,7 +1714,7 @@ def run_seeds(db: Session):
                     version_name=f"Orçamento {scenario_label[s_name]} — {unit_obj.name}",
                     status="published",
                     effective_start_date=opening,
-                    projection_horizon_years=10,
+                    projection_horizon_years=9,
                     created_by=admin.id,
                 )
                 db.add(bv)

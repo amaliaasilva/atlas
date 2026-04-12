@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Building2, MapPin, TrendingUp,
   FileSpreadsheet, Upload, ClipboardList, Settings, LogOut,
   ChevronDown, Briefcase, BarChart3, GitCompare, Scale,
-  ChevronRight,
+  ChevronRight, Calculator,
 } from 'lucide-react';
 import { businessesApi } from '@/lib/api';
 import { useAuthStore, useNavStore } from '@/store/auth';
@@ -269,6 +269,16 @@ export function Sidebar() {
           label: 'Versões de Orçamento',
           href: '/budget',
           icon: <FileSpreadsheet className="h-4 w-4" />,
+        },
+        {
+          label: 'Cálculos',
+          href: '/dashboard/calculos',
+          matchPrefix: '/dashboard/calculos',
+          icon: <Calculator className="h-4 w-4" />,
+          children: [
+            { label: 'Cálculo Kit Higiene', href: '/dashboard/calculo-kit-higiene' },
+            { label: 'Cálculo de Caixa', href: '/dashboard/calculo-caixa' },
+          ],
         },
         {
           label: 'Importar Excel',

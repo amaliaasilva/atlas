@@ -1,4 +1,4 @@
-import { DashboardNav } from '@/components/dashboard/DashboardNav';
+import { ExecutiveSubNav } from '@/components/dashboard/ExecutiveSubNav';
 import { GlobalFilters } from '@/components/dashboard/GlobalFilters';
 import { StoreSync } from '@/components/layout/StoreSync';
 
@@ -12,8 +12,8 @@ export default function ExecutiveDashboardLayout({
       {/* FE-B-11: sincroniza navStore → dashboardFilters em todas as rotas */}
       <StoreSync />
       <div className="sticky top-0 z-30">
-        {/* Sub-navegação entre dashboards */}
-        <DashboardNav />
+        {/* Sub-navegação contextual: dashboards gerais ou cálculos */}
+        <ExecutiveSubNav />
         {/* Filtros globais */}
         <GlobalFilters showUnit />
       </div>

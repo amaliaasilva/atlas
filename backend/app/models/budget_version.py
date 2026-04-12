@@ -44,7 +44,7 @@ class BudgetVersion(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
     # ARCH-08: horizonte de projeção explícito
     projection_horizon_years: Mapped[int] = mapped_column(
-        Integer, default=10, nullable=False
+        Integer, default=9, nullable=False
     )
 
     # Relationships
