@@ -1165,7 +1165,7 @@ LINE_ITEM_DEFINITIONS = [
     (
         "teachers_needed_pessimistic",
         "Professores Necessários (Pessimista — 1 aluno/prof)",
-        "operational",
+        "result",
         "teachers",
         24,
         False,
@@ -1175,7 +1175,7 @@ LINE_ITEM_DEFINITIONS = [
     (
         "teachers_needed_medium",
         "Professores Necessários (Médio — 1,5 alunos/prof)",
-        "operational",
+        "result",
         "teachers",
         25,
         False,
@@ -1185,7 +1185,7 @@ LINE_ITEM_DEFINITIONS = [
     (
         "teachers_needed_optimistic",
         "Professores Necessários (Otimista — 2 alunos/prof)",
-        "operational",
+        "result",
         "teachers",
         26,
         False,
