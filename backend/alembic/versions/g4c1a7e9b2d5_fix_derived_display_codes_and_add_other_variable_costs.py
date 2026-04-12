@@ -78,7 +78,7 @@ def upgrade() -> None:
         ).fetchone()
 
         if exists:
-            # Garante que o display_order e category estejam corretos
+            # Garante que display_order e category estejam corretos
             conn.execute(
                 sa.text(
                     "UPDATE line_item_definitions "
@@ -97,12 +97,12 @@ def upgrade() -> None:
             sa.text(
                 "INSERT INTO line_item_definitions "
                 "(id, business_id, code, name, category, subcategory, "
-                " display_order, show_in_summary, is_key_metric, is_percentage, "
+                " calculation_type, display_order, is_kpi, is_subtotal, "
                 " created_at, updated_at) "
                 "VALUES "
                 "(:id, :bid, 'other_variable_costs', 'Outros Custos Variáveis', "
                 " 'variable_cost', 'other_variable', "
-                " 24, false, false, false, "
+                " 'formula', 24, false, false, "
                 " NOW(), NOW())"
             ),
             {"id": new_id, "bid": business_id},
