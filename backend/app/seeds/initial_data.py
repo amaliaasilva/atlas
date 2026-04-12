@@ -73,6 +73,15 @@ DRE_DEFAULT_OUTSIDE_CODES = {
     "taxa_ocupacao_referencia_utilidades",
     "folha_clt_base_calculada",
     "encargos_clt_calculados",
+    # ── Valores derivados/preview (calculados client-side para exibição)  ──
+    # NUNCA devem entrar no motor de cálculo como inputs.
+    "impostos_calculados_mes",
+    "custo_taxa_cartao_calculado_mes",
+    "receita_total_calculada_mes",
+    "custo_energia_calculado_mes",
+    "custo_agua_calculado_mes",
+    "kit_higiene_professor_calculado_mes",
+    "folha_clt_total_calculada",
 }
 
 
@@ -1138,6 +1147,16 @@ LINE_ITEM_DEFINITIONS = [
         "variable_cost",
         "card_fee",
         23,
+        False,
+        False,
+        False,
+    ),
+    (
+        "other_variable_costs",
+        "Outros Custos Variáveis",
+        "variable_cost",
+        "other_variable",
+        24,
         False,
         False,
         False,

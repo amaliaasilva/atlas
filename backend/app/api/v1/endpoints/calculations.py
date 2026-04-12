@@ -49,6 +49,25 @@ DEFAULT_TAX_GROWTH_RULE = {
     "values": [0.06, 0.1633, 0.1633, 0.1633, 0.1633, 0.1633, 0.1633],
 }
 
+# Codes que são APENAS para exibição/preview no orçamento e NUNCA devem
+# entrar no motor de cálculo como inputs. São valores pré-calculados
+# derivados client-side (e às vezes persistidos com source_type='calculated')
+# que seriam somados duas vezes se não fossem explicitamente excluídos.
+DERIVED_DISPLAY_ONLY_CODES = frozenset({
+    "impostos_calculados_mes",           # preview: receita × alíquota
+    "custo_taxa_cartao_calculado_mes",   # preview: receita × taxa_cartao
+    "capacidade_maxima_mes",             # driver operacional informativo
+    "capacidade_estimada_aulas_mes",     # driver operacional informativo
+    "receita_total_calculada_mes",       # preview de receita
+    "custo_energia_calculado_mes",       # preview de energia
+    "custo_agua_calculado_mes",          # preview de água
+    "kit_higiene_professor_calculado_mes",  # preview de kit higiene
+    "taxa_ocupacao_referencia_utilidades",  # replica taxa_ocupacao — read-only
+    "folha_clt_base_calculada",          # preview folha CLT
+    "encargos_clt_calculados",           # preview encargos
+    "folha_clt_total_calculada",         # preview folha total
+})
+
 WORKING_CAPITAL_CODE = "capital_giro_inicial"
 WORKING_CAPITAL_BURN_NO_REVENUE_MONTHS_CODE = "caixa_meses_burn_sem_receita"
 WORKING_CAPITAL_BURN_WITH_REVENUE_MONTHS_CODE = "caixa_meses_com_receita"
@@ -408,7 +427,16 @@ def _build_inputs_for_version(
             if defn.code == "aliquota_imposto_receita" and (
                 not rule or rule.get("type") == "flat"
             ):
-                rule = DEFAULT_TAX_GROWTH_RULE
+                # Só aplica DEFAULT_TAX_GROWTH_RULE quando o usuário NÃO tem
+                # valores explícitos (manual) salvos para períodos futuros.
+                # Evita sobrescrever uma alíquota flat configurada intencionalmente.
+                has_explicit_future = any(
+                    p for p in periods
+                    if (defn.code, p) in values
+                    and int(p[:4]) > base_year
+                )
+                if not has_explicit_future:
+                    rule = DEFAULT_TAX_GROWTH_RULE
             rule = rule or {"type": "flat"}
             expanded = expand_assumption(rule, float(base), periods, base_year)
             for period, val in expanded.items():
@@ -562,11 +590,14 @@ def _build_inputs_for_version(
         "taxa_cartao_pct",  # handled via variable_costs.card_fee_rate — must not be added to tax_rate
     }
 
-    # Identifica codes desconhecidos por categoria (conjuntos reutilizados no loop)
+    # Identifica codes desconhecidos por categoria (conjuntos reutilizados no loop).
+    # DERIVED_DISPLAY_ONLY_CODES é excluído de todos os conjuntos: esses valores
+    # são previews calculados para exibição e recalcular leria o valor duas vezes.
     extra_fixed_codes = {
         code
         for (code, _) in values.keys()
         if code not in KNOWN_FIXED_CODES
+        and code not in DERIVED_DISPLAY_ONLY_CODES
         and code_category_map.get(code) in {"CUSTO_FIXO", "SALARIO"}
         and code_include_in_dre_map.get(code, True)
     }
@@ -574,6 +605,7 @@ def _build_inputs_for_version(
         code
         for (code, _) in values.keys()
         if code not in KNOWN_VARIABLE_CODES
+        and code not in DERIVED_DISPLAY_ONLY_CODES
         and code_category_map.get(code) == "CUSTO_VARIAVEL"
         and code_include_in_dre_map.get(code, True)
     }
@@ -581,6 +613,7 @@ def _build_inputs_for_version(
         code
         for (code, _) in values.keys()
         if code not in KNOWN_TAX_CODES
+        and code not in DERIVED_DISPLAY_ONLY_CODES
         and code_category_map.get(code) == "FISCAL"
         and code_include_in_dre_map.get(code, True)
     }
@@ -597,6 +630,15 @@ def _build_inputs_for_version(
         else []
     )
 
+    def _contract_start_offset(contract, horizon_opening_date) -> int:
+        """Calcula quantos meses o contrato começa após o início do horizonte."""
+        if not horizon_opening_date or not contract.start_date:
+            return 0
+        start = contract.start_date
+        origin = horizon_opening_date
+        offset = (start.year - origin.year) * 12 + (start.month - origin.month)
+        return max(0, offset)
+
     contract_inputs: list[FinancingContractInputs] = [
         FinancingContractInputs(
             name=c.name,
@@ -605,7 +647,7 @@ def _build_inputs_for_version(
             term_months=c.term_months,
             grace_period_months=c.grace_period_months,
             down_payment_pct=c.down_payment_pct,
-            start_offset_months=0,  # TODO: derivar de c.start_date vs opening
+            start_offset_months=_contract_start_offset(c, horizon_opening),
         )
         for c in db_contracts
     ]

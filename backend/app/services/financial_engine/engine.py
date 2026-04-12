@@ -435,6 +435,7 @@ class FinancialEngine:
                 "hygiene_kit_cost": period.hygiene_kit_cost,
                 "sales_commission_cost": period.sales_commission_cost,
                 "card_fee_cost": period.card_fee_cost,
+                "other_variable_costs": period.other_variable_costs,
                 "taxes_on_revenue": period.taxes_on_revenue,
                 "financing_payment": period.financing_payment,
                 "operating_result": period.operating_result,
