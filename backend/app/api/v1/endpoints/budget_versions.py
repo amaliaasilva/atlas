@@ -174,6 +174,8 @@ def archive_version(
 
 class CloneRequest(BaseModel):
     new_name: str | None = None
+    new_scenario_id: str | None = None
+    new_unit_id: str | None = None
 
 
 @router.post("/{version_id}/clone", response_model=BudgetVersionOut, status_code=201)
@@ -185,20 +187,64 @@ def clone_version(
 ):
     """
     Clona uma versão de orçamento: cria nova BudgetVersion (status=draft) com
-    todos os AssumptionValues copiados. Essencial para análise What-If.
+    todos os AssumptionValues copiados. Opcionalmente pode apontar para outro
+    cenário (new_scenario_id) e/ou outra unidade (new_unit_id).
+
+    Quando new_unit_id é fornecido, as datas effective_start/end são
+    recalculadas com base na opening_date da nova unidade.
     """
     source = db.query(BudgetVersion).filter(BudgetVersion.id == version_id).first()
     if not source:
         raise HTTPException(status_code=404, detail="Versão original não encontrada")
 
+    target_unit_id = data.new_unit_id or source.unit_id
+    target_scenario_id = data.new_scenario_id or source.scenario_id
+
+    # Valida cenário destino se fornecido
+    if data.new_scenario_id:
+        from app.models.scenario import Scenario as ScenarioModel
+        scenario = db.query(ScenarioModel).filter(ScenarioModel.id == data.new_scenario_id).first()
+        if not scenario:
+            raise HTTPException(status_code=404, detail="Cenário destino não encontrado")
+
+    # Deriva datas a partir da nova unidade se fornecida
+    effective_start = source.effective_start_date
+    effective_end = source.effective_end_date
+    horizon_years = source.projection_horizon_years
+
+    if data.new_unit_id:
+        target_unit = db.query(Unit).filter(Unit.id == data.new_unit_id).first()
+        if not target_unit:
+            raise HTTPException(status_code=404, detail="Unidade destino não encontrada")
+        if target_unit.opening_date:
+            effective_start = target_unit.opening_date
+            if horizon_years:
+                effective_end = (
+                    effective_start
+                    + relativedelta(months=horizon_years * 12)
+                    - relativedelta(days=1)
+                )
+            elif source.effective_end_date and source.effective_start_date:
+                # Mantém o mesmo horizonte em meses
+                delta_months = (
+                    (source.effective_end_date.year - source.effective_start_date.year) * 12
+                    + (source.effective_end_date.month - source.effective_start_date.month)
+                    + 1
+                )
+                effective_end = (
+                    effective_start
+                    + relativedelta(months=delta_months)
+                    - relativedelta(days=1)
+                )
+
     new_version = BudgetVersion(
-        unit_id=source.unit_id,
-        scenario_id=source.scenario_id,
+        unit_id=target_unit_id,
+        scenario_id=target_scenario_id,
         version_name=data.new_name or f"{source.version_name} (cópia)",
         status="draft",
-        effective_start_date=source.effective_start_date,
-        effective_end_date=source.effective_end_date,
-        projection_horizon_years=source.projection_horizon_years,
+        effective_start_date=effective_start,
+        effective_end_date=effective_end,
+        projection_horizon_years=horizon_years,
         notes=source.notes,
         created_by=current_user.id,
         is_active=True,

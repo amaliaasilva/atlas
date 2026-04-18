@@ -105,8 +105,15 @@ export const versionsApi = {
     api.post<BudgetVersion>(`/budget-versions/${id}/publish`).then((r) => r.data),
   archive: (id: string): Promise<BudgetVersion> =>
     api.post<BudgetVersion>(`/budget-versions/${id}/archive`).then((r) => r.data),
-  clone: (id: string, newName?: string): Promise<BudgetVersion> =>
-    api.post<BudgetVersion>(`/budget-versions/${id}/clone`, { new_name: newName }).then((r) => r.data),
+  clone: (
+    id: string,
+    opts?: { new_name?: string; new_scenario_id?: string; new_unit_id?: string },
+  ): Promise<BudgetVersion> =>
+    api.post<BudgetVersion>(`/budget-versions/${id}/clone`, {
+      new_name: opts?.new_name,
+      new_scenario_id: opts?.new_scenario_id ?? null,
+      new_unit_id: opts?.new_unit_id ?? null,
+    }).then((r) => r.data),
   delete: (id: string): Promise<void> =>
     api.delete(`/budget-versions/${id}`).then(() => {}),
 };

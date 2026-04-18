@@ -1414,6 +1414,27 @@ export default function BudgetVersionClient() {
     [allPeriods, getCellValue, definitionByCode],
   );
 
+  // Resumo DRE por ano — usado no tooltip dos pills de ano (hover)
+  const yearDreSummary = useMemo(() => {
+    const summary: Record<string, { receita: number; despesas: number; resultado: number }> = {};
+    for (const yr of availableYears) {
+      const yrPeriods = allPeriods.filter((p) => p.startsWith(yr));
+      let receita = 0;
+      let despesas = 0;
+      for (const p of yrPeriods) {
+        receita += getCellValue(DERIVED_REVENUE_CODE, p, 'monthly').value;
+      }
+      for (const def of visibleDefinitions) {
+        if (def.include_in_dre === false || def.code === DERIVED_REVENUE_CODE) continue;
+        for (const p of yrPeriods) {
+          despesas += getCellValue(def.code, p, def.periodicity).value;
+        }
+      }
+      summary[yr] = { receita, despesas, resultado: receita - despesas };
+    }
+    return summary;
+  }, [availableYears, allPeriods, visibleDefinitions, getCellValue]);
+
   const parseEditableNumber = (raw: string): number | null => {
     const trimmed = raw.trim();
     if (!trimmed) return null;
@@ -2299,19 +2320,48 @@ export default function BudgetVersionClient() {
               Editar todos
             </button>
           </div>
-          {viewMode === 'monthly' && availableYears.map((yr) => (
-            <button
-              key={yr}
-              onClick={() => setSelectedYear(yr)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
-                yr === activeYear
-                  ? 'bg-brand-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {yr}
-            </button>
-          ))}
+          {viewMode === 'monthly' && availableYears.map((yr) => {
+            const yrSum = yearDreSummary[yr];
+            return (
+              <div key={yr} className="relative group/yrpill">
+                <button
+                  onClick={() => setSelectedYear(yr)}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                    yr === activeYear
+                      ? 'bg-brand-600 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {yr}
+                </button>
+                {yrSum && (
+                  <div className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 w-56 rounded-xl border border-gray-200 bg-white shadow-2xl px-3 py-2.5 opacity-0 transition-opacity duration-150 group-hover/yrpill:opacity-100">
+                    <p className="text-[11px] font-bold text-gray-700 text-center mb-2 border-b border-gray-100 pb-1.5">{yr} — Resumo DRE</p>
+                    <div className="space-y-1.5 text-xs">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-500">Receita</span>
+                        <span className="font-semibold text-emerald-600">
+                          {yrSum.receita.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-500">Despesas DRE</span>
+                        <span className="font-semibold text-rose-600">
+                          {yrSum.despesas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                        </span>
+                      </div>
+                      <div className="border-t border-gray-100 pt-1.5 flex justify-between items-center">
+                        <span className="font-medium text-gray-700">Resultado</span>
+                        <span className={cn('font-bold', yrSum.resultado >= 0 ? 'text-emerald-700' : 'text-red-600')}>
+                          {yrSum.resultado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* Toolbar de premissas */}
@@ -2898,6 +2948,11 @@ export default function BudgetVersionClient() {
                     {viewMode === 'annual' ? p : formatPeriod(p)}
                   </th>
                 ))}
+                {viewMode === 'monthly' && (
+                  <th className={cn('px-2 text-center text-xs font-semibold text-indigo-600 bg-indigo-50/80 min-w-[90px] whitespace-nowrap border-l border-indigo-100', headerCellY)}>
+                    Σ {activeYear}
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -3032,7 +3087,7 @@ export default function BudgetVersionClient() {
                               void dropDefinition(cat.id, catDefs, def);
                             }}
                           >
-                              <td colSpan={displayPeriods.length + 2} className={cn('px-4', isCompactDensity ? 'py-2' : 'py-3', isDropTarget && 'bg-sky-50')}>
+                              <td colSpan={viewMode === 'monthly' ? displayPeriods.length + 3 : displayPeriods.length + 2} className={cn('px-4', isCompactDensity ? 'py-2' : 'py-3', isDropTarget && 'bg-sky-50')}>
                               <div className="flex items-center gap-3">
                                 <span
                                   draggable
@@ -3347,6 +3402,35 @@ export default function BudgetVersionClient() {
                               </td>
                             );
                           })}
+                          {viewMode === 'monthly' && (
+                            <td className={cn('px-1 text-center bg-indigo-50/40 border-l border-indigo-100', isCompactDensity ? 'py-0.5' : 'py-1')}>
+                              {isSeparator ? null : (() => {
+                                if (def.data_type === 'percentage') {
+                                  if (!visiblePeriods.length) return <span className="text-xs text-gray-400">—</span>;
+                                  const avg = visiblePeriods.reduce((s, p) => s + getCellValue(def.code, p, def.periodicity).value, 0) / visiblePeriods.length;
+                                  return (
+                                    <div className={cn('w-full rounded border border-indigo-100 bg-indigo-50 px-2 text-right font-semibold text-indigo-700 shadow-sm', valueTextSize, inputPaddingY)}>
+                                      {formatNumber(avg * 100, Number.isInteger(avg * 100) ? 0 : 1)}%
+                                    </div>
+                                  );
+                                }
+                                if (def.periodicity === 'static') {
+                                  const { value: sv } = getCellValue(def.code, visiblePeriods[0] ?? '', def.periodicity);
+                                  return (
+                                    <div className={cn('w-full rounded border border-indigo-100 bg-indigo-50/60 px-2 text-right font-semibold text-indigo-400 shadow-sm', valueTextSize, inputPaddingY)}>
+                                      {formatNumber(sv, Number.isInteger(sv) ? 0 : 2)}
+                                    </div>
+                                  );
+                                }
+                                const total = visiblePeriods.reduce((s, p) => s + getCellValue(def.code, p, def.periodicity).value, 0);
+                                return (
+                                  <div className={cn('w-full rounded border border-indigo-100 bg-indigo-50 px-2 text-right font-semibold text-indigo-700 shadow-sm', valueTextSize, inputPaddingY)}>
+                                    {formatNumber(total, Number.isInteger(total) ? 0 : 2)}
+                                  </div>
+                                );
+                              })()}
+                            </td>
+                          )}
                         </tr>
                       );
                     })),
