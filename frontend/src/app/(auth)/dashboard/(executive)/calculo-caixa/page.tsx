@@ -7,7 +7,7 @@ import { NoFiltersState } from '@/components/dashboard/EmptyState';
 import { Topbar } from '@/components/layout/Topbar';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import { assumptionsApi, dashboardApi, unitsApi, versionsApi } from '@/lib/api';
-import { Wallet, CalendarClock, TrendingDown, TrendingUp, Table2, Building2 } from 'lucide-react';
+import { Wallet, TrendingDown, Table2, Building2, FlameKindling, Save, Info } from 'lucide-react';
 
 type CashControls = {
   mesesBurnSemReceita: number;
@@ -229,203 +229,209 @@ export default function CalculoCaixaPage() {
   return (
     <>
       <Topbar title="Cálculo de Caixa" />
-      <div className="p-6 max-w-screen-2xl mx-auto space-y-6">
-        <header className="rounded-2xl border border-slate-200 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-5 py-4 text-white shadow-sm">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-white/10 text-white flex items-center justify-center border border-white/15 shrink-0">
-                <Wallet className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold tracking-tight">Cálculo de Caixa</h2>
-                <p className="text-sm text-slate-300 mt-0.5">
-                  Base automática pelo DRE dos 12 primeiros meses do Laboratório.
-                </p>
-              </div>
-            </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs text-slate-100">
-              <Building2 className="h-3.5 w-3.5" />
-              {laboratorioUnit ? `Unidade fonte: ${laboratorioUnit.name}` : 'Sem unidade Laboratório identificada'}
-            </div>
-          </div>
-        </header>
+      <div className="p-6 max-w-4xl mx-auto space-y-5">
 
-        {dreBase12m ? (
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
-            <div className="xl:col-span-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-              Base carregada do DRE: {dreBase12m.firstPeriod} a {dreBase12m.lastPeriod} ({formatNumber(dreBase12m.meses, 0)} meses).
+        {/* ── Header ──────────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
+              <Wallet className="h-4.5 w-4.5" />
             </div>
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] uppercase tracking-wide text-emerald-700 font-semibold">Capital de giro inicial</p>
-                <p className="text-base font-bold mt-0.5">{formatCurrency(capitalGiroAssumption?.numeric_value ?? calc.caixaNecessarioRecomendado)}</p>
-              </div>
-              <div className="text-xs">
-                Gerado automaticamente no recálculo
-              </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Cálculo de Caixa Necessário</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Base: DRE dos 12 primeiros meses ·{' '}
+                {laboratorioUnit ? laboratorioUnit.name : 'sem unidade Laboratório'}
+                {dreBase12m && ` · ${dreBase12m.firstPeriod} → ${dreBase12m.lastPeriod}`}
+              </p>
             </div>
           </div>
-        ) : (
+          {dreBase12m && (
+            <span className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">
+              <Building2 className="h-3.5 w-3.5" />
+              {formatNumber(dreBase12m.meses, 0)} meses carregados
+            </span>
+          )}
+        </div>
+
+        {!dreBase12m && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             Não foi possível montar a base DRE de 12 meses para o Laboratório neste cenário.
           </div>
         )}
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Horizonte de Necessidade de Caixa</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-            <label className="text-xs text-gray-500">
-              Faturamento mensal (DRE 12M)
-              <input
-                type="number"
-                step="0.01"
-                value={Number(calc.faturamentoMensal.toFixed(2))}
-                disabled
-                className="mt-1 w-full rounded border border-slate-200 bg-slate-100 px-2 py-1.5 text-sm text-slate-600"
-              />
-            </label>
-            <label className="text-xs text-gray-500">
-              Custo variável mensal (DRE 12M)
-              <input
-                type="number"
-                step="0.01"
-                value={Number(calc.custoVariavelMensal.toFixed(2))}
-                disabled
-                className="mt-1 w-full rounded border border-slate-200 bg-slate-100 px-2 py-1.5 text-sm text-slate-600"
-              />
-            </label>
-            <label className="text-xs text-gray-500">
-              Custo fixo mensal (DRE 12M)
-              <input
-                type="number"
-                step="0.01"
-                value={Number(calc.custoFixoMensal.toFixed(2))}
-                disabled
-                className="mt-1 w-full rounded border border-slate-200 bg-slate-100 px-2 py-1.5 text-sm text-slate-600"
-              />
-            </label>
-            <label className="text-xs text-gray-500">
-              Meses de burn (sem receita)
-              <input
-                type="number"
-                step="1"
-                min={0}
-                value={controls.mesesBurnSemReceita}
-                onChange={(e) => setControls((p) => ({ ...p, mesesBurnSemReceita: Number(e.target.value) || 0 }))}
-                className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
-            </label>
-            <label className="text-xs text-gray-500">
-              Meses considerando receita
-              <input
-                type="number"
-                step="1"
-                min={0}
-                value={controls.mesesComReceita}
-                onChange={(e) => setControls((p) => ({ ...p, mesesComReceita: Number(e.target.value) || 0 }))}
-                className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
-              />
-            </label>
-            <div className="flex items-end">
-              <button
-                type="button"
-                onClick={() => saveBurnParamsMutation.mutate()}
-                className="w-full rounded-lg bg-slate-900 text-white text-sm font-semibold px-3 py-2 hover:bg-slate-800 disabled:opacity-60"
-                disabled={saveBurnParamsMutation.isPending || !activeVersion}
-              >
-                {saveBurnParamsMutation.isPending ? 'Salvando...' : 'Salvar parâmetros de burn'}
-              </button>
-            </div>
-          </div>
+        {dreBase12m && (
+          <>
+            {/* ── PASSO 1 — Tabela DRE (fonte dos dados) ───────────────── */}
+            <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
+                <Table2 className="h-4 w-4 text-slate-500" />
+                <span className="text-sm font-semibold text-gray-700">1. DRE — Laboratório (12 meses)</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Período</th>
+                      <th className="px-4 py-2 text-right">Receita</th>
+                      <th className="px-4 py-2 text-right">Custo Variável</th>
+                      <th className="px-4 py-2 text-right">Custo Fixo</th>
+                      <th className="px-4 py-2 text-right font-bold text-slate-700">Resultado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {dreBase12m.rows.map((row) => (
+                      <tr key={row.period} className="hover:bg-slate-50/70">
+                        <td className="px-4 py-2 text-slate-700 font-medium tabular-nums">{row.period}</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-slate-600">{formatCurrency(row.receita)}</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-slate-600">{formatCurrency(row.variavel)}</td>
+                        <td className="px-4 py-2 text-right tabular-nums text-slate-600">{formatCurrency(row.fixo)}</td>
+                        <td className={`px-4 py-2 text-right tabular-nums font-semibold ${row.resultado < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                          {formatCurrency(row.resultado)}
+                        </td>
+                      </tr>
+                    ))}
+                    {/* linha de média */}
+                    <tr className="bg-slate-100 border-t-2 border-slate-300">
+                      <td className="px-4 py-2 text-xs font-bold text-slate-600 uppercase tracking-wide">Média mensal</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-xs font-semibold text-slate-600">{formatCurrency(calc.faturamentoMensal)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-xs font-semibold text-slate-600">{formatCurrency(calc.custoVariavelMensal)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-xs font-semibold text-slate-600">{formatCurrency(calc.custoFixoMensal)}</td>
+                      <td className={`px-4 py-2 text-right tabular-nums text-xs font-bold ${calc.resultadoMensal < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                        {formatCurrency(calc.resultadoMensal)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
 
-          <div className="mt-2 text-xs text-slate-600">
-            {saveStatus === 'done' && 'Parâmetros salvos. O capital de giro será atualizado automaticamente no próximo recálculo.'}
-            {saveStatus === 'error' && 'Falha ao salvar parâmetros de burn.'}
-          </div>
+            {/* ── PASSO 2 — Burn derivado ───────────────────────────────── */}
+            <section className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4">
+              <div className="flex items-center gap-2 mb-3">
+                <FlameKindling className="h-4 w-4 text-rose-600" />
+                <span className="text-sm font-semibold text-rose-800">2. Burn médio mensal (calculado do DRE)</span>
+              </div>
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex-1 min-w-[200px]">
+                  <p className="text-[11px] text-rose-600 uppercase tracking-wide font-semibold mb-0.5">Resultado médio / mês</p>
+                  <p className={`text-xl font-extrabold tabular-nums ${calc.resultadoMensal < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                    {formatCurrency(calc.resultadoMensal)}
+                  </p>
+                </div>
+                <div className="text-rose-400 text-lg font-light">→</div>
+                <div className="flex-1 min-w-[200px]">
+                  <p className="text-[11px] text-rose-600 uppercase tracking-wide font-semibold mb-0.5">Burn = max(0, −resultado)</p>
+                  <p className="text-xl font-extrabold text-rose-700 tabular-nums">
+                    {formatCurrency(calc.burnMensal)}<span className="text-sm font-normal text-rose-500">/mês</span>
+                  </p>
+                </div>
+              </div>
+              <p className="mt-3 text-[11px] text-rose-500 flex items-center gap-1">
+                <Info className="h-3 w-3" />
+                Burn é zero quando o resultado médio for positivo (negócio já sustentável).
+              </p>
+            </section>
 
-          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 space-y-1">
-            <p className="font-semibold">Fórmula usada:</p>
-              <p>Resultado mensal médio = Média(Receita − Custo variável − Custo fixo) nos 12 meses</p>
-              <p>Burn médio = max(0, −Resultado mensal médio)</p>
-              <p>Capital de giro = Burn médio × (Meses sem receita + Meses com receita)</p>
-          </div>
-        </section>
+            {/* ── PASSO 3 — Parâmetros (editável) ─────────────────────── */}
+            <section className="rounded-2xl border border-gray-200 bg-white px-5 py-4">
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <span className="text-sm font-semibold text-gray-700">3. Quantos meses de caixa você precisa?</span>
+                <button
+                  type="button"
+                  onClick={() => saveBurnParamsMutation.mutate()}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold px-3 py-1.5 hover:bg-slate-800 disabled:opacity-60"
+                  disabled={saveBurnParamsMutation.isPending || !activeVersion}
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  {saveBurnParamsMutation.isPending ? 'Salvando…' : 'Salvar'}
+                </button>
+              </div>
 
-        <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
-            <Table2 className="h-4 w-4 text-slate-600" />
-            <h3 className="text-sm font-semibold text-gray-700">Visão DRE - Laboratório (12 primeiros meses)</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-2 text-left">Período</th>
-                  <th className="px-4 py-2 text-right">Receita</th>
-                  <th className="px-4 py-2 text-right">Custo Variável</th>
-                  <th className="px-4 py-2 text-right">Custo Fixo</th>
-                  <th className="px-4 py-2 text-right">Resultado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {(dreBase12m?.rows ?? []).map((row) => (
-                  <tr key={row.period} className="hover:bg-slate-50/70">
-                    <td className="px-4 py-2 text-slate-700 font-medium">{row.period}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-slate-700">{formatCurrency(row.receita)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-slate-700">{formatCurrency(row.variavel)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-slate-700">{formatCurrency(row.fixo)}</td>
-                    <td className={`px-4 py-2 text-right tabular-nums font-semibold ${row.resultado < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                      {formatCurrency(row.resultado)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+              <div className="grid grid-cols-2 gap-4">
+                <label className="block">
+                  <span className="text-xs font-semibold text-slate-600">Meses iniciais sem receita</span>
+                  <p className="text-[11px] text-slate-400 mb-1">Período pré-abertura / ramp-up zero</p>
+                  <input
+                    type="number"
+                    step="1"
+                    min={0}
+                    value={controls.mesesBurnSemReceita}
+                    onChange={(e) => setControls((p) => ({ ...p, mesesBurnSemReceita: Number(e.target.value) || 0 }))}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold text-slate-600">Meses seguintes com receita</span>
+                  <p className="text-[11px] text-slate-400 mb-1">Período com receita, mas ainda negativo</p>
+                  <input
+                    type="number"
+                    step="1"
+                    min={0}
+                    value={controls.mesesComReceita}
+                    onChange={(e) => setControls((p) => ({ ...p, mesesComReceita: Number(e.target.value) || 0 }))}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  />
+                </label>
+              </div>
 
-        <section className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
-            <h3 className="text-sm font-semibold text-gray-700">Resumo do Caixa</h3>
-          </div>
-          <div className="p-4 space-y-4">
-            <div className="rounded-2xl border border-emerald-300 bg-gradient-to-r from-emerald-50 to-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Capital de giro inicial</p>
-              <div className="mt-2 flex items-end justify-between gap-3 flex-wrap">
-                <p className="text-3xl font-extrabold text-emerald-900 tabular-nums">{formatCurrency(calc.caixaNecessarioRecomendado)}</p>
-                <p className="text-[11px] font-bold text-emerald-900 tabular-nums">
-                  {formatCurrency(calc.caixaNecessarioBurn)} + {formatCurrency(calc.caixaNecessarioComReceita)}
+              {saveStatus === 'done' && (
+                <p className="mt-2 text-xs text-emerald-600">Parâmetros salvos. Recalcule o orçamento para atualizar o capital de giro.</p>
+              )}
+              {saveStatus === 'error' && (
+                <p className="mt-2 text-xs text-red-600">Falha ao salvar parâmetros.</p>
+              )}
+            </section>
+
+            {/* ── PASSO 4 — Resultado / decomposição ──────────────────── */}
+            <section className="rounded-2xl border border-emerald-300 bg-white overflow-hidden shadow-sm">
+              <div className="px-5 py-4 border-b border-emerald-100 bg-emerald-50">
+                <p className="text-[11px] uppercase tracking-wide text-emerald-700 font-semibold">4. Capital de giro necessário</p>
+                <p className="text-3xl font-extrabold text-emerald-900 tabular-nums mt-1">
+                  {formatCurrency(calc.caixaNecessarioRecomendado)}
                 </p>
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
-              <Metric title="Faturamento mensal (DRE)" value={formatCurrency(calc.faturamentoMensal)} icon={<TrendingUp className="h-4 w-4" />} tone="sky" />
-              <Metric title="Custos totais" value={formatCurrency(calc.custosTotais)} icon={<TrendingDown className="h-4 w-4" />} tone="amber" />
-              <Metric title="Resultado mensal" value={formatCurrency(calc.resultadoMensal)} icon={<TrendingUp className="h-4 w-4" />} tone={calc.resultadoMensal < 0 ? 'rose' : 'emerald'} />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-rose-700">
-                  <CalendarClock className="h-4 w-4" />
-                  {controls.mesesBurnSemReceita} mes. sem receita
+              <div className="px-5 py-4 space-y-2">
+                {/* linha do cálculo */}
+                <div className="flex items-center gap-3 flex-wrap text-sm tabular-nums">
+                  <span className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-rose-800 font-semibold whitespace-nowrap">
+                    {formatCurrency(calc.burnMensal)}<span className="font-normal text-rose-500">/mês</span>
+                  </span>
+                  <span className="text-slate-400">×</span>
+                  <span className="rounded-lg bg-slate-100 border border-slate-200 px-3 py-2 text-slate-700 font-semibold whitespace-nowrap">
+                    {controls.mesesBurnSemReceita} meses sem receita
+                  </span>
+                  <span className="text-slate-400">=</span>
+                  <span className="font-bold text-slate-800">{formatCurrency(calc.caixaNecessarioBurn)}</span>
                 </div>
-                <p className="mt-2 text-sm text-rose-900">Burn médio: <span className="font-bold tabular-nums">{formatCurrency(calc.burnMensal)}/mês</span></p>
-                <p className="mt-1 text-sm text-rose-900">Subtotal: <span className="font-bold tabular-nums">{formatCurrency(calc.caixaNecessarioBurn)}</span></p>
-              </div>
-
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-700">
-                  <TrendingDown className="h-4 w-4" />
-                  {controls.mesesComReceita} mes. com receita
+                <div className="flex items-center gap-3 flex-wrap text-sm tabular-nums">
+                  <span className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-rose-800 font-semibold whitespace-nowrap">
+                    {formatCurrency(calc.burnMensal)}<span className="font-normal text-rose-500">/mês</span>
+                  </span>
+                  <span className="text-slate-400">×</span>
+                  <span className="rounded-lg bg-slate-100 border border-slate-200 px-3 py-2 text-slate-700 font-semibold whitespace-nowrap">
+                    {controls.mesesComReceita} meses com receita
+                  </span>
+                  <span className="text-slate-400">=</span>
+                  <span className="font-bold text-slate-800">{formatCurrency(calc.caixaNecessarioComReceita)}</span>
                 </div>
-                <p className="mt-2 text-sm text-amber-900">Burn médio: <span className="font-bold tabular-nums">{formatCurrency(calc.burnMensal)}/mês</span></p>
-                <p className="mt-1 text-sm text-amber-900">Subtotal: <span className="font-bold tabular-nums">{formatCurrency(calc.caixaNecessarioComReceita)}</span></p>
+                <div className="border-t border-slate-200 pt-2 flex justify-between items-center">
+                  <span className="text-xs text-slate-500">Total ({controls.mesesBurnSemReceita + controls.mesesComReceita} meses)</span>
+                  <span className="text-base font-extrabold text-emerald-800 tabular-nums">{formatCurrency(calc.caixaNecessarioRecomendado)}</span>
+                </div>
               </div>
-            </div>
-          </div>
-        </section>
+              {capitalGiroAssumption && Math.abs(capitalGiroAssumption.numeric_value - calc.caixaNecessarioRecomendado) > 1 && (
+                <div className="px-5 py-3 border-t border-slate-100 bg-amber-50 text-xs text-amber-700 flex items-start gap-2">
+                  <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  <span>
+                    O orçamento ainda grava <strong>{formatCurrency(capitalGiroAssumption.numeric_value)}</strong> (calculado no último recálculo).
+                    Recalcule o orçamento para sincronizar com {formatCurrency(calc.caixaNecessarioRecomendado)}.
+                  </span>
+                </div>
+              )}
+            </section>
+          </>
+        )}
       </div>
     </>
   );
