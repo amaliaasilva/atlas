@@ -119,12 +119,13 @@ export default function CalculoCaixaPage() {
     const custoFixoMensal = dreBase12m?.custoFixoMensal ?? 0;
     const custosTotais = Math.max(0, custoVariavelMensal) + Math.max(0, custoFixoMensal);
     const resultadoMensal = faturamentoMensal - custosTotais;
-    const burnSemReceitaMensal = custosTotais;
-    const burnComReceitaSelecionado = Math.max(0, -resultadoMensal);
+    // Burn = prejuízo médio mensal (resultado negativo); zero se resultado for positivo
+    const burnMensal = Math.max(0, -resultadoMensal);
 
-    const caixaNecessarioBurn = burnSemReceitaMensal * Math.max(controls.mesesBurnSemReceita, 0);
-    const caixaNecessarioComReceita = burnComReceitaSelecionado * Math.max(controls.mesesComReceita, 0);
-    const caixaNecessarioRecomendado = Math.max(caixaNecessarioBurn, caixaNecessarioComReceita);
+    const caixaNecessarioBurn = burnMensal * Math.max(controls.mesesBurnSemReceita, 0);
+    const caixaNecessarioComReceita = burnMensal * Math.max(controls.mesesComReceita, 0);
+    // Capital total = burn × meses_sem_receita + burn × meses_com_receita (soma, não max)
+    const caixaNecessarioRecomendado = caixaNecessarioBurn + caixaNecessarioComReceita;
 
     return {
       faturamentoMensal,
@@ -132,8 +133,7 @@ export default function CalculoCaixaPage() {
       custoFixoMensal,
       custosTotais,
       resultadoMensal,
-      burnSemReceitaMensal,
-      burnComReceitaSelecionado,
+      burnMensal,
       caixaNecessarioBurn,
       caixaNecessarioComReceita,
       caixaNecessarioRecomendado,
@@ -345,9 +345,9 @@ export default function CalculoCaixaPage() {
 
           <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 space-y-1">
             <p className="font-semibold">Fórmula usada:</p>
-            <p>Resultado mensal = Faturamento - (Custos variáveis + Custos fixos)</p>
-            <p>Burn com receita = max(0, -Resultado mensal)</p>
-            <p>Capital de giro inicial é gerado automaticamente quando a versão é recalculada.</p>
+              <p>Resultado mensal médio = Média(Receita − Custo variável − Custo fixo) nos 12 meses</p>
+              <p>Burn médio = max(0, −Resultado mensal médio)</p>
+              <p>Capital de giro = Burn médio × (Meses sem receita + Meses com receita)</p>
           </div>
         </section>
 
@@ -393,8 +393,8 @@ export default function CalculoCaixaPage() {
               <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Capital de giro inicial</p>
               <div className="mt-2 flex items-end justify-between gap-3 flex-wrap">
                 <p className="text-3xl font-extrabold text-emerald-900 tabular-nums">{formatCurrency(calc.caixaNecessarioRecomendado)}</p>
-                <p className="text-xs text-emerald-800">
-                  Valor autogerado por max(Burn sem receita, Burn com receita)
+                <p className="text-[11px] font-bold text-emerald-900 tabular-nums">
+                  {formatCurrency(calc.caixaNecessarioBurn)} + {formatCurrency(calc.caixaNecessarioComReceita)}
                 </p>
               </div>
             </div>
@@ -409,19 +409,19 @@ export default function CalculoCaixaPage() {
               <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-rose-700">
                   <CalendarClock className="h-4 w-4" />
-                  Cenário sem receita
+                  {controls.mesesBurnSemReceita} mes. sem receita
                 </div>
-                <p className="mt-2 text-sm text-rose-900">Burn mensal: <span className="font-bold tabular-nums">{formatCurrency(calc.burnSemReceitaMensal)}</span></p>
-                <p className="mt-1 text-sm text-rose-900">Caixa necessário: <span className="font-bold tabular-nums">{formatCurrency(calc.caixaNecessarioBurn)}</span></p>
+                <p className="mt-2 text-sm text-rose-900">Burn médio: <span className="font-bold tabular-nums">{formatCurrency(calc.burnMensal)}/mês</span></p>
+                <p className="mt-1 text-sm text-rose-900">Subtotal: <span className="font-bold tabular-nums">{formatCurrency(calc.caixaNecessarioBurn)}</span></p>
               </div>
 
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-700">
                   <TrendingDown className="h-4 w-4" />
-                  Cenário com receita
+                  {controls.mesesComReceita} mes. com receita
                 </div>
-                <p className="mt-2 text-sm text-amber-900">Burn mensal: <span className="font-bold tabular-nums">{formatCurrency(calc.burnComReceitaSelecionado)}</span></p>
-                <p className="mt-1 text-sm text-amber-900">Caixa necessário: <span className="font-bold tabular-nums">{formatCurrency(calc.caixaNecessarioComReceita)}</span></p>
+                <p className="mt-2 text-sm text-amber-900">Burn médio: <span className="font-bold tabular-nums">{formatCurrency(calc.burnMensal)}/mês</span></p>
+                <p className="mt-1 text-sm text-amber-900">Subtotal: <span className="font-bold tabular-nums">{formatCurrency(calc.caixaNecessarioComReceita)}</span></p>
               </div>
             </div>
           </div>

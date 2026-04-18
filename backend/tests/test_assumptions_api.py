@@ -1289,7 +1289,7 @@ def test_auto_working_capital_replaces_stale_period_rows():
                 scenario_id=scenario.id,
                 line_item_id=line_revenue.id,
                 period_date="2026-08",
-                value=1000.0,
+                value=0.0,  # sem receita -> resultado negativo para testar burn
             ),
             CalculatedResult(
                 id="res-2",
@@ -1316,7 +1316,7 @@ def test_auto_working_capital_replaces_stale_period_rows():
                 scenario_id=scenario.id,
                 line_item_id=line_revenue.id,
                 period_date="2026-09",
-                value=1100.0,
+                value=0.0,  # sem receita -> resultado negativo para testar burn
             ),
             CalculatedResult(
                 id="res-5",
@@ -1383,7 +1383,9 @@ def test_auto_working_capital_replaces_stale_period_rows():
         assert period_rows[1].period_date == "2026-09"
         assert period_rows[0].source_type == "derived"
         assert period_rows[1].source_type == "derived"
-        assert period_rows[0].value_numeric > 0
+        # avg_result = (-800 + -900) / 2 = -850; burn = 850
+        # n_no_revenue=1, n_with_revenue=2 -> working_capital = 850 * 3 = 2550
+        assert period_rows[0].value_numeric == 2550.0
         assert period_rows[1].value_numeric == 0.0
 
         static_row = (

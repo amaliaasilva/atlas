@@ -240,26 +240,22 @@ def _auto_update_working_capital_from_results(
     if not periods:
         return
 
-    burn_no_revenue_values: list[float] = []
-    burn_with_revenue_values: list[float] = []
+    monthly_results: list[float] = []
     for period in periods:
         metrics = period_metrics.get(period, {})
         revenue = abs(float(metrics.get("revenue_total", 0.0)))
         variable_costs = abs(float(metrics.get("total_variable_costs", 0.0)))
         fixed_costs = abs(float(metrics.get("total_fixed_costs", 0.0)))
-        total_costs = variable_costs + fixed_costs
-        monthly_result = revenue - total_costs
+        monthly_results.append(revenue - variable_costs - fixed_costs)
 
-        burn_no_revenue_values.append(total_costs)
-        burn_with_revenue_values.append(max(0.0, -monthly_result))
+    avg_result = sum(monthly_results) / len(monthly_results)
+    # Burn é o prejuízo médio mensal; zero quando o resultado médio for positivo
+    avg_burn = max(0.0, -avg_result)
 
-    avg_burn_no_revenue = sum(burn_no_revenue_values) / len(burn_no_revenue_values)
-    avg_burn_with_revenue = sum(burn_with_revenue_values) / len(burn_with_revenue_values)
-
-    required_by_no_revenue = avg_burn_no_revenue * max(0.0, burn_no_revenue_months)
-    required_by_with_revenue = avg_burn_with_revenue * max(0.0, burn_with_revenue_months)
+    n_no_revenue = max(0, round(burn_no_revenue_months))
+    n_with_revenue = max(0, round(burn_with_revenue_months))
     working_capital_value = round(
-        max(required_by_no_revenue, required_by_with_revenue),
+        avg_burn * (n_no_revenue + n_with_revenue),
         2,
     )
 

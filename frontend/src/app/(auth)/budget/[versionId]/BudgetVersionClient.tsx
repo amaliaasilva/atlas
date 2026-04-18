@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
 import { LoadingScreen } from '@/components/ui/Spinner';
 import { cn, formatNumber, formatPeriod, getErrorMessage } from '@/lib/utils';
-import { Save, PlayCircle, ChevronDown, ChevronRight, Plus, Trash2, TrendingUp, Zap, History, SlidersHorizontal, X, Edit3, Info, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
+import { Save, PlayCircle, ChevronDown, ChevronRight, Plus, Trash2, TrendingUp, Zap, History, SlidersHorizontal, X, Edit3, Info, ArrowUp, ArrowDown, GripVertical, Copy } from 'lucide-react';
 
 // ── Gera lista de períodos entre dois meses ────────────────────────────────────
 function generatePeriods(start: string, end: string): string[] {
@@ -433,6 +433,9 @@ export default function BudgetVersionClient() {
     italic: false,
   });
   const [showHistory, setShowHistory] = useState(false);
+  const [showCloneModal, setShowCloneModal] = useState(false);
+  const [cloneTargetScenarioId, setCloneTargetScenarioId] = useState<string>('');
+  const [cloneNewName, setCloneNewName] = useState<string>('');
   const [editingRuleDef, setEditingRuleDef] = useState<AssumptionDefinition | null>(null);
   const [editingMetaDef, setEditingMetaDef] = useState<AssumptionDefinition | null>(null);
   const [metaForm, setMetaForm] = useState({
@@ -549,6 +552,31 @@ export default function BudgetVersionClient() {
       setTimeout(() => setToast(''), 4000);
     },
     onError: (err) => setToast(`Erro: ${getErrorMessage(err)}`),
+  });
+
+  // Todos os cenários do negócio (para o modal de clone)
+  const { data: allScenarios = [] } = useQuery({
+    queryKey: ['scenarios', effectiveBusinessId],
+    queryFn: () => scenariosApi.list(effectiveBusinessId!),
+    enabled: !!effectiveBusinessId && showCloneModal,
+  });
+
+  const otherScenarios = allScenarios.filter((s) => s.id !== version?.scenario_id);
+
+  const cloneToScenarioMutation = useMutation({
+    mutationFn: ({ targetScenarioId, name }: { targetScenarioId: string; name: string }) =>
+      versionsApi.clone(versionId, { new_scenario_id: targetScenarioId, new_name: name || undefined }),
+    onSuccess: (newVersion) => {
+      queryClient.invalidateQueries({ queryKey: ['versions'] });
+      setShowCloneModal(false);
+      setCloneTargetScenarioId('');
+      setCloneNewName('');
+      setToast('Orçamento copiado com sucesso! Abrindo nova versão...');
+      setTimeout(() => {
+        router.push(`/budget/${newVersion.id}`);
+      }, 1200);
+    },
+    onError: (err) => setToast(`Erro ao copiar: ${getErrorMessage(err)}`),
   });
 
   const addContractMutation = useMutation({
@@ -1969,6 +1997,9 @@ export default function BudgetVersionClient() {
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" onClick={() => setShowHistory((v) => !v)}>
               <History className="h-4 w-4" /> Histórico
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => { setShowCloneModal(true); }}>
+              <Copy className="h-4 w-4" /> Copiar para cenário
             </Button>
             <Button variant="secondary" size="sm" onClick={handleSave} loading={saving} disabled={!hasChanges}>
               <Save className="h-4 w-4" /> Salvar
@@ -3969,6 +4000,76 @@ export default function BudgetVersionClient() {
           </div>
         )}
       </div>
+
+      {/* Modal: Copiar para outro cenário */}
+      {showCloneModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-gray-100">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Copiar orçamento para outro cenário</h3>
+                <p className="text-sm text-gray-500 mt-0.5">Todas as premissas serão copiadas. O novo orçamento ficará como rascunho.</p>
+              </div>
+              <button onClick={() => setShowCloneModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Cenário destino *</label>
+                {otherScenarios.length === 0 ? (
+                  <p className="text-sm text-gray-400 italic">Nenhum outro cenário disponível. Crie um cenário conservador ou agressivo primeiro.</p>
+                ) : (
+                  <select
+                    value={cloneTargetScenarioId}
+                    onChange={(e) => {
+                      setCloneTargetScenarioId(e.target.value);
+                      if (!cloneNewName && e.target.value) {
+                        const sc = otherScenarios.find((s) => s.id === e.target.value);
+                        if (sc) setCloneNewName(`Orçamento ${sc.name} — ${version?.name?.replace(/^Orçamento\s+\S+\s+—\s+/, '') ?? ''}`);
+                      }
+                    }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  >
+                    <option value="">Selecione o cenário...</option>
+                    {otherScenarios.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.scenario_type === 'aggressive' ? 'Agressivo' : s.scenario_type === 'conservative' ? 'Conservador' : s.scenario_type === 'base' ? 'Base' : 'Personalizado'})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome da nova versão</label>
+                <input
+                  type="text"
+                  value={cloneNewName}
+                  onChange={(e) => setCloneNewName(e.target.value)}
+                  placeholder={`${version?.name ?? 'Orçamento'} (cópia)`}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 px-6 pb-6">
+              <Button variant="secondary" size="sm" onClick={() => { setShowCloneModal(false); setCloneTargetScenarioId(''); setCloneNewName(''); }}>
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                disabled={!cloneTargetScenarioId || cloneToScenarioMutation.isPending}
+                loading={cloneToScenarioMutation.isPending}
+                onClick={() => {
+                  if (!cloneTargetScenarioId) return;
+                  cloneToScenarioMutation.mutate({ targetScenarioId: cloneTargetScenarioId, name: cloneNewName });
+                }}
+              >
+                <Copy className="h-4 w-4" /> Copiar orçamento
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
