@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { calculationsApi, versionsApi, reportsApi } from '@/lib/api';
@@ -97,6 +97,8 @@ export default function ResultsClient() {
   const router = useRouter();
   const { businessId, scenarioId } = useNavStore();
   const [drilldown, setDrilldown] = useState<DrilldownState | null>(null);
+  const [viewMode, setViewMode] = useState<'monthly' | 'annual'>('monthly');
+  const [selectedYear, setSelectedYear] = useState<string | null>(null);
 
   const { data: version } = useQuery({
     queryKey: ['version', versionId],
@@ -126,16 +128,58 @@ export default function ResultsClient() {
     downloadBlob(blob, `atlas_dre_${versionId}.csv`);
   };
 
+  // ── Dados derivados (todos os useMemo ANTES de qualquer early return) ──────
+
+  const dataMap = useMemo(() => {
+    const map: Record<string, Record<string, number>> = {};
+    results?.forEach((r) => {
+      if (!map[r.metric_code]) map[r.metric_code] = {};
+      map[r.metric_code][r.period_date] = r.value;
+    });
+    return map;
+  }, [results]);
+
+  const allPeriods = useMemo(
+    () => [...new Set(results?.map((r) => r.period_date) ?? [])].sort(),
+    [results],
+  );
+
+  const availableYears = useMemo(
+    () => [...new Set(allPeriods.map((p) => p.slice(0, 4)))],
+    [allPeriods],
+  );
+
+  const activeYear = selectedYear ?? availableYears[0] ?? '';
+
+  const displayPeriods = useMemo(
+    () => viewMode === 'annual'
+      ? availableYears
+      : allPeriods.filter((p) => !activeYear || p.startsWith(activeYear)),
+    [viewMode, availableYears, allPeriods, activeYear],
+  );
+
+  const annualDataMap = useMemo(() => {
+    if (viewMode !== 'annual') return {} as Record<string, Record<string, number>>;
+    const agg: Record<string, Record<string, number>> = {};
+    for (const [code, byPeriod] of Object.entries(dataMap)) {
+      agg[code] = {};
+      for (const yr of availableYears) {
+        const monthsOfYear = allPeriods.filter((p) => p.startsWith(yr));
+        const vals = monthsOfYear.map((p) => byPeriod[p] ?? 0);
+        if (!vals.length) continue;
+        agg[code][yr] = PERCENT_METRICS.has(code)
+          ? vals.reduce((a, b) => a + b, 0) / vals.length
+          : vals.reduce((a, b) => a + b, 0);
+      }
+    }
+    return agg;
+  }, [viewMode, dataMap, availableYears, allPeriods]);
+
+  const activeDataMap = viewMode === 'annual' ? annualDataMap : dataMap;
+  const periods = displayPeriods;
+
+  // ── Early return após todos os hooks ─────────────────────────────────────
   if (isLoading) return <LoadingScreen />;
-
-  // Montar map: metric_code → { period → value }
-  const dataMap: Record<string, Record<string, number>> = {};
-  results?.forEach((r) => {
-    if (!dataMap[r.metric_code]) dataMap[r.metric_code] = {};
-    dataMap[r.metric_code][r.period_date] = r.value;
-  });
-
-  const periods = [...new Set(results?.map((r) => r.period_date) ?? [])].sort();
 
   const formatCell = (code: string, val: number) => {
     if (val === undefined || val === null) return '—';
@@ -151,12 +195,27 @@ export default function ResultsClient() {
       <Topbar title={`DRE — ${version?.name ?? versionId}`} />
       <div className="flex-1 flex flex-col p-6">
         {/* Actions */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div className="flex items-center gap-3">
             {version && <StatusBadge status={version.status} />}
-            <span className="text-sm text-gray-500">{periods.length} períodos</span>
+            <span className="text-sm text-gray-500">{allPeriods.length} períodos</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Toggle Mensal / Anual */}
+            <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
+              {(['monthly', 'annual'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => { setViewMode(m); if (m === 'annual') setSelectedYear(null); }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    viewMode === m ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {m === 'monthly' ? 'Mensal' : 'Anual'}
+                </button>
+              ))}
+            </div>
             <Button variant="secondary" size="sm" onClick={() => router.push(`/budget/${versionId}`)}>
               ← Editar Premissas
             </Button>
@@ -182,6 +241,28 @@ export default function ResultsClient() {
           </div>
         </div>
 
+        {/* Filtro por ano (só no modo mensal) */}
+        {viewMode === 'monthly' && availableYears.length > 1 && (
+          <div className="flex items-center gap-2 mb-3 flex-wrap bg-white border border-gray-200 rounded-xl px-4 py-2">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Ano</span>
+            <div className="h-4 w-px bg-gray-200" />
+            {availableYears.map((yr) => (
+              <button
+                key={yr}
+                type="button"
+                onClick={() => setSelectedYear(selectedYear === yr ? null : yr)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                  (selectedYear ?? activeYear) === yr
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-indigo-50 hover:text-indigo-700'
+                }`}
+              >
+                {yr}
+              </button>
+            ))}
+          </div>
+        )}
+
         {results?.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
             <p className="mb-4">Nenhum resultado calculado ainda.</p>
@@ -194,12 +275,12 @@ export default function ResultsClient() {
             <table className="w-full text-sm border-collapse">
               <thead className="sticky top-0 z-10 bg-gray-50">
                 <tr className="border-b border-gray-200">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 sticky left-0 bg-gray-50 min-w-[240px]">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 sticky left-0 z-20 bg-gray-50 min-w-[240px] shadow-[2px_0_6px_-1px_rgba(0,0,0,0.08)] border-r border-gray-200">
                     Métrica
                   </th>
                   {periods.map((p) => (
                     <th key={p} className="px-3 py-3 text-right text-xs font-semibold text-gray-500 whitespace-nowrap min-w-[100px]">
-                      {formatPeriod(p)}
+                      {viewMode === 'annual' ? p : formatPeriod(p)}
                     </th>
                   ))}
                   <th className="px-3 py-3 text-right text-xs font-semibold text-brand-600 whitespace-nowrap min-w-[100px]">
@@ -209,7 +290,7 @@ export default function ResultsClient() {
               </thead>
               <tbody>
                 {DRE_STRUCTURE.map((row) => {
-                  const rowData = dataMap[row.code] ?? {};
+                  const rowData = activeDataMap[row.code] ?? {};
                   const values = periods.map((p) => rowData[p] ?? 0);
                   const total = PERCENT_METRICS.has(row.code)
                     ? values.reduce((a, b) => a + b, 0) / (values.length || 1)
@@ -227,7 +308,7 @@ export default function ResultsClient() {
                     >
                       <td
                         className={`
-                          px-4 py-2 sticky left-0 bg-inherit border-r border-gray-100
+                          px-4 py-2 sticky left-0 z-10 bg-inherit border-r border-gray-200 shadow-[2px_0_6px_-1px_rgba(0,0,0,0.07)]
                           ${row.bold ? 'font-semibold text-gray-900' : 'text-gray-600'}
                         `}
                         style={{ paddingLeft: `${(row.indent + 1) * 16}px` }}

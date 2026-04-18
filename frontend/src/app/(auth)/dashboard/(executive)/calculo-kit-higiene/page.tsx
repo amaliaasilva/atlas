@@ -30,6 +30,11 @@ const DEFAULT_PARAMS: HygieneParams = {
 };
 
 const STATUS_PRIORITY: Record<string, number> = { published: 0, draft: 1, planning: 2 };
+const KIT_HIGIENE_POR_ALUNO_CODE = 'kit_higiene_por_aluno'; // driver legado (únidade por professor); usado só como intermediário interno
+const KIT_HIGIENE_POR_PROFESSOR_NAME = 'Kit higiene por professor diamante ativo/mês';
+const KIT_HIGIENE_PROFESSOR_MES_CODE = 'kit_higiene_professor_calculado_mes';
+const KIT_HIGIENE_PROFESSOR_MES_NAME = 'Kit higiene professor/mês (pré-calculado)';
+const KIT_HIGIENE_PROFESSOR_MES_DESCRIPTION = 'Total mensal de kit higiene para professores diamante ativos. Composição: (sachês × banhos/mês) + (lavagem de toalha × banhos/mês) + reposição de itens (5% × R$20/un.). O valor é a soma dos custos operacionais de higiene por período e entra diretamente na DRE como custo variável.';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -267,6 +272,12 @@ export default function CalculoKitHigienePage() {
     enabled: !!businessId,
   });
 
+  const { data: assumptionCategories = [] } = useQuery({
+    queryKey: ['assumption-categories-hygiene-kit', businessId],
+    queryFn: () => assumptionsApi.categories(businessId!),
+    enabled: !!businessId,
+  });
+
   const { data: servicePlans = [], isLoading: loadingPlans } = useQuery({
     queryKey: ['service-plans-hygiene-kit', businessId],
     queryFn: () => servicePlansApi.list(businessId!),
@@ -439,8 +450,12 @@ export default function CalculoKitHigienePage() {
       if (!activeVersion || !periods.length) throw new Error('Versão ativa não encontrada.');
 
       let kitDefId =
-        assumptionValues.find((v) => v.code === 'kit_higiene_por_aluno')?.assumption_definition_id
-        ?? assumptionDefinitions.find((d) => d.code === 'kit_higiene_por_aluno')?.id;
+        assumptionValues.find((v) => v.code === KIT_HIGIENE_POR_ALUNO_CODE)?.assumption_definition_id
+        ?? assumptionDefinitions.find((d) => d.code === KIT_HIGIENE_POR_ALUNO_CODE)?.id;
+
+      let kitProfessorMesDefId =
+        assumptionValues.find((v) => v.code === KIT_HIGIENE_PROFESSOR_MES_CODE)?.assumption_definition_id
+        ?? assumptionDefinitions.find((d) => d.code === KIT_HIGIENE_PROFESSOR_MES_CODE)?.id;
 
       // Se a premissa foi removida, cria automaticamente para não bloquear o fluxo.
       if (!kitDefId) {
@@ -449,7 +464,7 @@ export default function CalculoKitHigienePage() {
         const quickAdded = await assumptionsApi.quickAdd({
           budget_version_id: activeVersion.id,
           business_id: businessId,
-          name: 'Kit higiene por aluno/mês',
+          name: KIT_HIGIENE_POR_PROFESSOR_NAME,
           value: 0,
           category_code: 'CUSTO_VARIAVEL',
           data_type: 'currency',
@@ -460,9 +475,36 @@ export default function CalculoKitHigienePage() {
         kitDefId = quickAdded.definition_id;
       }
 
+      if (!kitProfessorMesDefId) {
+        if (!businessId) throw new Error('Negócio não selecionado para criar premissa de kit higiene mensal.');
 
+        const variableCostCategoryId =
+          assumptionDefinitions.find((d) => d.code === KIT_HIGIENE_POR_ALUNO_CODE)?.category_id
+          ?? assumptionCategories.find((c) => c.code === 'CUSTO_VARIAVEL')?.id;
 
-      const payload = periods.map((period) => {
+        if (!variableCostCategoryId) {
+          throw new Error('Categoria CUSTO_VARIAVEL não encontrada para criar premissa pré-calculada de kit higiene.');
+        }
+
+        const createdDefinition = await assumptionsApi.createDefinition({
+          business_id: businessId,
+          category_id: variableCostCategoryId,
+          code: KIT_HIGIENE_PROFESSOR_MES_CODE,
+          name: KIT_HIGIENE_PROFESSOR_MES_NAME,
+          description: KIT_HIGIENE_PROFESSOR_MES_DESCRIPTION,
+          data_type: 'currency',
+          unit_of_measure: 'R$/mês',
+          default_value: 0,
+          editable: false,
+          periodicity: 'monthly',
+          applies_to: 'version',
+          include_in_dre: true,
+        });
+
+        kitProfessorMesDefId = createdDefinition.id;
+      }
+
+      const payload = periods.flatMap((period) => {
         const cap = capacityByPeriod.get(period) ?? baseCalc.capacidadeMaximaOriginal;
         const ocup = occupancyByPeriod.get(period) ?? 0;
         const diasOperacaoMes = (workingDaysByPeriod.get(period) ?? 22) + (saturdaysByPeriod.get(period) ?? 4);
@@ -482,13 +524,22 @@ export default function CalculoKitHigienePage() {
         const activeStudents = Math.max(1, Math.ceil(cap * ocup));
         const kitPorAluno = custoTotalMes / activeStudents;
 
-        return {
-          assumption_definition_id: kitDefId,
-          code: 'kit_higiene_por_aluno',
-          period_date: period,
-          numeric_value: Number(kitPorAluno.toFixed(4)),
-          source_type: 'manual' as const,
-        };
+        return [
+          {
+            assumption_definition_id: kitDefId,
+            code: KIT_HIGIENE_POR_ALUNO_CODE,
+            period_date: period,
+            numeric_value: Number(kitPorAluno.toFixed(4)),
+            source_type: 'manual' as const,
+          },
+          {
+            assumption_definition_id: kitProfessorMesDefId,
+            code: KIT_HIGIENE_PROFESSOR_MES_CODE,
+            period_date: period,
+            numeric_value: Number(custoTotalMes.toFixed(4)),
+            source_type: 'derived' as const,
+          },
+        ];
       });
 
       await assumptionsApi.bulkUpsert(activeVersion.id, payload);
@@ -499,6 +550,8 @@ export default function CalculoKitHigienePage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['assumption-values-hygiene-kit', activeVersion.id] }),
         queryClient.invalidateQueries({ queryKey: ['assumption-definitions-hygiene-kit', businessId] }),
+        queryClient.invalidateQueries({ queryKey: ['assumption-values', activeVersion.id] }),
+        queryClient.invalidateQueries({ queryKey: ['assumption-definitions', businessId] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-consolidated'] }),
       ]);
     },

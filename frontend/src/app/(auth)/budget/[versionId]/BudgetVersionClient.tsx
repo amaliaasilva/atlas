@@ -102,6 +102,32 @@ function categoryTone(categoryCode?: string): { header: string; dot: string } {
   return { header: 'bg-rose-50 hover:bg-rose-100', dot: 'bg-rose-500' };
 }
 
+const PERSISTED_DEFINITION_ID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isPersistedDefinitionId(id: string): boolean {
+  return PERSISTED_DEFINITION_ID_REGEX.test(id);
+}
+
+function getAssumptionVisualEmoji(def: Pick<AssumptionDefinition, 'code' | 'name'>): string | null {
+  const normalizedCode = normalizeAssumptionLabel(def.code);
+  const normalizedName = normalizeAssumptionLabel(def.name);
+
+  if (normalizedCode.includes('receita') || normalizedName.includes('receita') || normalizedCode.includes('ticket')) return '💰';
+  if (normalizedCode.includes('energia') || normalizedName.includes('energia')) return '⚡';
+  if (normalizedCode.includes('agua') || normalizedName.includes('agua')) return '💧';
+  if (normalizedCode.includes('imposto') || normalizedName.includes('imposto')) return '🧾';
+  if (normalizedCode.includes('cartao') || normalizedName.includes('cartao')) return '💳';
+  if (normalizedCode.includes('ocupacao') || normalizedName.includes('ocupacao')) return '📈';
+  if (normalizedCode.includes('capacidade') || normalizedName.includes('capacidade')) return '📊';
+  if (normalizedCode.includes('salario') || normalizedName.includes('salario') || normalizedCode.includes('folha') || normalizedName.includes('folha')) return '👥';
+  if (normalizedCode.includes('kit_higiene') || normalizedName.includes('higiene')) return '🧴';
+  if (normalizedCode.includes('aluguel') || normalizedName.includes('aluguel')) return '🏢';
+  if (normalizedCode.includes('marketing') || normalizedName.includes('marketing')) return '📣';
+  if (normalizedCode.includes('seguro') || normalizedName.includes('seguro')) return '🛡️';
+  if (normalizedCode.includes('royalties') || normalizedName.includes('royalties') || normalizedCode.includes('franchise') || normalizedName.includes('franquia')) return '🤝';
+  return null;
+}
+
 type RuleTypeOption = 'flat' | 'compound_growth' | 'curve';
 type SeparatorTone = 'slate' | 'indigo' | 'blue' | 'emerald' | 'amber' | 'rose' | 'violet';
 type SeparatorFontSize = 'xs' | 'sm' | 'base' | 'lg';
@@ -131,6 +157,9 @@ const HIDDEN_ASSUMPTION_CODES = new Set([
   'tarifa_agua_m3',
   'consumo_energia_kwh_mensal',
   'tarifa_energia_kwh',
+  // Driver interno do Cálculo Kit Higiene — não exibir no orçamento.
+  // O total mensal pré-calculado (kit_higiene_professor_calculado_mes) é a linha visível.
+  'kit_higiene_por_aluno',
 ]);
 const SETTINGS_DRIVEN_ASSUMPTION_CODES = new Set(['ticket_medio_plano_mensal']);
 const SETTINGS_DRIVEN_TICKET_DESCRIPTION = 'Valor sincronizado automaticamente com Configurações. Para alterar, edite os valores na tela de Configurações.';
@@ -152,7 +181,7 @@ const DERIVED_WATER_DESCRIPTION = 'Água estimada = parcela fixa + (máximo vari
 const DERIVED_CARD_FEE_CODE = 'custo_taxa_cartao_calculado_mes';
 const DERIVED_CARD_FEE_DESCRIPTION = 'Taxa de cartão estimada = receita total estimada × taxa de cartão (% da receita). Valor pré-calculado automaticamente.';
 const DERIVED_HYGIENE_KIT_CODE = 'kit_higiene_professor_calculado_mes';
-const DERIVED_HYGIENE_KIT_DESCRIPTION = 'Kit higiene professor/mês calculado automaticamente a partir do cálculo salvo na aba de Kit Higiene. Valor exibido somente para leitura no orçamento mensal.';
+const DERIVED_HYGIENE_KIT_DESCRIPTION = 'Total mensal de kit higiene calculado na aba Cálculo Kit Higiene para professores diamante ativos. Composição: (sachês × banhos/mês) + (lavagem de toalha × banhos/mês) + reposição de itens (5% × R$20/un.). O valor é persistido mensalmente após salvar a simulação.';
 const DERIVED_TAXES_CODE = 'impostos_calculados_mes';
 const DERIVED_TAXES_DESCRIPTION = 'Impostos estimados = receita total estimada × alíquota de imposto sobre receita. Valor pré-calculado automaticamente.';
 const DERIVED_UTILITIES_OCCUPANCY_CODE = 'taxa_ocupacao_referencia_utilidades';
@@ -373,6 +402,7 @@ export default function BudgetVersionClient() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   const [selectedYear, setSelectedYear] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'monthly' | 'annual'>('monthly');
   const [showAddContract, setShowAddContract] = useState(false);
   const [newContract, setNewContract] = useState({
     name: '',
@@ -409,6 +439,7 @@ export default function BudgetVersionClient() {
     name: '',
     category_code: 'CUSTO_FIXO',
     include_in_dre: true,
+    dre_bucket: '',
     separator_tone: 'slate' as SeparatorTone,
     separator_font_size: 'sm' as SeparatorFontSize,
     separator_bold: true,
@@ -416,6 +447,8 @@ export default function BudgetVersionClient() {
   });
   const [draggingDefId, setDraggingDefId] = useState<string | null>(null);
   const [dragOverDefId, setDragOverDefId] = useState<string | null>(null);
+  const [categoryOrderOverrides, setCategoryOrderOverrides] = useState<Record<string, string[]>>({});
+  const [densityMode, setDensityMode] = useState<'compact' | 'comfortable'>('comfortable');
   const [ruleForm, setRuleForm] = useState({
     type: 'flat' as RuleTypeOption,
     ratePct: 0,
@@ -727,6 +760,9 @@ export default function BudgetVersionClient() {
     [allPeriods, activeYear],
   );
 
+  // Vista anual: um item por ano; mensal: meses do ano selecionado
+  const displayPeriods = viewMode === 'annual' ? availableYears : visiblePeriods;
+
   // Map valores: "code::period" → value; "code::static" para period_date=null
   const valueMap = useMemo(() => {
     const m: Record<string, number> = {};
@@ -811,6 +847,18 @@ export default function BudgetVersionClient() {
             ...def,
             include_in_dre: false,
             description: def.description ?? 'Percentual aplicado sobre a receita total estimada. O valor em R$/mês aparece na linha pré-calculada logo abaixo.',
+          };
+        }
+
+        if (def.code === 'kit_higiene_por_aluno') {
+          // Driver interno usado apenas pela aba Cálculo Kit Higiene para derivar o
+          // total mensal (kit_higiene_professor_calculado_mes). Não entra na DRE.
+          return {
+            ...def,
+            name: 'Kit higiene por professor diamante ativo/mês',
+            include_in_dre: false,
+            editable: false,
+            description: 'Custo unitário calculado automaticamente pela aba Cálculo Kit Higiene. Usado como driver intermediário; o total mensal aparece na linha pré-calculada abaixo.',
           };
         }
 
@@ -925,7 +973,7 @@ export default function BudgetVersionClient() {
       filtered.push({
         id: DERIVED_ELECTRICITY_CODE,
         category_id: fixedCostCategoryId,
-        name: 'Energia elétrica — total estimado (pré-calculado)',
+        name: '⚡ Energia elétrica — total estimado (pré-calculado)',
         code: DERIVED_ELECTRICITY_CODE,
         description: DERIVED_ELECTRICITY_DESCRIPTION,
         data_type: 'currency',
@@ -943,7 +991,7 @@ export default function BudgetVersionClient() {
       filtered.push({
         id: DERIVED_WATER_CODE,
         category_id: fixedCostCategoryId,
-        name: 'Água — total estimado (pré-calculado)',
+        name: '💧 Água — total estimado (pré-calculado)',
         code: DERIVED_WATER_CODE,
         description: DERIVED_WATER_DESCRIPTION,
         data_type: 'currency',
@@ -957,8 +1005,10 @@ export default function BudgetVersionClient() {
       });
     }
 
-    const hygieneDerivedSortOrder = ((filtered.find((def) => def.code === 'kit_higiene_por_aluno')?.sort_order as number | undefined)
-      ?? 0) + 0.1;
+    // kit_higiene_por_aluno está oculto; ancora pelo sort_order da comissão de vendas
+    // (primeira linha visível da categoria CUSTO_VARIAVEL) — instrui o pré-calculado a aparecer antes.
+    const hygieneDerivedSortOrder = ((filtered.find((def) => def.code === 'comissao_vendas_pct')?.sort_order as number | undefined)
+      ?? 1) - 0.1;
 
     if (variableCostCategoryId && !filtered.some((def) => def.code === DERIVED_HYGIENE_KIT_CODE)) {
       filtered.push({
@@ -1262,10 +1312,12 @@ export default function BudgetVersionClient() {
   const calculateDerivedHygieneKitProfessor = useCallback(
     (period: string) => {
       const perStudent = getStoredCellValue('kit_higiene_por_aluno', period, definitionPeriodicityByCode.kit_higiene_por_aluno).value;
-      const estimatedCapacity = calculateDerivedEstimatedCapacity(period);
-      return Math.round(perStudent * estimatedCapacity * 100) / 100;
+      const monthlyCapacity = getStoredCellValue('capacidade_maxima_mes', period, definitionPeriodicityByCode.capacidade_maxima_mes).value;
+      const occupancyRate = getStoredCellValue('taxa_ocupacao', period, definitionPeriodicityByCode.taxa_ocupacao).value;
+      const activeStudents = Math.max(0, monthlyCapacity * occupancyRate);
+      return Math.round(perStudent * activeStudents * 100) / 100;
     },
-    [calculateDerivedEstimatedCapacity, definitionPeriodicityByCode.kit_higiene_por_aluno, getStoredCellValue],
+    [definitionPeriodicityByCode, getStoredCellValue],
   );
 
   const calculateDerivedTaxCost = useCallback(
@@ -1294,6 +1346,17 @@ export default function BudgetVersionClient() {
         return { value: calculateDerivedCardFeeCost(period), isAuto: true };
       }
       if (code === DERIVED_HYGIENE_KIT_CODE) {
+        const periodKey = `${code}::${period}`;
+        const staticKey = `${code}::static`;
+        const hasStoredValue = periodKey in pendingChanges
+          || periodKey in valueMap
+          || staticKey in pendingChanges
+          || staticKey in valueMap;
+
+        if (hasStoredValue) {
+          return getStoredCellValue(code, period, periodicity ?? definitionPeriodicityByCode[code]);
+        }
+
         return { value: calculateDerivedHygieneKitProfessor(period), isAuto: true };
       }
       if (code === DERIVED_ELECTRICITY_CODE) {
@@ -1328,9 +1391,27 @@ export default function BudgetVersionClient() {
       calculateDerivedRevenue,
       calculateDerivedTaxCost,
       calculateDerivedWaterCost,
-      definitionPeriodicityByCode.taxa_ocupacao,
+      definitionPeriodicityByCode,
       getStoredCellValue,
+      pendingChanges,
+      valueMap,
     ],
+  );
+
+  // Agrega valores mensais em totais/médias anuais para a vista "Anual"
+  const getAnnualCellValue = useCallback(
+    (code: string, year: string, periodicity?: string): CellInfo => {
+      const monthsOfYear = allPeriods.filter((p) => p.startsWith(year));
+      if (!monthsOfYear.length) return { value: 0, isAuto: false };
+      const def = definitionByCode[code];
+      const isPct = def?.data_type === 'percentage';
+      const vals = monthsOfYear.map((p) => getCellValue(code, p, periodicity).value);
+      const aggregated = isPct
+        ? vals.reduce((a, v) => a + v, 0) / vals.length  // média para percentuais
+        : vals.reduce((a, v) => a + v, 0);               // soma para moeda/numérico
+      return { value: Math.round(aggregated * 100) / 100, isAuto: false };
+    },
+    [allPeriods, getCellValue, definitionByCode],
   );
 
   const parseEditableNumber = (raw: string): number | null => {
@@ -1354,7 +1435,10 @@ export default function BudgetVersionClient() {
   };
 
   const resolveEditableKey = (code: string, period: string, periodicity?: string) => {
-    if (periodicity === 'static') return `${code}::static`;
+    const definition = definitionByCode[code];
+    // Para premissas com curva ativa, permitir override manual por coluna
+    // mesmo quando a periodicidade-base é static.
+    if (periodicity === 'static' && !hasActiveGrowthRule(definition)) return `${code}::static`;
     return `${code}::${period}`;
   };
 
@@ -1366,7 +1450,9 @@ export default function BudgetVersionClient() {
 
     const parsed = parseEditableNumber(raw);
 
-    if (editMode === 'all' && periodicity !== 'static') {
+    const hasGrowthRule = hasActiveGrowthRule(definitionByCode[code]);
+
+    if (editMode === 'all' && (periodicity !== 'static' || hasGrowthRule)) {
       if (parsed === null) {
         if (raw.trim() === '') {
           setPendingChanges((prev) => {
@@ -1448,6 +1534,7 @@ export default function BudgetVersionClient() {
       name: def.name,
       category_code: currentCategoryCode,
       include_in_dre: def.include_in_dre !== false,
+      dre_bucket: def.ui_config?.dre_bucket ?? '',
       separator_tone: separatorStyle.tone,
       separator_font_size: separatorStyle.font_size,
       separator_bold: separatorStyle.bold,
@@ -1497,9 +1584,12 @@ export default function BudgetVersionClient() {
       : rawName.replace(/^\s*sal[aá]rio\s*-\s*/i, '').trim();
 
     const isSeparator = isSeparatorAssumption(editingMetaDef);
-    const nextUiConfig = isSeparator
-      ? {
-          ...(editingMetaDef.ui_config ?? {}),
+    // Constrói ui_config preservando campos existentes e atualizando dre_bucket
+    const uiConfigBase: Record<string, unknown> = { ...(editingMetaDef.ui_config ?? {}) };
+    let nextUiConfig: typeof editingMetaDef.ui_config;
+    if (isSeparator) {
+      nextUiConfig = {
+          ...uiConfigBase,
           is_separator: true,
           separator_style: {
             tone: metaForm.separator_tone,
@@ -1507,8 +1597,15 @@ export default function BudgetVersionClient() {
             bold: metaForm.separator_bold,
             italic: metaForm.separator_italic,
           },
-        }
-      : (editingMetaDef.ui_config ?? null);
+        } as typeof editingMetaDef.ui_config;
+    } else {
+      if (metaForm.dre_bucket) {
+        uiConfigBase.dre_bucket = metaForm.dre_bucket;
+      } else {
+        delete uiConfigBase.dre_bucket;
+      }
+      nextUiConfig = Object.keys(uiConfigBase).length ? uiConfigBase as typeof editingMetaDef.ui_config : null;
+    }
 
     updateDefinitionMetaMutation.mutate({
       definitionId: editingMetaDef.id,
@@ -1522,26 +1619,39 @@ export default function BudgetVersionClient() {
   };
 
   const reorderDefinitions = async (
+    categoryId: string,
     categoryDefs: AssumptionDefinition[],
     draggedDef: AssumptionDefinition,
     targetDef: AssumptionDefinition,
   ) => {
     if (draggedDef.id === targetDef.id) return;
 
-    const movableDefs = [...categoryDefs]
-      .filter((item) => item.editable !== false)
+    const orderedDefs = [...categoryDefs]
       .sort((a, b) => (a.sort_order ?? a.display_order ?? 0) - (b.sort_order ?? b.display_order ?? 0));
 
-    const fromIndex = movableDefs.findIndex((item) => item.id === draggedDef.id);
-    const toIndex = movableDefs.findIndex((item) => item.id === targetDef.id);
+    const fromIndex = orderedDefs.findIndex((item) => item.id === draggedDef.id);
+    const toIndex = orderedDefs.findIndex((item) => item.id === targetDef.id);
     if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
 
-    const reordered = [...movableDefs];
+    const reordered = [...orderedDefs];
     const [movedItem] = reordered.splice(fromIndex, 1);
     reordered.splice(toIndex, 0, movedItem);
 
-    const orderSlots = movableDefs.map((item, index) => Number(item.sort_order ?? item.display_order ?? index));
-    const updates = reordered
+    setCategoryOrderOverrides((prev) => ({
+      ...prev,
+      [categoryId]: reordered.map((item) => item.id),
+    }));
+
+    const persistedDefs = orderedDefs.filter((item) => isPersistedDefinitionId(item.id));
+    const reorderedPersisted = reordered.filter((item) => isPersistedDefinitionId(item.id));
+    if (!persistedDefs.length || !reorderedPersisted.length) {
+      setToast('Ordem visual atualizada.');
+      setTimeout(() => setToast(''), 2500);
+      return;
+    }
+
+    const orderSlots = persistedDefs.map((item, index) => Number(item.sort_order ?? item.display_order ?? index));
+    const updates = reorderedPersisted
       .map((item, index) => ({
         definitionId: item.id,
         nextSortOrder: orderSlots[index],
@@ -1549,7 +1659,11 @@ export default function BudgetVersionClient() {
       }))
       .filter((item) => item.currentSortOrder !== item.nextSortOrder);
 
-    if (!updates.length) return;
+    if (!updates.length) {
+      setToast('Ordem visual atualizada.');
+      setTimeout(() => setToast(''), 2500);
+      return;
+    }
 
     await Promise.all(
       updates.map((item) =>
@@ -1563,19 +1677,21 @@ export default function BudgetVersionClient() {
   };
 
   const moveDefinition = async (
+    categoryId: string,
     categoryDefs: AssumptionDefinition[],
     definition: AssumptionDefinition,
     swapWith: AssumptionDefinition | undefined,
   ) => {
     if (!swapWith) return;
     try {
-      await reorderDefinitions(categoryDefs, definition, swapWith);
+      await reorderDefinitions(categoryId, categoryDefs, definition, swapWith);
     } catch (err) {
       setToast(`Erro ao reordenar premissa: ${getErrorMessage(err)}`);
     }
   };
 
   const dropDefinition = async (
+    categoryId: string,
     categoryDefs: AssumptionDefinition[],
     targetDef: AssumptionDefinition,
   ) => {
@@ -1583,12 +1699,12 @@ export default function BudgetVersionClient() {
     setDragOverDefId(null);
     setDraggingDefId(null);
 
-    if (!draggedDef || draggedDef.id === targetDef.id || draggedDef.editable === false || targetDef.editable === false) {
+    if (!draggedDef || draggedDef.id === targetDef.id) {
       return;
     }
 
     try {
-      await reorderDefinitions(categoryDefs, draggedDef, targetDef);
+      await reorderDefinitions(categoryId, categoryDefs, draggedDef, targetDef);
     } catch (err) {
       setToast(`Erro ao reordenar premissa: ${getErrorMessage(err)}`);
     }
@@ -1651,8 +1767,8 @@ export default function BudgetVersionClient() {
   };
 
   // Bulk upsert — salva apenas mudanças pendentes
-  const handleSave = async () => {
-    if (!definitions) return;
+  const handleSave = async (): Promise<boolean> => {
+    if (!definitions) return false;
     setSaving(true);
     try {
       const touchedCodes = [...new Set(Object.keys(pendingChanges).map((key) => key.split('::')[0]))];
@@ -1663,11 +1779,18 @@ export default function BudgetVersionClient() {
         if (!def) return;
 
         if (hasActiveGrowthRule(def) && allPeriods.length > 0) {
+          const existingManualPeriods = new Set(
+            (values ?? [])
+              .filter((item) => item.code === code && item.period_date && item.source_type === 'manual')
+              .map((item) => item.period_date as string),
+          );
+
           const nonStaticPendingPeriods = Object.keys(pendingChanges)
             .filter((key) => key.startsWith(`${code}::`) && !key.endsWith('::static'))
             .map((key) => key.split('::')[1])
             .sort();
-          const manualPeriodOverrides = new Set(nonStaticPendingPeriods);
+          const pendingManualPeriods = new Set(nonStaticPendingPeriods);
+          const manualPeriodOverrides = new Set([...existingManualPeriods, ...nonStaticPendingPeriods]);
           const growthBaseYear = def.growth_rule?.base_year
             ?? (nonStaticPendingPeriods[0] ? parseInt(nonStaticPendingPeriods[0].slice(0, 4), 10) : parseInt(allPeriods[0].slice(0, 4), 10));
           const firstPeriod = allPeriods[0];
@@ -1691,13 +1814,21 @@ export default function BudgetVersionClient() {
           });
 
           allPeriods.forEach((period) => {
+            const hasPendingManualOverride = pendingManualPeriods.has(period);
+            const hasExistingManualOverride = existingManualPeriods.has(period);
             const hasManualOverride = manualPeriodOverrides.has(period);
+            const manualValue = hasPendingManualOverride
+              ? pendingChanges[`${code}::${period}`]
+              : hasExistingManualOverride
+                ? valueMap[`${code}::${period}`]
+                : undefined;
+
             updates.push({
               assumption_definition_id: def.id,
               code,
               period_date: period,
               numeric_value: hasManualOverride
-                ? pendingChanges[`${code}::${period}`]
+                ? (manualValue ?? computeAutoValue(defForSave, baseValue, period, allPeriods))
                 : computeAutoValue(defForSave, baseValue, period, allPeriods),
               source_type: hasManualOverride ? ('manual' as const) : ('derived' as const),
             });
@@ -1725,11 +1856,24 @@ export default function BudgetVersionClient() {
       queryClient.invalidateQueries({ queryKey: ['assumption-values', versionId] });
       setToast('Premissas salvas!');
       setTimeout(() => setToast(''), 3000);
+      return true;
     } catch (err) {
       setToast(`Erro: ${getErrorMessage(err)}`);
+      return false;
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleRecalculate = async () => {
+    if (saving || recalcMutation.isPending) return;
+
+    if (Object.keys(pendingChanges).length > 0) {
+      const saved = await handleSave();
+      if (!saved) return;
+    }
+
+    recalcMutation.mutate();
   };
 
   // Recalcular
@@ -1777,6 +1921,11 @@ export default function BudgetVersionClient() {
     },
   });
   const newSeparatorToneClasses = getSeparatorToneClasses(newSeparatorPreviewStyle.tone);
+  const isCompactDensity = densityMode === 'compact';
+  const headerCellY = isCompactDensity ? 'py-2' : 'py-3';
+  const rowCellY = isCompactDensity ? 'py-1.5' : 'py-2';
+  const valueTextSize = isCompactDensity ? 'text-[11px]' : 'text-xs';
+  const inputPaddingY = isCompactDensity ? 'py-0.5' : 'py-1';
 
   return (
     <>
@@ -1803,7 +1952,7 @@ export default function BudgetVersionClient() {
             <Button variant="secondary" size="sm" onClick={handleSave} loading={saving} disabled={!hasChanges}>
               <Save className="h-4 w-4" /> Salvar
             </Button>
-            <Button size="sm" onClick={() => recalcMutation.mutate()} loading={recalcMutation.isPending}>
+            <Button size="sm" onClick={() => { void handleRecalculate(); }} loading={recalcMutation.isPending} disabled={saving}>
               <PlayCircle className="h-4 w-4" /> Recalcular
             </Button>
           </div>
@@ -2028,7 +2177,8 @@ export default function BudgetVersionClient() {
         )}
 
         {/* Legenda */}
-        <div className="flex items-center gap-4 mb-2 text-xs text-gray-500 flex-wrap">
+        <div className="mb-2 rounded-lg border border-gray-200 bg-white/90 px-3 py-2 text-xs text-gray-600 shadow-sm">
+          <div className="flex items-center gap-4 flex-wrap">
           <span className="flex items-center gap-1">
             <span className="inline-block w-3 h-3 rounded bg-amber-100 border border-amber-300" />
             Editado manualmente
@@ -2050,10 +2200,76 @@ export default function BudgetVersionClient() {
             <TrendingUp className="h-3 w-3 text-emerald-500" />
             Regra de crescimento ativa
           </span>
+            <span className="flex items-center gap-1">
+              <GripVertical className="h-3 w-3 text-slate-500" />
+              Arraste qualquer linha para reordenar
+            </span>
+          </div>
+          <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500 flex-wrap">
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5">💰 Receita</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5">⚡ Energia</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5">💧 Água</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5">🧾 Impostos</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5">💳 Cartão</span>
+          </div>
         </div>
 
         {/* Navegação por ano */}
         <div className="flex items-center gap-1 mb-3 flex-wrap">
+          {/* Toggle Mensal / Anual */}
+          <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 p-0.5 text-[11px]">
+            <button
+              type="button"
+              onClick={() => setViewMode('monthly')}
+              className={cn(
+                'px-2.5 py-1 rounded font-medium transition-colors',
+                viewMode === 'monthly'
+                  ? 'bg-white text-gray-800 shadow-sm border border-gray-200'
+                  : 'text-gray-400 hover:text-gray-600',
+              )}
+            >
+              Mensal
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('annual')}
+              className={cn(
+                'px-2.5 py-1 rounded font-medium transition-colors',
+                viewMode === 'annual'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-600',
+              )}
+            >
+              Anual
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 p-0.5 text-[11px]">
+            <span className="px-2 text-gray-500">Densidade</span>
+            <button
+              type="button"
+              onClick={() => setDensityMode('compact')}
+              className={cn(
+                'px-2.5 py-1 rounded font-medium transition-colors',
+                densityMode === 'compact'
+                  ? 'bg-white text-gray-800 shadow-sm border border-gray-200'
+                  : 'text-gray-400 hover:text-gray-600',
+              )}
+            >
+              Compacta
+            </button>
+            <button
+              type="button"
+              onClick={() => setDensityMode('comfortable')}
+              className={cn(
+                'px-2.5 py-1 rounded font-medium transition-colors',
+                densityMode === 'comfortable'
+                  ? 'bg-white text-gray-800 shadow-sm border border-gray-200'
+                  : 'text-gray-400 hover:text-gray-600',
+              )}
+            >
+              Confortável
+            </button>
+          </div>
           {/* Toggle de modo de edição */}
           <div className="ml-auto flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 p-0.5 text-[11px]">
             <button
@@ -2083,7 +2299,7 @@ export default function BudgetVersionClient() {
               Editar todos
             </button>
           </div>
-          {availableYears.map((yr) => (
+          {viewMode === 'monthly' && availableYears.map((yr) => (
             <button
               key={yr}
               onClick={() => setSelectedYear(yr)}
@@ -2238,7 +2454,7 @@ export default function BudgetVersionClient() {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
               <input
                 className="md:col-span-5 rounded border border-gray-300 px-3 py-1.5 text-sm"
-                placeholder="Nome da premissa (ex: Taxa de Limpeza, Taxa de Cartão, Royalties)"
+                placeholder="Nome da premissa (aceita emoji, ex: 💧 Água, ⚡ Energia, Taxa de Cartão)"
                 value={newAssumption.name}
                 onChange={(e) => setNewAssumption((p) => ({ ...p, name: e.target.value }))}
               />
@@ -2431,7 +2647,7 @@ export default function BudgetVersionClient() {
                     value={metaForm.name}
                     onChange={(e) => setMetaForm((prev) => ({ ...prev, name: e.target.value }))}
                     className="mt-1 w-full rounded border border-gray-300 px-2 py-2 text-sm"
-                    placeholder="Ex: Salário Supervisor"
+                    placeholder="Ex: ⚡ Energia Operacional"
                   />
                 </label>
                 <label className="text-xs text-gray-600 block">
@@ -2505,14 +2721,34 @@ export default function BudgetVersionClient() {
                     <p className="text-[11px] text-slate-500">Separadores são apenas visuais e não entram no DRE.</p>
                   </>
                 ) : (
-                  <label className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={metaForm.include_in_dre}
-                      onChange={(e) => setMetaForm((prev) => ({ ...prev, include_in_dre: e.target.checked }))}
-                    />
-                    <span>Entrar no cálculo do DRE</span>
-                  </label>
+                  <>
+                    <label className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={metaForm.include_in_dre}
+                        onChange={(e) => setMetaForm((prev) => ({ ...prev, include_in_dre: e.target.checked }))}
+                      />
+                      <span>Entrar no cálculo do DRE</span>
+                    </label>
+                    <label className="text-xs text-gray-600 block">
+                      Linha do DRE
+                      <select
+                        value={metaForm.dre_bucket}
+                        onChange={(e) => setMetaForm((prev) => ({ ...prev, dre_bucket: e.target.value }))}
+                        className="mt-1 w-full rounded border border-gray-300 px-2 py-2 text-sm bg-white"
+                      >
+                        <option value="">(sem roteamento / padrão do motor)</option>
+                        <option value="rent_total">Aluguel / Encargos do imóvel</option>
+                        <option value="staff_costs">Folha de pagamento</option>
+                        <option value="utility_costs">Utilidades</option>
+                        <option value="admin_costs">Adm + Contabilidade</option>
+                        <option value="marketing_costs">Marketing</option>
+                        <option value="equipment_costs">Equipamentos / Depreciação</option>
+                        <option value="insurance_costs">Seguros</option>
+                        <option value="other_fixed_costs">Outros custos fixos</option>
+                      </select>
+                    </label>
+                  </>
                 )}
               </div>
               <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
@@ -2651,15 +2887,15 @@ export default function BudgetVersionClient() {
           <table className="w-full text-sm border-collapse">
             <thead className="sticky top-0 z-10">
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 sticky left-0 bg-gray-50 min-w-[240px]">
+                <th className={cn('px-4 text-left text-xs font-semibold text-gray-600 sticky left-0 z-20 bg-gray-50 min-w-[240px] shadow-[2px_0_6px_-1px_rgba(0,0,0,0.08)] border-r border-gray-200', headerCellY)}>
                   Premissa
                 </th>
-                <th className="px-2 py-3 text-center text-xs font-semibold text-gray-400 min-w-[50px] whitespace-nowrap">
-                  Regra
+                <th className={cn('px-2 text-center text-xs font-semibold text-gray-400 min-w-[50px] whitespace-nowrap', headerCellY)}>
+                  {viewMode === 'annual' ? '' : 'Regra'}
                 </th>
-                {visiblePeriods.map((p) => (
-                  <th key={p} className="px-2 py-3 text-center text-xs font-semibold text-gray-500 min-w-[90px] whitespace-nowrap">
-                    {formatPeriod(p)}
+                {displayPeriods.map((p) => (
+                  <th key={p} className={cn('px-2 text-center text-xs font-semibold text-gray-500 min-w-[90px] whitespace-nowrap', headerCellY)}>
+                    {viewMode === 'annual' ? p : formatPeriod(p)}
                   </th>
                 ))}
               </tr>
@@ -2669,9 +2905,18 @@ export default function BudgetVersionClient() {
                 .sort((a, b) => (a.sort_order ?? a.display_order ?? 0) - (b.sort_order ?? b.display_order ?? 0))
                 .map((cat) => {
                   const tone = categoryTone(cat.code);
-                  const catDefs = visibleDefinitions
+                  const sortedDefs = visibleDefinitions
                     .filter((d) => d.category_id === cat.id)
                     .sort((a, b) => (a.sort_order ?? a.display_order ?? 0) - (b.sort_order ?? b.display_order ?? 0));
+                  const overrideOrder = categoryOrderOverrides[cat.id];
+                  const catDefs = overrideOrder?.length
+                    ? [
+                        ...sortedDefs
+                          .filter((item) => overrideOrder.includes(item.id))
+                          .sort((a, b) => overrideOrder.indexOf(a.id) - overrideOrder.indexOf(b.id)),
+                        ...sortedDefs.filter((item) => !overrideOrder.includes(item.id)),
+                      ]
+                    : sortedDefs;
 
                   if (catDefs.length === 0) return null;
                   const collapsed = collapsedCategories.has(cat.id);
@@ -2682,7 +2927,7 @@ export default function BudgetVersionClient() {
                       className={`${tone.header} cursor-pointer transition-colors`}
                       onClick={() => toggleCategory(cat.id)}
                     >
-                      <td className="px-4 py-2 sticky left-0 bg-inherit" colSpan={visiblePeriods.length + 2}>
+                      <td className="px-4 py-2 sticky left-0 z-10 bg-inherit shadow-[2px_0_6px_-1px_rgba(0,0,0,0.06)] border-r border-gray-200" colSpan={displayPeriods.length + 2}>
                         <div className="flex items-center gap-2">
                           <span className={`h-2 w-2 rounded-full ${tone.dot}`} />
                           {collapsed
@@ -2717,10 +2962,12 @@ export default function BudgetVersionClient() {
                       const isRevenueDerivedField = isDerivedField && derivedStyleVariant === 'revenue';
                       const isExpenseDerivedField = isDerivedField && derivedStyleVariant === 'expense';
                       const isHighlightedRevenue = HIGHLIGHTED_REVENUE_CODES.has(def.code);
-                      const movableDefs = catDefs.filter((item) => item.editable !== false);
+                      const movableDefs = catDefs;
                       const moveIndex = movableDefs.findIndex((item) => item.id === def.id);
                       const previousMovableDef = moveIndex > 0 ? movableDefs[moveIndex - 1] : undefined;
                       const nextMovableDef = moveIndex >= 0 && moveIndex < movableDefs.length - 1 ? movableDefs[moveIndex + 1] : undefined;
+                      const canReorderThis = true;
+                      const assumptionEmoji = getAssumptionVisualEmoji(def);
                       const isDraggingThis = draggingDefId === def.id;
                       const isDropTarget = dragOverDefId === def.id && draggingDefId !== def.id;
                       const separatorStyle = getSeparatorStyleConfig(def.ui_config);
@@ -2767,9 +3014,9 @@ export default function BudgetVersionClient() {
                           <tr
                             key={def.id}
                             className={cn(
-                              'border-b border-gray-100 bg-white transition-colors',
+                              'border-b border-gray-100 bg-white transition-colors focus-within:bg-sky-50/60',
                               isDraggingThis && 'opacity-60',
-                              isDropTarget && 'ring-1 ring-inset ring-sky-300 bg-sky-50',
+                              isDropTarget && 'ring-1 ring-inset ring-sky-300 bg-sky-50 border-t-2 border-sky-400',
                             )}
                             onDragOver={(e) => {
                               if (!draggingDefId || draggingDefId === def.id) return;
@@ -2782,10 +3029,10 @@ export default function BudgetVersionClient() {
                             }}
                             onDrop={(e) => {
                               e.preventDefault();
-                              void dropDefinition(catDefs, def);
+                              void dropDefinition(cat.id, catDefs, def);
                             }}
                           >
-                            <td colSpan={visiblePeriods.length + 2} className={cn('px-4 py-3', isDropTarget && 'bg-sky-50')}>
+                              <td colSpan={displayPeriods.length + 2} className={cn('px-4', isCompactDensity ? 'py-2' : 'py-3', isDropTarget && 'bg-sky-50')}>
                               <div className="flex items-center gap-3">
                                 <span
                                   draggable
@@ -2842,13 +3089,13 @@ export default function BudgetVersionClient() {
                         <tr
                           key={def.id}
                           className={cn(
-                            'border-b border-gray-100 group transition-colors',
+                            'border-b border-gray-100 group transition-colors focus-within:bg-indigo-50/40',
                             rowTone,
                             isDraggingThis && 'opacity-60',
-                            isDropTarget && 'ring-1 ring-inset ring-sky-300 bg-sky-50',
+                            isDropTarget && 'ring-1 ring-inset ring-sky-300 bg-sky-50 border-t-2 border-sky-400',
                           )}
                           onDragOver={(e) => {
-                            if (isReadonly || !draggingDefId || draggingDefId === def.id) return;
+                            if (!draggingDefId || draggingDefId === def.id) return;
                             e.preventDefault();
                             e.dataTransfer.dropEffect = 'move';
                             setDragOverDefId(def.id);
@@ -2858,12 +3105,12 @@ export default function BudgetVersionClient() {
                           }}
                           onDrop={(e) => {
                             e.preventDefault();
-                            void dropDefinition(catDefs, def);
+                            void dropDefinition(cat.id, catDefs, def);
                           }}
                         >
-                          <td className={cn('px-4 py-2 sticky left-0 transition-colors border-r border-gray-100', stickyTone, isDropTarget && 'bg-sky-50')}>
+                          <td className={cn('px-4 sticky left-0 z-10 hover:z-30 focus-within:z-30 transition-colors border-r border-gray-200 shadow-[2px_0_6px_-1px_rgba(0,0,0,0.07)]', rowCellY, stickyTone, isDropTarget && 'bg-sky-50')}>
                             <div className="flex items-center gap-2">
-                              {!isReadonly && (
+                              {canReorderThis && (
                                 <span
                                   draggable
                                   onDragStart={(e) => {
@@ -2882,7 +3129,10 @@ export default function BudgetVersionClient() {
                                   <GripVertical className="h-3.5 w-3.5" />
                                 </span>
                               )}
-                              <span className="text-xs font-semibold text-gray-800">{def.name}</span>
+                              {assumptionEmoji && (
+                                <span className="text-sm leading-none" aria-hidden="true">{assumptionEmoji}</span>
+                              )}
+                              <span className={cn('font-semibold text-gray-800', valueTextSize)}>{def.name}</span>
                               {def.unit_of_measure && (
                                 <span className="text-xs text-gray-400">({def.unit_of_measure})</span>
                               )}
@@ -2922,23 +3172,23 @@ export default function BudgetVersionClient() {
                                 <span className={cn('text-[10px] px-1.5 py-0.5 rounded border', readonlyBadgeTone)}>auto</span>
                               )}
                               {def.description && (
-                                <div className="relative group/info">
+                                <div className="relative inline-flex group/info">
                                   <button
                                     type="button"
-                                    className="text-gray-400 hover:text-brand-700"
+                                    className="inline-flex shrink-0 text-gray-400 hover:text-brand-700"
                                     title={def.description}
                                     onClick={(e) => e.stopPropagation()}
                                     aria-label={`Explicação de ${def.name}`}
                                   >
                                     <Info className="h-3.5 w-3.5" />
                                   </button>
-                                  <div className="pointer-events-none absolute left-0 top-full z-20 mt-1 w-72 rounded-lg border border-gray-200 bg-white p-2 text-[11px] leading-4 text-gray-600 shadow-lg opacity-0 transition-opacity group-hover/info:opacity-100 group-focus-within/info:opacity-100">
+                                  <div className="pointer-events-none absolute left-0 top-full z-50 mt-1.5 w-[min(24rem,calc(100vw-3rem))] rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs leading-relaxed text-gray-700 shadow-xl opacity-0 transition-opacity duration-150 whitespace-normal break-words group-hover/info:opacity-100 group-focus-within/info:opacity-100 sm:w-80">
                                     {def.description}
                                   </div>
                                 </div>
                               )}
                               {!isReadonly && (
-                                <div className="ml-auto flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                <div className="ml-auto flex items-center gap-1 opacity-100 md:opacity-80 md:group-hover:opacity-100 transition-opacity">
                                   <button
                                     type="button"
                                     className="text-gray-400 hover:text-sky-600 rounded px-1 py-0.5 shrink-0"
@@ -2951,7 +3201,7 @@ export default function BudgetVersionClient() {
                                     type="button"
                                     className="text-gray-400 hover:text-indigo-600 rounded px-1 py-0.5 shrink-0 disabled:opacity-30"
                                     title="Mover para cima"
-                                    onClick={() => void moveDefinition(catDefs, def, previousMovableDef)}
+                                    onClick={() => void moveDefinition(cat.id, catDefs, def, previousMovableDef)}
                                     disabled={!previousMovableDef}
                                   >
                                     <ArrowUp className="h-3 w-3" />
@@ -2960,7 +3210,7 @@ export default function BudgetVersionClient() {
                                     type="button"
                                     className="text-gray-400 hover:text-indigo-600 rounded px-1 py-0.5 shrink-0 disabled:opacity-30"
                                     title="Mover para baixo"
-                                    onClick={() => void moveDefinition(catDefs, def, nextMovableDef)}
+                                    onClick={() => void moveDefinition(cat.id, catDefs, def, nextMovableDef)}
                                     disabled={!nextMovableDef}
                                   >
                                     <ArrowDown className="h-3 w-3" />
@@ -2998,13 +3248,13 @@ export default function BudgetVersionClient() {
                               )}
                             </div>
                           </td>
-                          <td className={cn('px-1 py-1 text-center', derivedCellTone)}>
+                          <td className={cn('px-1 text-center', isCompactDensity ? 'py-0.5' : 'py-1', derivedCellTone)}>
                             {isReadonly ? (
                               <span className="text-xs font-medium text-indigo-600">Auto</span>
                             ) : (
                               <button
                                 type="button"
-                                className="inline-flex items-center gap-1 text-xs text-gray-600 hover:text-brand-700 rounded px-1 py-0.5 hover:bg-brand-50"
+                                className={cn('inline-flex items-center gap-1 text-gray-600 hover:text-brand-700 rounded px-1 hover:bg-brand-50', valueTextSize, isCompactDensity ? 'py-0.5' : 'py-1')}
                                 onClick={() => openRuleEditor(def)}
                                 title="Criar ou adaptar regra de crescimento"
                               >
@@ -3020,8 +3270,11 @@ export default function BudgetVersionClient() {
                               </button>
                             )}
                           </td>
-                          {visiblePeriods.map((period) => {
-                            const { value: val, isAuto } = getCellValue(def.code, period, def.periodicity);
+                          {displayPeriods.map((period) => {
+                            const isAnnual = viewMode === 'annual';
+                            const { value: val, isAuto } = isAnnual
+                              ? getAnnualCellValue(def.code, period, def.periodicity)
+                              : getCellValue(def.code, period, def.periodicity);
                             const pendKey = def.periodicity === 'static'
                               ? `${def.code}::static`
                               : `${def.code}::${period}`;
@@ -3030,14 +3283,18 @@ export default function BudgetVersionClient() {
                                 ? `${formatNumber(val * 100, Number.isInteger(val * 100) ? 0 : 2)}%`
                                 : formatNumber(val, Number.isInteger(val) ? 0 : 2)
                               : '—';
+                            // Em modo anual a célula é sempre somente leitura
+                            const effectiveReadonly = isReadonly || isAnnual;
 
                             return (
-                              <td key={period} className={cn('px-1 py-1 text-center', derivedCellTone)}>
-                                {isReadonly ? (
+                              <td key={period} className={cn('px-1 text-center', isCompactDensity ? 'py-0.5' : 'py-1', derivedCellTone)}>
+                                {effectiveReadonly ? (
                                   <div
                                     title={def.description ?? undefined}
                                     className={cn(
-                                      'w-full rounded border px-2 py-1 text-right text-xs font-semibold shadow-sm',
+                                      'w-full rounded border px-2 text-right font-semibold shadow-sm',
+                                      valueTextSize,
+                                      inputPaddingY,
                                       isDerivedField ? readonlyTone : 'border-slate-200 bg-slate-50 text-slate-700',
                                     )}
                                   >
@@ -3073,7 +3330,9 @@ export default function BudgetVersionClient() {
                                     }}
                                     title={isAuto && def.growth_rule ? `Auto: ${growthRuleLabel(def.growth_rule)}` : def.description ?? undefined}
                                     className={cn(
-                                      'w-full text-right text-xs font-medium px-2 py-1 rounded border',
+                                      'w-full text-right font-medium px-2 rounded border',
+                                      valueTextSize,
+                                      inputPaddingY,
                                       'focus:outline-none focus:ring-1 focus:ring-brand-400',
                                       changed
                                         ? 'bg-amber-50 border-amber-300 text-amber-800'
@@ -3133,7 +3392,7 @@ export default function BudgetVersionClient() {
               <Button variant="secondary" size="sm" onClick={handleSave} loading={saving} disabled={!hasChanges}>
                 <Save className="h-3.5 w-3.5" /> Salvar
               </Button>
-              <Button size="sm" onClick={() => recalcMutation.mutate()} loading={recalcMutation.isPending}>
+              <Button size="sm" onClick={() => { void handleRecalculate(); }} loading={recalcMutation.isPending} disabled={saving}>
                 <PlayCircle className="h-3.5 w-3.5" /> Recalcular
               </Button>
               <Button

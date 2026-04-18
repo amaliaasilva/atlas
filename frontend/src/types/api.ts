@@ -86,6 +86,7 @@ export interface AssumptionDefinition {
   include_in_dre?: boolean;
   ui_config?: {
     is_separator?: boolean;
+    dre_bucket?: string;
     separator_style?: {
       tone?: 'slate' | 'indigo' | 'blue' | 'emerald' | 'amber' | 'rose' | 'violet';
       font_size?: 'xs' | 'sm' | 'base' | 'lg';
@@ -650,6 +651,38 @@ export interface PeriodTraceResponse {
     equipment: number;
     insurance: number;
     other: number;
+    admin_detail?: {
+      office_supplies: number;
+      hygiene_cleaning: number;
+      management_software: number;
+      legal_fees: number;
+      accounting_fees: number;
+      administrative_services: number;
+      extra_items?: Array<{ code: string; name: string; value: number; data_type: string }>;
+    };
+    marketing_detail?: {
+      digital_marketing: number;
+      brand_materials: number;
+      promotional_materials: number;
+      extra_items?: Array<{ code: string; name: string; value: number; data_type: string }>;
+    };
+    equipment_detail?: {
+      depreciation_equipment: number;
+      depreciation_renovation: number;
+      maintenance_equipment: number;
+      extra_items?: Array<{ code: string; name: string; value: number; data_type: string }>;
+    };
+    insurance_detail?: {
+      property_insurance: number;
+      equipment_insurance: number;
+      extra_items?: Array<{ code: string; name: string; value: number; data_type: string }>;
+    };
+    other_detail?: {
+      security_systems: number;
+      financial_fees: number;
+      other_fixed_costs: number;
+      extra_items?: Array<{ code: string; name: string; value: number; data_type: string }>;
+    };
   };
   utilities?: {
     total: number;

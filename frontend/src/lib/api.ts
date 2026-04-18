@@ -118,6 +118,23 @@ export const assumptionsApi = {
     api.get<AssumptionCategory[]>('/assumptions/categories', { params: { business_id } }).then((r) => r.data),
   definitions: (category_id?: string, business_id?: string): Promise<AssumptionDefinition[]> =>
     api.get<AssumptionDefinition[]>('/assumptions/definitions', { params: { category_id, business_id } }).then((r) => r.data),
+  createDefinition: (data: {
+    business_id: string;
+    category_id: string;
+    code: string;
+    name: string;
+    description?: string;
+    data_type?: string;
+    unit_of_measure?: string | null;
+    default_value?: number;
+    editable?: boolean;
+    periodicity?: string;
+    applies_to?: string;
+    sort_order?: number;
+    include_in_dre?: boolean;
+    ui_config?: AssumptionDefinition['ui_config'];
+  }): Promise<AssumptionDefinition> =>
+    api.post<AssumptionDefinition>('/assumptions/definitions', data).then((r) => r.data),
   updateDefinition: (definition_id: string, data: AssumptionDefinitionUpdateInput): Promise<AssumptionDefinition> =>
     api.patch<AssumptionDefinition>(`/assumptions/definitions/${definition_id}`, data).then((r) => r.data),
   deleteDefinition: (definition_id: string): Promise<void> =>

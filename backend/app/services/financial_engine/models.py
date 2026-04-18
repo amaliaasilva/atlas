@@ -160,11 +160,26 @@ class FixedCostInputs:
         0.0  # ARCH-04: acumula premissas desconhecidas da categoria CUSTO_FIXO
     )
 
+    # ARCH-04 extras roteados por dre_bucket (premissas customizadas)
+    extra_rent: float = 0.0
+    extra_staff: float = 0.0
+    extra_utility: float = 0.0
+    extra_admin: float = 0.0
+    extra_marketing: float = 0.0
+    extra_equipment: float = 0.0
+    extra_insurance: float = 0.0
+
 
 @dataclass
 class VariableCostInputs:
     """Premissas de custos variáveis."""
 
+    # Valor mensal total pré-calculado na aba Cálculo Kit Higiene.
+    # Composição: (sachês × banhos) + (lavagem × banhos) + reposição de itens.
+    # Quando > 0, é usado diretamente pelo engine (prioridade sobre hygiene_kit_per_student).
+    hygiene_kit_monthly: float = 0.0
+    # Legado: custo unitário por professor diamante ativo (usado como fallback
+    # quando hygiene_kit_monthly=0, ex.: versões criadas antes do Cálculo Kit Higiene).
     hygiene_kit_per_student: float = 0.0
     sales_commission_rate: float = 0.0  # % sobre receita
     card_fee_rate: float = (

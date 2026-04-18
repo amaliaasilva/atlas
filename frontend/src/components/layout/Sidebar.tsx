@@ -14,6 +14,7 @@ import { useAuthStore, useNavStore } from '@/store/auth';
 import { useDashboardFilters } from '@/store/dashboard';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
+import { AtlasLogo } from '@/components/ui/AtlasLogo';
 
 interface NavChild {
   label: string;
@@ -312,9 +313,7 @@ export function Sidebar() {
       {/* Logo */}
       <div className="px-4 py-4 border-b border-white/10">
         <div className="flex items-center gap-2.5">
-          <div className="h-7 w-7 rounded-lg bg-atlas-teal flex items-center justify-center shrink-0">
-            <BarChart3 className="h-4 w-4 text-atlas-dark" />
-          </div>
+          <AtlasLogo variant="mark" size={28} />
           <div>
             <p className="text-xs font-bold text-white tracking-tight leading-none">Atlas Finance</p>
             <p className="text-[9px] text-gray-500 mt-0.5">Gestão Financeira</p>

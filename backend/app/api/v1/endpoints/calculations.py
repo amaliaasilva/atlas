@@ -61,7 +61,7 @@ DERIVED_DISPLAY_ONLY_CODES = frozenset({
     "receita_total_calculada_mes",       # preview de receita
     "custo_energia_calculado_mes",       # preview de energia
     "custo_agua_calculado_mes",          # preview de água
-    "kit_higiene_professor_calculado_mes",  # preview de kit higiene
+    # kit_higiene_professor_calculado_mes removido: agora é input direto do engine
     "taxa_ocupacao_referencia_utilidades",  # replica taxa_ocupacao — read-only
     "folha_clt_base_calculada",          # preview folha CLT
     "encargos_clt_calculados",           # preview encargos
@@ -114,7 +114,10 @@ def _get(
     values: dict, code: str, period: str | None = None, default: float = 0.0
 ) -> float:
     """Helper para buscar um valor por code e período."""
-    v = values.get((code, period)) or values.get((code, None))
+    # ATENÇÃO: não usar `or` aqui — 0.0 é falsy e faria o fallback ignorar zeros salvos.
+    v = values.get((code, period))
+    if v is None:
+        v = values.get((code, None))
     return float(v) if v is not None else default
 
 
@@ -261,6 +264,19 @@ def _auto_update_working_capital_from_results(
     )
 
     first_period = periods[0]
+
+    # Evita que overrides antigos por período deixem o capital de giro "preso"
+    # em um mês que não é mais o início do horizonte.
+    (
+        db.query(AssumptionValue)
+        .filter(
+            AssumptionValue.budget_version_id == version.id,
+            AssumptionValue.assumption_definition_id == working_cap_def.id,
+            AssumptionValue.period_date.isnot(None),
+        )
+        .delete(synchronize_session=False)
+    )
+
     _upsert_assumption_value(
         db=db,
         version_id=version.id,
@@ -270,15 +286,18 @@ def _auto_update_working_capital_from_results(
         period_date=None,
         source_type="derived",
     )
-    _upsert_assumption_value(
-        db=db,
-        version_id=version.id,
-        assumption_definition_id=working_cap_def.id,
-        numeric_value=working_capital_value,
-        updated_by=updated_by,
-        period_date=first_period,
-        source_type="derived",
-    )
+
+    # Exibição mensal: capital de giro só no primeiro mês, zerado nos demais.
+    for period in periods:
+        _upsert_assumption_value(
+            db=db,
+            version_id=version.id,
+            assumption_definition_id=working_cap_def.id,
+            numeric_value=working_capital_value if period == first_period else 0.0,
+            updated_by=updated_by,
+            period_date=period,
+            source_type="derived",
+        )
 
 
 def _build_inputs_for_version(
@@ -306,6 +325,28 @@ def _build_inputs_for_version(
     if version and unit:
         scenario = db.query(Scenario).filter(Scenario.id == version.scenario_id).first()
         if scenario and abs((scenario.occupancy_multiplier or 1.0) - 1.0) > 1e-9 and scenario.scenario_type != "base":
+            manual_occupancy_rows = (
+                db.query(AssumptionValue.period_date)
+                .join(
+                    AssumptionDefinition,
+                    AssumptionValue.assumption_definition_id == AssumptionDefinition.id,
+                )
+                .filter(
+                    AssumptionValue.budget_version_id == version.id,
+                    AssumptionDefinition.code == "taxa_ocupacao",
+                    AssumptionValue.source_type == "manual",
+                )
+                .all()
+            )
+            manual_period_overrides = {
+                period_date
+                for (period_date,) in manual_occupancy_rows
+                if period_date is not None
+            }
+            has_manual_static_override = any(
+                period_date is None for (period_date,) in manual_occupancy_rows
+            )
+
             # Busca cenário base do mesmo business
             base_scenario = (
                 db.query(Scenario)
@@ -333,6 +374,10 @@ def _build_inputs_for_version(
                     # Substitui todos os valores de taxa_ocupacao pela versão base × mult
                     for (code, period), val in base_values.items():
                         if code == "taxa_ocupacao":
+                            if has_manual_static_override:
+                                continue
+                            if period in manual_period_overrides:
+                                continue
                             values[(code, period)] = min(val * mult, 1.0)
 
     # ── Determina horizonte temporal ────────────────────────────────────────
@@ -449,6 +494,8 @@ def _build_inputs_for_version(
     code_category_map: dict[str, str] = {}
     code_data_type_map: dict[str, str] = {}
     code_include_in_dre_map: dict[str, bool] = {}
+    code_name_map: dict[str, str] = {}
+    code_dre_bucket_map: dict[str, str] = {}
     if unit:
         all_defns_with_cat = (
             db.query(
@@ -456,6 +503,8 @@ def _build_inputs_for_version(
                 AssumptionCategory.code,
                 AssumptionDefinition.data_type,
                 AssumptionDefinition.include_in_dre,
+                AssumptionDefinition.name,
+                AssumptionDefinition.ui_config,
             )
             .join(
                 AssumptionCategory,
@@ -469,15 +518,24 @@ def _build_inputs_for_version(
         )
         code_category_map = {
             defn_code: cat_code
-            for defn_code, cat_code, _, _ in all_defns_with_cat
+            for defn_code, cat_code, _, _, _, _ in all_defns_with_cat
         }
         code_data_type_map = {
             defn_code: data_type
-            for defn_code, _, data_type, _ in all_defns_with_cat
+            for defn_code, _, data_type, _, _, _ in all_defns_with_cat
         }
         code_include_in_dre_map = {
             defn_code: include_in_dre
-            for defn_code, _, _, include_in_dre in all_defns_with_cat
+            for defn_code, _, _, include_in_dre, _, _ in all_defns_with_cat
+        }
+        code_name_map = {
+            defn_code: defn_name
+            for defn_code, _, _, _, defn_name, _ in all_defns_with_cat
+        }
+        code_dre_bucket_map = {
+            defn_code: ui_cfg["dre_bucket"]
+            for defn_code, _, _, _, _, ui_cfg in all_defns_with_cat
+            if isinstance(ui_cfg, dict) and ui_cfg.get("dre_bucket")
         }
 
     def _is_salary_like_fixed_code(code: str) -> bool:
@@ -519,7 +577,8 @@ def _build_inputs_for_version(
         "encargos_folha_pct",
         "beneficios_por_funcionario",
         "num_funcionarios",
-        "kit_higiene_por_aluno",
+        "kit_higiene_professor_calculado_mes",
+        "kit_higiene_por_aluno",           # legado — fallback quando mensal não está salvo
         "comissao_vendas_pct",
         "taxa_cartao_pct",
         "aliquota_imposto_receita",
@@ -580,7 +639,8 @@ def _build_inputs_for_version(
         "despesas_financeiras_taxas",
     }
     KNOWN_VARIABLE_CODES = {
-        "kit_higiene_por_aluno",
+        "kit_higiene_professor_calculado_mes",
+        "kit_higiene_por_aluno",           # legado
         "comissao_vendas_pct",
         "taxa_cartao_pct",
         "outros_custos_variaveis",
@@ -707,6 +767,9 @@ def _build_inputs_for_version(
     )
 
     inputs_list = []
+    extra_by_period: dict[str, list[dict]] = {}
+    # extra_by_bucket_by_period: { dre_bucket: { period: [items] } }
+    extra_by_bucket_by_period: dict[str, dict[str, list[dict]]] = {}
     for idx, period in enumerate(periods):
         p = period  # alias
 
@@ -835,7 +898,10 @@ def _build_inputs_for_version(
         )
 
         variable = VariableCostInputs(
-            hygiene_kit_per_student=_get_input_value("kit_higiene_por_aluno", p),
+            # Total mensal pré-calculado na aba Cálculo Kit Higiene (prioridade).
+            # Para versões legado sem cálculo salvo, hygiene_kit_per_student entra como fallback.
+            hygiene_kit_monthly=_get(values, "kit_higiene_professor_calculado_mes", p, default=0.0),
+            hygiene_kit_per_student=_get(values, "kit_higiene_por_aluno", p, default=0.0),
             sales_commission_rate=_get_input_value("comissao_vendas_pct", p),
             card_fee_rate=_get_input_value("taxa_cartao_pct", p, default=0.0),
             other_variable_costs=_get_input_value("outros_custos_variaveis", p),
@@ -843,6 +909,16 @@ def _build_inputs_for_version(
         tax_rate = _get_input_value("aliquota_imposto_receita", p, default=0.06)
 
         # ── ARCH-04: Acumula premissas desconhecidas por categoria ─────────
+        # Mapeamento dre_bucket → campo a acumular em FixedCostInputs
+        _BUCKET_FIELD_MAP = {
+            "rent_total": "extra_rent",
+            "staff_costs": "extra_staff",
+            "utility_costs": "extra_utility",
+            "admin_costs": "extra_admin",
+            "marketing_costs": "extra_marketing",
+            "equipment_costs": "extra_equipment",
+            "insurance_costs": "extra_insurance",
+        }
         for code in extra_fixed_codes:
             extra_val = _get(values, code, p, default=0.0)
             if _is_salary_like_fixed_code(code):
@@ -850,7 +926,26 @@ def _build_inputs_for_version(
                     fixed.additional_clt_salary_base + extra_val, 2
                 )
             else:
-                fixed.other_fixed_costs = round(fixed.other_fixed_costs + extra_val, 2)
+                # Roteia para o bucket declarado em ui_config.dre_bucket;
+                # se não houver, cai em other_fixed_costs (comportamento legado)
+                bucket = code_dre_bucket_map.get(code, "other_fixed_costs")
+                field = _BUCKET_FIELD_MAP.get(bucket)
+                if field:
+                    setattr(fixed, field, round(getattr(fixed, field) + extra_val, 2))
+                else:
+                    fixed.other_fixed_costs = round(fixed.other_fixed_costs + extra_val, 2)
+                if extra_val != 0.0:
+                    item = {
+                        "code": code,
+                        "name": code_name_map.get(code, code),
+                        "value": round(extra_val, 2),
+                        "data_type": code_data_type_map.get(code, "currency"),
+                    }
+                    # Índice legado (only other_fixed_costs)
+                    if bucket == "other_fixed_costs":
+                        extra_by_period.setdefault(p, []).append(item)
+                    # Índice por bucket
+                    extra_by_bucket_by_period.setdefault(bucket, {}).setdefault(p, []).append(item)
 
         for code in extra_var_codes:
             extra_val = _get(values, code, p, default=0.0)
@@ -888,7 +983,7 @@ def _build_inputs_for_version(
             )
         )
 
-    return inputs_list, capex, periods
+    return inputs_list, capex, periods, extra_by_period, extra_by_bucket_by_period
 
 
 class RecalculateResponse(BaseModel):
@@ -919,7 +1014,7 @@ def recalculate_version(
             status_code=409, detail="Versão arquivada não pode ser recalculada"
         )
 
-    inputs_list, capex, periods = _build_inputs_for_version(version_id, db)
+    inputs_list, capex, periods, extra_by_period, extra_by_bucket_by_period = _build_inputs_for_version(version_id, db)
 
     engine = FinancialEngine()
     outputs = engine.calculate(
@@ -929,6 +1024,46 @@ def recalculate_version(
         unit_id=version.unit_id,
         scenario_id=version.scenario_id,
     )
+
+    # Injeta breakdown de extras no trace de cada período
+    # Mapeamento dre_bucket → caminho no trace
+    _BUCKET_TRACE_NODE = {
+        "rent_total": "rent",
+        "staff_costs": "staff",
+        "utility_costs": "utilities",
+        "admin_costs": "admin",
+        "marketing_costs": "marketing",
+        "equipment_costs": "equipment",
+        "insurance_costs": "insurance",
+        "other_fixed_costs": "other",
+    }
+    for period_result in outputs.periods:
+        period_key = period_result.period
+        if not period_result.calculation_trace:
+            continue
+        trace = period_result.calculation_trace
+        # Legado: extras de other_fixed_costs já em extra_by_period
+        extras_other = extra_by_period.get(period_key, [])
+        if extras_other:
+            other_node = (
+                trace.setdefault("fixed_costs", {})
+                    .setdefault("detail", {})
+                    .setdefault("other", {})
+            )
+            other_node["extra_items"] = extras_other
+        # Extras de outros buckets
+        for bucket, by_period in extra_by_bucket_by_period.items():
+            items = by_period.get(period_key, [])
+            if not items:
+                continue
+            node_key = _BUCKET_TRACE_NODE.get(bucket)
+            if node_key and node_key != "other":
+                node = (
+                    trace.setdefault("fixed_costs", {})
+                        .setdefault("detail", {})
+                        .setdefault(node_key, {})
+                )
+                node["extra_items"] = items
 
     engine.persist(outputs, db)
     _auto_update_working_capital_from_results(

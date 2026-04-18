@@ -595,6 +595,11 @@ def unit_period_trace(
     taxes = trace.get("taxes", {})
     fin = trace.get("financing", {})
     kpis = trace.get("kpis", {})
+    admin_detail = fc_detail.get("admin", {})
+    marketing_detail = fc_detail.get("marketing", {})
+    equipment_detail = fc_detail.get("equipment", {})
+    insurance_detail = fc_detail.get("insurance", {})
+    other_detail = fc_detail.get("other", {})
 
     fc_rent = round(fc.get("rent", 0.0), 2)
     fc_staff = round(fc.get("staff", 0.0), 2)
@@ -655,6 +660,38 @@ def unit_period_trace(
             "equipment": fc_equipment,
             "insurance": fc_insurance,
             "other": fc_other,
+            "admin_detail": {
+                "office_supplies": round(admin_detail.get("office_supplies", 0.0), 2),
+                "hygiene_cleaning": round(admin_detail.get("hygiene_cleaning", 0.0), 2),
+                "management_software": round(admin_detail.get("management_software", 0.0), 2),
+                "legal_fees": round(admin_detail.get("legal_fees", 0.0), 2),
+                "accounting_fees": round(admin_detail.get("accounting_fees", 0.0), 2),
+                "administrative_services": round(admin_detail.get("administrative_services", 0.0), 2),
+                "extra_items": admin_detail.get("extra_items", []),
+            },
+            "marketing_detail": {
+                "digital_marketing": round(marketing_detail.get("digital_marketing", 0.0), 2),
+                "brand_materials": round(marketing_detail.get("brand_materials", 0.0), 2),
+                "promotional_materials": round(marketing_detail.get("promotional_materials", 0.0), 2),
+                "extra_items": marketing_detail.get("extra_items", []),
+            },
+            "equipment_detail": {
+                "depreciation_equipment": round(equipment_detail.get("depreciation_equipment", 0.0), 2),
+                "depreciation_renovation": round(equipment_detail.get("depreciation_renovation", 0.0), 2),
+                "maintenance_equipment": round(equipment_detail.get("maintenance_equipment", 0.0), 2),
+                "extra_items": equipment_detail.get("extra_items", []),
+            },
+            "insurance_detail": {
+                "property_insurance": round(insurance_detail.get("property_insurance", 0.0), 2),
+                "equipment_insurance": round(insurance_detail.get("equipment_insurance", 0.0), 2),
+                "extra_items": insurance_detail.get("extra_items", []),
+            },
+            "other_detail": {
+                "security_systems": round(other_detail.get("security_systems", 0.0), 2),
+                "financial_fees": round(other_detail.get("financial_fees", 0.0), 2),
+                "other_fixed_costs": round(other_detail.get("other_fixed_costs", 0.0), 2),
+                "extra_items": other_detail.get("extra_items", []),
+            },
         },
         "utilities": {
             "total": round(util.get("total_utilities", 0.0), 2),

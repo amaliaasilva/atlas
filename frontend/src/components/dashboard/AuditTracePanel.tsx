@@ -49,7 +49,7 @@ function PeriodPanel({ trace: t }: { trace: CalcTrace }) {
           <TraceSection label="Receita">
             <Field name="Cowork" value={formatCurrency(trace.revenue.cowork_revenue)} />
             <Field name="Outros" value={formatCurrency(trace.revenue.other_revenue)} />
-            <Field name="Preço/hora" value={formatCurrency(trace.revenue.avg_price_per_hour)} />
+            <Field name="Preço/hora" value={formatCurrency(trace.revenue.avg_price_per_hour, 2)} />
             <Field name="Ocupação" value={`${(trace.revenue.occupancy_rate * 100).toFixed(1)}%`} />
           </TraceSection>
 

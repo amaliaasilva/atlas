@@ -91,7 +91,7 @@ function RevenueSection({ data }: { data: PeriodTraceResponse }) {
         </div>
         <div className="flex justify-between">
           <span className="text-slate-500">Preço médio/hora</span>
-          <span className="font-medium text-slate-700">{formatCurrency(r.avg_price_per_hour)}</span>
+          <span className="font-medium text-slate-700">{formatCurrency(r.avg_price_per_hour, 2)}</span>
         </div>
       </div>
 
@@ -103,7 +103,7 @@ function RevenueSection({ data }: { data: PeriodTraceResponse }) {
               <span className="text-slate-500">{p.name}</span>
               <div className="text-right">
                 <span className="text-slate-600 font-medium">{fmtPct(p.mix)}</span>
-                <span className="text-slate-400 ml-2 text-[11px]">{formatCurrency(p.price)}/h</span>
+                <span className="text-slate-400 ml-2 text-[11px]">{formatCurrency(p.price, 2)}/h</span>
               </div>
             </div>
           ))}
@@ -525,20 +525,156 @@ function DrilldownContent({
     return <UtilitiesSection data={data} rowCode={rowCode} />;
   }
 
-  // Admin / Marketing / Equip. / Seguros / Outros (sem breakdown)
-  if (['admin_costs', 'marketing_costs', 'equipment_costs', 'insurance_costs', 'other_fixed_costs'].includes(rowCode)) {
+  // Adm + Contabilidade — com breakdown detalhado
+  if (rowCode === 'admin_costs') {
     const fc = data.fixed_costs;
-    const valueMap: Record<string, number> = {
-      admin_costs: fc?.admin || 0,
-      marketing_costs: fc?.marketing || 0,
-      equipment_costs: fc?.equipment || 0,
-      insurance_costs: fc?.insurance || 0,
-      other_fixed_costs: fc?.other || 0,
+    const total = fc?.admin || 0;
+    const d = fc?.admin_detail;
+    const items: Array<{ label: string; value: number }> = d
+      ? [
+          { label: 'Material de escritório', value: d.office_supplies },
+          { label: 'Higiene e limpeza (adm)', value: d.hygiene_cleaning },
+          { label: 'Software de gestão', value: d.management_software },
+          { label: 'Honorários jurídicos', value: d.legal_fees },
+          { label: 'Honorários contábeis', value: d.accounting_fees },
+          { label: 'Serviços administrativos', value: d.administrative_services },
+        ].filter((i) => i.value !== 0)
+      : [];
+    const extraItems = d?.extra_items ?? [];
+    const dataTypeLabel = (dt: string) => {
+      if (dt === 'percentage') return '%';
+      if (dt === 'integer') return 'un';
+      return '';
     };
     return (
       <div className="space-y-2">
-        <Row label={rowName} value={formatCurrency(valueMap[rowCode] || 0)} highlight negative />
-        <p className="text-[10px] text-slate-400">Detalhamento disponível nas premissas do orçamento.</p>
+        <Row label="Adm + Contabilidade" value={formatCurrency(total)} highlight negative />
+        {(items.length > 0 || extraItems.length > 0) ? (
+          <>
+            <Divider />
+            <div className="space-y-1.5">
+              {items.map((item) => (
+                <Row key={item.label} label={item.label} value={formatCurrency(item.value)} negative indent />
+              ))}
+              {extraItems.length > 0 && (
+                <>
+                  {items.length > 0 && <Divider />}
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium px-0.5">Premissas individuais</p>
+                  {extraItems.map((ex) => (
+                    <div key={ex.code} className="flex justify-between items-start gap-3 pl-3">
+                      <span className="text-xs text-slate-500 flex items-center gap-1.5">
+                        {ex.name}
+                        {dataTypeLabel(ex.data_type) && (
+                          <span className="text-[9px] bg-slate-100 text-slate-400 rounded px-1 font-mono">{dataTypeLabel(ex.data_type)}</span>
+                        )}
+                      </span>
+                      <span className="text-xs font-medium text-rose-600 whitespace-nowrap">
+                        {ex.data_type === 'percentage' ? fmtPct(ex.value) : formatCurrency(ex.value)}
+                      </span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-[10px] text-slate-400">Detalhamento disponível nas premissas do orçamento.</p>
+        )}
+      </div>
+    );
+  }
+
+  // Marketing / Equip. / Seguros / Outros (sem breakdown)
+  if (['marketing_costs', 'equipment_costs', 'insurance_costs', 'other_fixed_costs'].includes(rowCode)) {
+    const fc = data.fixed_costs;
+    type DetailItem = { label: string; value: number };
+
+    let total = 0;
+    let items: DetailItem[] = [];
+
+    if (rowCode === 'marketing_costs') {
+      total = fc?.marketing || 0;
+      const d = fc?.marketing_detail;
+      if (d) items = [
+        { label: 'Marketing digital', value: d.digital_marketing },
+        { label: 'Material de marca', value: d.brand_materials },
+        { label: 'Material promocional', value: d.promotional_materials },
+      ].filter((i) => i.value !== 0);
+    } else if (rowCode === 'equipment_costs') {
+      total = fc?.equipment || 0;
+      const d = fc?.equipment_detail;
+      if (d) items = [
+        { label: 'Depreciação de equipamentos', value: d.depreciation_equipment },
+        { label: 'Depreciação de obras/reforma', value: d.depreciation_renovation },
+        { label: 'Manutenção de equipamentos', value: d.maintenance_equipment },
+      ].filter((i) => i.value !== 0);
+    } else if (rowCode === 'insurance_costs') {
+      total = fc?.insurance || 0;
+      const d = fc?.insurance_detail;
+      if (d) items = [
+        { label: 'Seguro patrimonial', value: d.property_insurance },
+        { label: 'Seguro de equipamentos', value: d.equipment_insurance },
+      ].filter((i) => i.value !== 0);
+    } else if (rowCode === 'other_fixed_costs') {
+      total = fc?.other || 0;
+      const d = fc?.other_detail;
+      if (d) items = [
+        { label: 'Sistemas de segurança', value: d.security_systems },
+        { label: 'Tarifas financeiras', value: d.financial_fees },
+        { label: 'Outros custos fixos (base)', value: d.other_fixed_costs },
+      ].filter((i) => i.value !== 0);
+    }
+
+    // Extras (premissas adicionais roteadas para este bucket)
+    const extraItems =
+      rowCode === 'other_fixed_costs' ? (fc?.other_detail?.extra_items ?? []) :
+      rowCode === 'marketing_costs'   ? (fc?.marketing_detail?.extra_items ?? []) :
+      rowCode === 'equipment_costs'   ? (fc?.equipment_detail?.extra_items ?? []) :
+      rowCode === 'insurance_costs'   ? (fc?.insurance_detail?.extra_items ?? []) :
+      [];
+
+    const dataTypeLabel = (dt: string) => {
+      if (dt === 'percentage') return '%';
+      if (dt === 'integer') return 'un';
+      return '';
+    };
+
+    return (
+      <div className="space-y-2">
+        <Row label={rowName} value={formatCurrency(total)} highlight negative />
+        {(items.length > 0 || extraItems.length > 0) ? (
+          <>
+            <Divider />
+            <div className="space-y-1.5">
+              {items.map((item) => (
+                <Row key={item.label} label={item.label} value={formatCurrency(item.value)} negative indent />
+              ))}
+              {extraItems.length > 0 && (
+                <>
+                  {items.length > 0 && <Divider />}
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium px-0.5">Premissas individuais</p>
+                  {extraItems.map((ex) => (
+                    <div key={ex.code} className="flex justify-between items-start gap-3 pl-3">
+                      <span className="text-xs text-slate-500 flex items-center gap-1.5">
+                        {ex.name}
+                        {dataTypeLabel(ex.data_type) && (
+                          <span className="text-[9px] bg-slate-100 text-slate-400 rounded px-1 font-mono">{dataTypeLabel(ex.data_type)}</span>
+                        )}
+                      </span>
+                      <span className="text-xs font-medium text-rose-600 whitespace-nowrap">
+                        {ex.data_type === 'percentage'
+                          ? fmtPct(ex.value)
+                          : formatCurrency(ex.value)}
+                      </span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-[10px] text-slate-400">Detalhamento disponível nas premissas do orçamento.</p>
+        )}
       </div>
     );
   }

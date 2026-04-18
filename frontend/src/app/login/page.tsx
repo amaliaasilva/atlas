@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
+import { AtlasLogo } from '@/components/ui/AtlasLogo';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { getErrorMessage } from '@/lib/utils';
@@ -124,14 +124,7 @@ export default function LoginPage() {
             ]}}
             transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
           >
-            <Image
-              src="/logo-atlas.svg"
-              alt="Atlas Finance"
-              width={650}
-              height={300}
-              priority
-              style={{ height: '180px', width: 'auto', display: 'block' }}
-            />
+            <AtlasLogo variant="full" />
           </motion.div>
         </motion.div>
 

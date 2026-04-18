@@ -149,7 +149,7 @@ export function DRETable({ data, versionId, consolidatedCtx, onExportCsv, isExpo
             <thead>
               <tr className="bg-slate-100 text-slate-500 uppercase tracking-wide">
                 {/* Coluna congelada */}
-                <th className="sticky left-0 z-10 bg-slate-100 px-4 py-3 text-left whitespace-nowrap min-w-[200px] font-semibold">
+                <th className="sticky left-0 z-10 bg-slate-100 px-4 py-3 text-left whitespace-nowrap min-w-[200px] font-semibold shadow-[2px_0_6px_-1px_rgba(0,0,0,0.08)] border-r border-slate-200">
                   Item
                 </th>
                 {/* FIX B2: cabeçalhos formatados "Jan/26" em vez de "2026-01" */}
@@ -170,7 +170,7 @@ export function DRETable({ data, versionId, consolidatedCtx, onExportCsv, isExpo
                   {header && (
                     <tr key={`hdr-${category}`} className="bg-slate-50">
                       <td
-                        className="sticky left-0 z-10 bg-slate-50 px-4 py-2 text-left text-[10px] font-bold tracking-widest text-slate-500 uppercase"
+                        className="sticky left-0 z-10 bg-slate-50 px-4 py-2 text-left text-[10px] font-bold tracking-widest text-slate-500 uppercase shadow-[2px_0_6px_-1px_rgba(0,0,0,0.06)] border-r border-slate-200"
                         colSpan={1}
                       >
                         {header}
@@ -201,7 +201,7 @@ export function DRETable({ data, versionId, consolidatedCtx, onExportCsv, isExpo
                         }`}
                       >
                         <td
-                          className={`sticky left-0 z-10 bg-white px-4 py-2.5 whitespace-nowrap ${rowColor}`}
+                          className={`sticky left-0 z-10 bg-white px-4 py-2.5 whitespace-nowrap shadow-[2px_0_6px_-1px_rgba(0,0,0,0.06)] border-r border-slate-200 ${rowColor}`}
                         >
                             {row.name}
                         </td>

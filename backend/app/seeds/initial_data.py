@@ -80,8 +80,10 @@ DRE_DEFAULT_OUTSIDE_CODES = {
     "receita_total_calculada_mes",
     "custo_energia_calculado_mes",
     "custo_agua_calculado_mes",
-    "kit_higiene_professor_calculado_mes",
     "folha_clt_total_calculada",
+    # kit_higiene_por_aluno: driver interno da aba Cálculo Kit Higiene (fallback legado).
+    # O valor real na DRE vem de kit_higiene_professor_calculado_mes (total mensal).
+    "kit_higiene_por_aluno",
 }
 
 
@@ -805,7 +807,7 @@ ASSUMPTION_DEFINITIONS = {
     "CUSTO_VARIAVEL": [
         (
             "kit_higiene_por_aluno",
-            "Kit higiene por aluno/mês",
+            "Kit higiene por professor diamante ativo/mês",
             "currency",
             "R$",
             3.5,
@@ -1123,7 +1125,7 @@ LINE_ITEM_DEFINITIONS = [
     ),
     (
         "hygiene_kit_cost",
-        "Kit Higiene (por aluno)",
+        "Kit Higiene (por professor diamante)",
         "variable_cost",
         "hygiene",
         21,

@@ -7,11 +7,16 @@ from sqlalchemy.pool import StaticPool
 
 from main import app
 from app.api.v1.deps import get_current_user
-from app.api.v1.endpoints.calculations import _build_inputs_for_version
+from app.api.v1.endpoints.calculations import (
+    _auto_update_working_capital_from_results,
+    _build_inputs_for_version,
+)
 from app.core.database import Base, get_db
 from app.models.assumption import AssumptionCategory, AssumptionDefinition, AssumptionValue
 from app.models.budget_version import BudgetVersion, VersionStatus
 from app.models.business import Business, BusinessType
+from app.models.calculated_result import CalculatedResult
+from app.models.line_item import LineItemDefinition
 from app.models.organization import Organization
 from app.models.scenario import Scenario, ScenarioType
 from app.models.service_plan import ServicePlan
@@ -796,6 +801,137 @@ def test_build_inputs_for_version_uses_version_start_for_revenue(client_with_dat
     result = calculate_gross_revenue(inputs_list[0].revenue)
     assert result["gross_revenue"] == pytest.approx(7207.88, rel=1e-3)
 
+def test_non_base_occupancy_multiplier_preserves_manual_period_override():
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    with TestingSessionLocal() as db:
+        user = User(
+            id="user-occ",
+            email="occ@example.com",
+            full_name="Occupancy Tester",
+            hashed_password="not-used",
+            is_superuser=True,
+        )
+        org = Organization(id="org-occ", name="Org OCC", slug="org-occ")
+        business = Business(
+            id="biz-occ",
+            organization_id=org.id,
+            name="Negócio OCC",
+            slug="negocio-occ",
+            business_type=BusinessType.cowork_gym,
+        )
+        category = AssumptionCategory(
+            id="cat-occ",
+            business_id=business.id,
+            name="Receita",
+            code="RECEITA",
+            sort_order=1,
+        )
+        occupancy_def = AssumptionDefinition(
+            id="def-occ",
+            business_id=business.id,
+            category_id=category.id,
+            code="taxa_ocupacao",
+            name="Taxa de ocupação",
+            data_type="percentage",
+            default_value=0.2,
+            editable=True,
+            periodicity="monthly",
+            applies_to="version",
+            sort_order=1,
+            is_active=True,
+            granularity="monthly",
+            growth_rule={"type": "flat"},
+        )
+        unit = Unit(
+            id="unit-occ",
+            business_id=business.id,
+            name="Unidade OCC",
+            code="UOCC",
+            opening_date=date(2026, 8, 1),
+            status=UnitStatus.active,
+        )
+        scenario_base = Scenario(
+            id="scenario-occ-base",
+            business_id=business.id,
+            name="Base",
+            scenario_type=ScenarioType.base,
+            is_active=True,
+            occupancy_multiplier=1.0,
+        )
+        scenario_aggressive = Scenario(
+            id="scenario-occ-agg",
+            business_id=business.id,
+            name="Agressivo",
+            scenario_type=ScenarioType.aggressive,
+            is_active=True,
+            occupancy_multiplier=1.5,
+        )
+        base_version = BudgetVersion(
+            id="version-occ-base",
+            unit_id=unit.id,
+            scenario_id=scenario_base.id,
+            version_name="Versão Base",
+            status=VersionStatus.draft,
+            effective_start_date=date(2026, 8, 1),
+            projection_horizon_years=1,
+            is_active=True,
+        )
+        aggressive_version = BudgetVersion(
+            id="version-occ-agg",
+            unit_id=unit.id,
+            scenario_id=scenario_aggressive.id,
+            version_name="Versão Agressiva",
+            status=VersionStatus.draft,
+            effective_start_date=date(2026, 8, 1),
+            projection_horizon_years=1,
+            is_active=True,
+        )
+        base_occupancy = AssumptionValue(
+            id="val-occ-base",
+            budget_version_id=base_version.id,
+            assumption_definition_id=occupancy_def.id,
+            period_date=None,
+            value_numeric=0.2,
+            source_type="manual",
+            updated_by=user.id,
+        )
+        manual_aug_override = AssumptionValue(
+            id="val-occ-agg-aug",
+            budget_version_id=aggressive_version.id,
+            assumption_definition_id=occupancy_def.id,
+            period_date="2026-08",
+            value_numeric=0.25,
+            source_type="manual",
+            updated_by=user.id,
+        )
+
+        db.add_all(
+            [
+                user,
+                org,
+                business,
+                category,
+                occupancy_def,
+                unit,
+                scenario_base,
+                scenario_aggressive,
+                base_version,
+                aggressive_version,
+                base_occupancy,
+                manual_aug_override,
+            ]
+        )
+        db.commit()
+
+        inputs_list, _capex, periods = _build_inputs_for_version(aggressive_version.id, db)
+
+    assert periods[0] == "2026-08"
+    assert periods[1] == "2026-09"
+    assert inputs_list[0].revenue.occupancy_rate == pytest.approx(0.25)
+    assert inputs_list[1].revenue.occupancy_rate == pytest.approx(0.3)
+
 
 def test_get_version_values_includes_derived_utility_rows(client_with_data):
     with TestingSessionLocal() as db:
@@ -972,6 +1108,296 @@ def test_get_version_values_includes_derived_utility_rows(client_with_data):
     assert taxes
     assert taxes[0]["numeric_value"] == pytest.approx(round(1005.0 * 57.5 * 0.06, 2))
     assert taxes[0]["source_type"] == "derived"
+
+
+def test_auto_working_capital_replaces_stale_period_rows():
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    with TestingSessionLocal() as db:
+        user = User(
+            id="user-wc",
+            email="wc@example.com",
+            full_name="Working Capital",
+            hashed_password="not-used",
+            is_superuser=True,
+        )
+        org = Organization(id="org-wc", name="Org WC", slug="org-wc")
+        business = Business(
+            id="biz-wc",
+            organization_id=org.id,
+            name="Negócio WC",
+            slug="negocio-wc",
+            business_type=BusinessType.cowork_gym,
+        )
+        category = AssumptionCategory(
+            id="cat-wc",
+            business_id=business.id,
+            name="Caixa",
+            code="CAIXA",
+            sort_order=1,
+        )
+        unit = Unit(
+            id="unit-wc",
+            business_id=business.id,
+            name="Unidade WC",
+            code="UWC",
+            opening_date=date(2026, 8, 1),
+            status=UnitStatus.active,
+        )
+        scenario = Scenario(
+            id="scenario-wc",
+            business_id=business.id,
+            name="Base WC",
+            scenario_type=ScenarioType.base,
+            is_active=True,
+            occupancy_multiplier=1.0,
+        )
+        version = BudgetVersion(
+            id="version-wc",
+            unit_id=unit.id,
+            scenario_id=scenario.id,
+            version_name="Versão WC",
+            status=VersionStatus.draft,
+            effective_start_date=date(2026, 8, 1),
+            projection_horizon_years=1,
+            is_active=True,
+        )
+
+        def_working_cap = AssumptionDefinition(
+            id="def-wc",
+            business_id=business.id,
+            category_id=category.id,
+            code="capital_giro_inicial",
+            name="Capital de giro inicial",
+            data_type="currency",
+            default_value=0.0,
+            editable=False,
+            periodicity="static",
+            applies_to="version",
+            sort_order=1,
+            is_active=True,
+            include_in_dre=False,
+            granularity="monthly",
+        )
+        def_burn_no_revenue = AssumptionDefinition(
+            id="def-wc-burn-1",
+            business_id=business.id,
+            category_id=category.id,
+            code="caixa_meses_burn_sem_receita",
+            name="Meses sem receita",
+            data_type="numeric",
+            default_value=3.0,
+            editable=True,
+            periodicity="static",
+            applies_to="version",
+            sort_order=2,
+            is_active=True,
+            include_in_dre=False,
+            granularity="monthly",
+        )
+        def_burn_with_revenue = AssumptionDefinition(
+            id="def-wc-burn-2",
+            business_id=business.id,
+            category_id=category.id,
+            code="caixa_meses_com_receita",
+            name="Meses com receita",
+            data_type="numeric",
+            default_value=9.0,
+            editable=True,
+            periodicity="static",
+            applies_to="version",
+            sort_order=3,
+            is_active=True,
+            include_in_dre=False,
+            granularity="monthly",
+        )
+
+        line_revenue = LineItemDefinition(
+            id="li-revenue",
+            business_id=business.id,
+            code="revenue_total",
+            name="Receita Total",
+            category="result",
+            calculation_type="derived",
+            display_order=1,
+            indent_level=0,
+            is_kpi=False,
+            is_subtotal=False,
+            is_visible=True,
+        )
+        line_variable = LineItemDefinition(
+            id="li-variable",
+            business_id=business.id,
+            code="total_variable_costs",
+            name="Custos Variáveis Totais",
+            category="result",
+            calculation_type="derived",
+            display_order=2,
+            indent_level=0,
+            is_kpi=False,
+            is_subtotal=False,
+            is_visible=True,
+        )
+        line_fixed = LineItemDefinition(
+            id="li-fixed",
+            business_id=business.id,
+            code="total_fixed_costs",
+            name="Custos Fixos Totais",
+            category="result",
+            calculation_type="derived",
+            display_order=3,
+            indent_level=0,
+            is_kpi=False,
+            is_subtotal=False,
+            is_visible=True,
+        )
+
+        stale_period_value = AssumptionValue(
+            id="val-wc-stale",
+            budget_version_id=version.id,
+            assumption_definition_id=def_working_cap.id,
+            period_date="2026-11",
+            value_numeric=999999.0,
+            source_type="manual",
+            updated_by=user.id,
+        )
+        burn_no_revenue_value = AssumptionValue(
+            id="val-wc-burn-1",
+            budget_version_id=version.id,
+            assumption_definition_id=def_burn_no_revenue.id,
+            period_date=None,
+            value_numeric=1.0,
+            source_type="manual",
+            updated_by=user.id,
+        )
+        burn_with_revenue_value = AssumptionValue(
+            id="val-wc-burn-2",
+            budget_version_id=version.id,
+            assumption_definition_id=def_burn_with_revenue.id,
+            period_date=None,
+            value_numeric=2.0,
+            source_type="manual",
+            updated_by=user.id,
+        )
+
+        results = [
+            CalculatedResult(
+                id="res-1",
+                budget_version_id=version.id,
+                unit_id=unit.id,
+                scenario_id=scenario.id,
+                line_item_id=line_revenue.id,
+                period_date="2026-08",
+                value=1000.0,
+            ),
+            CalculatedResult(
+                id="res-2",
+                budget_version_id=version.id,
+                unit_id=unit.id,
+                scenario_id=scenario.id,
+                line_item_id=line_variable.id,
+                period_date="2026-08",
+                value=300.0,
+            ),
+            CalculatedResult(
+                id="res-3",
+                budget_version_id=version.id,
+                unit_id=unit.id,
+                scenario_id=scenario.id,
+                line_item_id=line_fixed.id,
+                period_date="2026-08",
+                value=500.0,
+            ),
+            CalculatedResult(
+                id="res-4",
+                budget_version_id=version.id,
+                unit_id=unit.id,
+                scenario_id=scenario.id,
+                line_item_id=line_revenue.id,
+                period_date="2026-09",
+                value=1100.0,
+            ),
+            CalculatedResult(
+                id="res-5",
+                budget_version_id=version.id,
+                unit_id=unit.id,
+                scenario_id=scenario.id,
+                line_item_id=line_variable.id,
+                period_date="2026-09",
+                value=350.0,
+            ),
+            CalculatedResult(
+                id="res-6",
+                budget_version_id=version.id,
+                unit_id=unit.id,
+                scenario_id=scenario.id,
+                line_item_id=line_fixed.id,
+                period_date="2026-09",
+                value=550.0,
+            ),
+        ]
+
+        db.add_all(
+            [
+                user,
+                org,
+                business,
+                category,
+                unit,
+                scenario,
+                version,
+                def_working_cap,
+                def_burn_no_revenue,
+                def_burn_with_revenue,
+                line_revenue,
+                line_variable,
+                line_fixed,
+                stale_period_value,
+                burn_no_revenue_value,
+                burn_with_revenue_value,
+                *results,
+            ]
+        )
+        db.commit()
+
+        _auto_update_working_capital_from_results(
+            db=db,
+            version=version,
+            updated_by=user.id,
+        )
+        db.commit()
+
+        period_rows = (
+            db.query(AssumptionValue)
+            .filter(
+                AssumptionValue.budget_version_id == version.id,
+                AssumptionValue.assumption_definition_id == def_working_cap.id,
+                AssumptionValue.period_date.isnot(None),
+            )
+            .order_by(AssumptionValue.period_date)
+            .all()
+        )
+        assert len(period_rows) == 2
+        assert period_rows[0].period_date == "2026-08"
+        assert period_rows[1].period_date == "2026-09"
+        assert period_rows[0].source_type == "derived"
+        assert period_rows[1].source_type == "derived"
+        assert period_rows[0].value_numeric > 0
+        assert period_rows[1].value_numeric == 0.0
+
+        static_row = (
+            db.query(AssumptionValue)
+            .filter(
+                AssumptionValue.budget_version_id == version.id,
+                AssumptionValue.assumption_definition_id == def_working_cap.id,
+                AssumptionValue.period_date.is_(None),
+            )
+            .first()
+        )
+        assert static_row is not None
+        assert static_row.value_numeric == period_rows[0].value_numeric
+        assert static_row.source_type == "derived"
 
 
 def test_bulk_upsert_version_values_preserves_other_existing_rows(client_with_data):
